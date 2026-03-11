@@ -549,121 +549,184 @@ function generateScheduleWithAssignments(semester: number): FullSchedule {
 async function exportExcel(schedule: FullSchedule) {
     const wb = new ExcelJS.Workbook();
 
+    /* ---------- Group sections by program ---------- */
+    const programs: Record<string, string[]> = {};
+
     for (const section in schedule) {
-        const ws = wb.addWorksheet(section);
-        const sched = schedule[section];
+        const program = section.slice(0, 4); // BSIT, BSBA, etc
 
-        // ---------- Column Setup ----------
-        ws.getColumn(1).width = 2; // left spacer
-        ws.getColumn(2).width = 10; // time column
+        if (!programs[program]) programs[program] = [];
+        programs[program].push(section);
+    }
 
-        let colIndex = 3;
-        for (let i = 0; i < days.length; i++) {
-            ws.getColumn(colIndex).width = 16; // day column
-            colIndex++;
-            if (i < days.length - 1) {
-                ws.getColumn(colIndex).width = 2; // spacer
+    /* ---------- Create one sheet per program ---------- */
+    for (const program in programs) {
+
+        const ws = wb.addWorksheet(program);
+        const sections = programs[program];
+
+        let tableOffset = 1;
+
+        for (let s = 0; s < sections.length; s++) {
+
+            const section = sections[s];
+            const sched = schedule[section];
+
+            const baseCol = tableOffset;
+
+            /* ---------- Column Setup ---------- */
+
+            ws.getColumn(baseCol).width = 2; // left spacer
+            ws.getColumn(baseCol + 1).width = 10; // time column
+
+            let colIndex = baseCol + 2;
+
+            for (let i = 0; i < days.length; i++) {
+                ws.getColumn(colIndex).width = 16;
                 colIndex++;
-            }
-        }
-        ws.getColumn(colIndex).width = 2; // right spacer
 
-        // ---------- Header Rows ----------
-        ws.mergeCells(1, 2, 1, colIndex);
-        ws.getCell(1, 2).value = "CLASS SCHEDULE";
-        ws.getCell(1, 2).alignment = { horizontal: "center", vertical: "middle" };
-
-        ws.mergeCells(2, 2, 2, colIndex);
-        ws.getCell(2, 2).value = "MODIFIED SCHEDULE      TERTIARY";
-        ws.getCell(2, 2).alignment = { horizontal: "center", vertical: "middle" };
-
-        ws.mergeCells(4, 2, 6, 2);
-        ws.getCell(4, 2).value = "SY\nPROGRAM\nSECTION";
-        ws.getCell(4, 2).alignment = { horizontal: "right", vertical: "middle", wrapText: true };
-        ws.getCell(4, 3).value = "2025-2026";
-        ws.getCell(5, 3).value = section.slice(0, 4);
-        ws.getCell(6, 3).value = section.slice(4);
-        for(let i = 4; i < 7; i++){
-            ws.getCell(i, 3).alignment = {horizontal: "right"};
-        }
-
-        // ---------- Days Row ----------
-        const dayRow = 7;
-        ws.getRow(dayRow).height = 25.5;
-        let startCol = 3;
-        for (let i = 0; i < days.length; i++) {
-            const col = startCol + i * 2;
-            ws.getCell(dayRow, col).value = days[i].toUpperCase();
-            ws.getCell(dayRow, col).alignment = { horizontal: "center", vertical: "middle" };
-        }
-
-        // ---------- Schedule Rows ----------
-        let excelRow = dayRow + 1;
-        const timeToRow: Record<string, number> = {};
-        timeBlocks.forEach((t, i) => timeToRow[t] = excelRow + i);
-
-        for (let dayIdx = 0; dayIdx < days.length; dayIdx++) {
-            const day = days[dayIdx];
-            const col = 3 + dayIdx * 2; // column for this day
-
-            let rowIdx = 0;
-            while (rowIdx < timeBlocks.length) {
-                const t = timeBlocks[rowIdx];
-                const cell = sched[day][t];
-
-                if (!cell) {
-                    rowIdx++;
-                    continue;
+                if (i < days.length - 1) {
+                    ws.getColumn(colIndex).width = 2;
+                    colIndex++;
                 }
+            }
 
-                // Count consecutive blocks for merging
-                let span = 1;
-                for (let j = rowIdx + 1; j < timeBlocks.length; j++) {
-                    const nextT = timeBlocks[j];
-                    const nextCell = sched[day][nextT];
-                    if (
-                        nextCell &&
-                        nextCell.subject === cell.subject &&
-                        nextCell.teacher === cell.teacher &&
-                        nextCell.section === cell.section
-                    ) {
-                        span++;
-                    } else {
-                        break;
+            ws.getColumn(colIndex).width = 2; // right spacer
+
+            /* ---------- Header ---------- */
+
+            ws.mergeCells(1, baseCol + 1, 1, colIndex);
+            ws.getCell(1, baseCol + 1).value = "CLASS SCHEDULE";
+            ws.getCell(1, baseCol + 1).alignment = { horizontal: "center", vertical: "middle" };
+
+            ws.mergeCells(2, baseCol + 1, 2, colIndex);
+            ws.getCell(2, baseCol + 1).value = "MODIFIED SCHEDULE      TERTIARY";
+            ws.getCell(2, baseCol + 1).alignment = { horizontal: "center", vertical: "middle" };
+
+            ws.mergeCells(4, baseCol + 1, 6, baseCol + 1);
+            ws.getCell(4, baseCol + 1).value = "SY\nPROGRAM\nSECTION";
+            ws.getCell(4, baseCol + 1).alignment = {
+                horizontal: "right",
+                vertical: "middle",
+                wrapText: true
+            };
+
+            ws.getCell(4, baseCol + 2).value = "2025-2026";
+            ws.getCell(5, baseCol + 2).value = section.slice(0, 4);
+            ws.getCell(6, baseCol + 2).value = section.slice(4);
+
+            for (let i = 4; i < 7; i++) {
+                ws.getCell(i, baseCol + 2).alignment = { horizontal: "right" };
+            }
+
+            /* ---------- Day Headers ---------- */
+
+            const dayRow = 7;
+            ws.getRow(dayRow).height = 25.5;
+
+            for (let i = 0; i < days.length; i++) {
+                const col = baseCol + 2 + i * 2;
+                ws.getCell(dayRow, col).value = days[i].toUpperCase();
+                ws.getCell(dayRow, col).alignment = { horizontal: "center", vertical: "middle" };
+            }
+
+            /* ---------- Schedule Blocks ---------- */
+
+            const excelRow = dayRow + 1;
+
+            for (let dayIdx = 0; dayIdx < days.length; dayIdx++) {
+
+                const day = days[dayIdx];
+                const col = baseCol + 2 + dayIdx * 2;
+
+                let rowIdx = 0;
+
+                while (rowIdx < timeBlocks.length) {
+
+                    const t = timeBlocks[rowIdx];
+                    const cell = sched[day][t];
+
+                    if (!cell) {
+                        rowIdx++;
+                        continue;
                     }
+
+                    let span = 1;
+
+                    for (let j = rowIdx + 1; j < timeBlocks.length; j++) {
+
+                        const nextT = timeBlocks[j];
+                        const nextCell = sched[day][nextT];
+
+                        if (
+                            nextCell &&
+                            nextCell.subject === cell.subject &&
+                            nextCell.teacher === cell.teacher &&
+                            nextCell.section === cell.section
+                        ) {
+                            span++;
+                        } else break;
+                    }
+
+                    const startRow = excelRow + rowIdx;
+                    const endRow = startRow + span - 1;
+
+                    ws.mergeCells(startRow, col, endRow, col);
+
+                    ws.getCell(startRow, col).value =
+                        `${cell.subject}/${cell.teacher}\n${cell.program}${cell.section}\n${cell.room}`;
+
+                    ws.getCell(startRow, col).alignment = {
+                        horizontal: "center",
+                        vertical: "middle",
+                        wrapText: true
+                    };
+
+                    rowIdx += span;
+                }
+            }
+
+            /* ---------- Time Column ---------- */
+
+            for (let i = 0; i < timeBlocks.length; i++) {
+
+                const t = timeBlocks[i];
+                let [hour, min] = t.split(":").map(Number);
+
+                let endHour = hour;
+                let endMin = min + 30;
+
+                if (endMin === 60) {
+                    endHour += 1;
+                    endMin = 0;
                 }
 
-                const startRow = excelRow + rowIdx;
-                const endRow = startRow + span - 1;
+                const format12 = (h: number, m: number) =>
+                    `${h % 12 === 0 ? 12 : h % 12}:${m.toString().padStart(2, "0")}`;
 
-                // Merge cells for multi-block class
-                ws.mergeCells(startRow, col, endRow, col);
-                ws.getCell(startRow, col).value = `${cell.subject}/${cell.teacher}\n${cell.program}${cell.section}\n${cell.room}`;
-                ws.getCell(startRow, col).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-
-                rowIdx += span;
+                ws.getRow(excelRow + i)
+                    .getCell(baseCol + 1)
+                    .value = `${format12(hour, min)}-${format12(endHour, endMin)}`;
             }
-        }
 
-        // ---------- Time Column ----------
-        for (let i = 0; i < timeBlocks.length; i++) {
-            const t = timeBlocks[i];
-            let [hour, min] = t.split(":").map(Number);
-            let endHour = hour;
-            let endMin = min + 30;
-            if (endMin === 60) { endHour += 1; endMin = 0; }
-            const format12 = (h: number, m: number) => `${h % 12 === 0 ? 12 : h % 12}:${m.toString().padStart(2, "0")}`;
-            ws.getRow(excelRow + i).getCell(2).value = `${format12(hour, min)}-${format12(endHour, endMin)}`;
+            /* ---------- Move next table ---------- */
+
+            tableOffset = colIndex + 2; // spacer column (width 16)
+
+            ws.getColumn(colIndex + 1).width = 16;
         }
     }
 
     const buffer = await wb.xlsx.writeBuffer();
+
     const blob = new Blob([buffer]);
     const url = window.URL.createObjectURL(blob);
+
     const a = document.createElement("a");
     a.href = url;
     a.download = "schedule.xlsx";
     a.click();
+
     window.URL.revokeObjectURL(url);
 }
 
