@@ -1,36 +1,142 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Acehub
 
-## Getting Started
+A web-based faculty scheduling system that generates class schedules and exports them to **Excel format**.
+This project uses **React**, **TailwindCSS**, and **ExcelJS** to create an interactive interface and automatically generate formatted schedule spreadsheets.
 
-First, run the development server:
+---
+
+# Technologies Used
+
+This project was built using the following tools and libraries:
+
+* **Flowbite** – UI component library for TailwindCSS
+* **Flowbite React** – React components built on Flowbite
+* **Tailwind CSS** – Utility-first CSS framework
+* **ExcelJS** – Library used to generate and export Excel schedule files
+* **React Icons** – Icon library for React
+* **Node Package Manager (npm)** – version **10.8.2**
+
+---
+
+# Prerequisites
+
+Before running the project, make sure you have:
+
+* **Node.js installed**
+* **npm version 10.8.2 or newer**
+
+Check your npm version:
+
+```bash
+npm -v
+```
+
+---
+
+# Installation
+
+Clone the repository:
+
+```bash
+git clone https://github.com/yourusername/acehub.git
+```
+
+Go into the project directory:
+
+```bash
+cd acehub
+```
+
+Install project dependencies:
+
+```bash
+npm install
+```
+
+---
+
+# Install Required Libraries
+
+If installing manually, install the required packages using:
+
+### TailwindCSS
+
+```bash
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+```
+
+---
+
+### Flowbite
+
+```bash
+npm install flowbite
+```
+
+---
+
+### Flowbite React
+
+```bash
+npm install flowbite-react
+```
+
+---
+
+### ExcelJS
+
+```bash
+npm install exceljs
+```
+
+---
+
+### React Icons
+
+```bash
+npm install react-icons
+```
+
+---
+
+# Running the Project
+
+Start the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The application will be available at:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+# Features
 
-To learn more about Next.js, take a look at the following resources:
+* Automatic **faculty scheduling**
+* **Conflict detection**
+* **Excel schedule export**
+* **Responsive UI**
+* Organized schedules by **program and section**
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# Project Structure
 
-## Deploy on Vercel
+```
+/app
+/components
+/lib
+/public
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# License
+
+This project is for **academic and educational purposes**.
