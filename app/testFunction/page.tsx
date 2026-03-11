@@ -547,51 +547,124 @@ function generateScheduleWithAssignments(semester: number): FullSchedule {
 /* ---------- Excel Export ---------- */
 
 async function exportExcel(schedule: FullSchedule) {
-
-    const wb = new ExcelJS.Workbook()
+    const wb = new ExcelJS.Workbook();
 
     for (const section in schedule) {
+        const ws = wb.addWorksheet(section);
+        const sched = schedule[section];
 
-        const ws = wb.addWorksheet(section)
+        // ---------- Column Setup ----------
+        ws.getColumn(1).width = 2; // left spacer
+        ws.getColumn(2).width = 10; // time column
 
-        ws.addRow(["Time", ...days])
+        let colIndex = 3;
+        for (let i = 0; i < days.length; i++) {
+            ws.getColumn(colIndex).width = 16; // day column
+            colIndex++;
+            if (i < days.length - 1) {
+                ws.getColumn(colIndex).width = 2; // spacer
+                colIndex++;
+            }
+        }
+        ws.getColumn(colIndex).width = 2; // right spacer
 
-        const sched = schedule[section]
+        // ---------- Header Rows ----------
+        ws.mergeCells(1, 2, 1, colIndex);
+        ws.getCell(1, 2).value = "CLASS SCHEDULE";
+        ws.getCell(1, 2).alignment = { horizontal: "center", vertical: "middle" };
 
-        for (const t of timeBlocks) {
+        ws.mergeCells(2, 2, 2, colIndex);
+        ws.getCell(2, 2).value = "MODIFIED SCHEDULE      TERTIARY";
+        ws.getCell(2, 2).alignment = { horizontal: "center", vertical: "middle" };
 
-            const row: any[] = [t]
+        ws.mergeCells(4, 2, 6, 2);
+        ws.getCell(4, 2).value = "SY\nPROGRAM\nSECTION";
+        ws.getCell(4, 2).alignment = { horizontal: "right", vertical: "middle", wrapText: true };
+        ws.getCell(4, 3).value = "2025-2026";
+        ws.getCell(5, 3).value = section.slice(0, 4);
+        ws.getCell(6, 3).value = section.slice(4);
+        for(let i = 4; i < 7; i++){
+            ws.getCell(i, 3).alignment = {horizontal: "right"};
+        }
 
-            for (const d of days) {
+        // ---------- Days Row ----------
+        const dayRow = 7;
+        ws.getRow(dayRow).height = 25.5;
+        let startCol = 3;
+        for (let i = 0; i < days.length; i++) {
+            const col = startCol + i * 2;
+            ws.getCell(dayRow, col).value = days[i].toUpperCase();
+            ws.getCell(dayRow, col).alignment = { horizontal: "center", vertical: "middle" };
+        }
 
-                const c = sched[d][t]
+        // ---------- Schedule Rows ----------
+        let excelRow = dayRow + 1;
+        const timeToRow: Record<string, number> = {};
+        timeBlocks.forEach((t, i) => timeToRow[t] = excelRow + i);
 
-                if (!c) {
-                    row.push("")
-                    continue
+        for (let dayIdx = 0; dayIdx < days.length; dayIdx++) {
+            const day = days[dayIdx];
+            const col = 3 + dayIdx * 2; // column for this day
+
+            let rowIdx = 0;
+            while (rowIdx < timeBlocks.length) {
+                const t = timeBlocks[rowIdx];
+                const cell = sched[day][t];
+
+                if (!cell) {
+                    rowIdx++;
+                    continue;
                 }
 
-                row.push(
-                    `${c.subject}\n${c.teacher}\n${c.program}${c.section}\nRoom:${c.room}`
-                )
-            }
+                // Count consecutive blocks for merging
+                let span = 1;
+                for (let j = rowIdx + 1; j < timeBlocks.length; j++) {
+                    const nextT = timeBlocks[j];
+                    const nextCell = sched[day][nextT];
+                    if (
+                        nextCell &&
+                        nextCell.subject === cell.subject &&
+                        nextCell.teacher === cell.teacher &&
+                        nextCell.section === cell.section
+                    ) {
+                        span++;
+                    } else {
+                        break;
+                    }
+                }
 
-            ws.addRow(row)
+                const startRow = excelRow + rowIdx;
+                const endRow = startRow + span - 1;
+
+                // Merge cells for multi-block class
+                ws.mergeCells(startRow, col, endRow, col);
+                ws.getCell(startRow, col).value = `${cell.subject}/${cell.teacher}\n${cell.program}${cell.section}\n${cell.room}`;
+                ws.getCell(startRow, col).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+
+                rowIdx += span;
+            }
+        }
+
+        // ---------- Time Column ----------
+        for (let i = 0; i < timeBlocks.length; i++) {
+            const t = timeBlocks[i];
+            let [hour, min] = t.split(":").map(Number);
+            let endHour = hour;
+            let endMin = min + 30;
+            if (endMin === 60) { endHour += 1; endMin = 0; }
+            const format12 = (h: number, m: number) => `${h % 12 === 0 ? 12 : h % 12}:${m.toString().padStart(2, "0")}`;
+            ws.getRow(excelRow + i).getCell(2).value = `${format12(hour, min)}-${format12(endHour, endMin)}`;
         }
     }
 
-    const buffer = await wb.xlsx.writeBuffer()
-
-    const blob = new Blob([buffer])
-
-    const url = window.URL.createObjectURL(blob)
-
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "schedule.xlsx"
-    a.click()
-
-    window.URL.revokeObjectURL(url)
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer]);
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "schedule.xlsx";
+    a.click();
+    window.URL.revokeObjectURL(url);
 }
 
 /* ---------- Page ---------- */
@@ -723,6 +796,7 @@ export default function Page() {
                                                     align-middle
                                                     text-center
                                                     text-xs
+                                                    text-white
                                                     font-medium
                                                     p-2
                                                     w-24
