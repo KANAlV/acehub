@@ -315,8 +315,6 @@ const rooms: Rooms[] = [
 const max_load = 24
 const preferred_length = 3
 const preferred_lab = 4
-const max_split = 2
-const ge_length = 1.5
 const maxPrep = 4
 
 const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -375,10 +373,6 @@ function createSchedule(): Schedule {
     }
 
     return sched
-}
-
-function hoursToBlocks(hours: number) {
-    return hours * 2
 }
 
 /* ---------- Teacher Assignment ---------- */
