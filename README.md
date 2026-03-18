@@ -88,18 +88,10 @@ export default {
 
 ---
 
-### Flowbite
+### Flowbite & Flowbite React
 
 ```bash
-npm install flowbite
-```
-
----
-
-### Flowbite React
-
-```bash
-npm install flowbite-react
+npm install flowbite flowbite-react
 ```
 
 ---
