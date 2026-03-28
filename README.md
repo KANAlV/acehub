@@ -112,6 +112,14 @@ npm install react-icons
 
 ---
 
+### Postgres
+
+```bash
+npm install postgres
+```
+
+---
+
 # Running the Project
 
 Start the development server:
