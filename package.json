@@ -23,11 +23,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "auto": "^11.3.6",
     "autoprefixer": "^10.4.27",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "postcss": "^8.5.8",
-    "tailwindcss": "^4.2.1",
+    "prefixer": "^0.0.3",
+    "tailwindcss": "^4.2.2",
     "typescript": "^5"
   }
 }

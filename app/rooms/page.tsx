@@ -10,10 +10,11 @@ import {
     TableHeadCell,
     TableRow,
     Label,
-    TextInput, Dropdown, DropdownItem, Select
+    TextInput, Select, Toast,
+    ToastToggle
 } from "flowbite-react";
 import {useState} from "react";
-import {HiOutlineExclamationCircle} from "react-icons/hi";
+import {HiCheck, HiOutlineExclamationCircle, HiOutlineTrash} from "react-icons/hi";
 import {FaSave} from "react-icons/fa";
 
 export default function RoomManager() {
@@ -21,6 +22,9 @@ export default function RoomManager() {
     const [openWarningModal, setOpenWarningModal] = useState(false);
     const [selectedRoom, setSelectedRoom] = useState(null); // Track the room being edited
     const [warningType, setWarningType] = useState(null); // Track What warning will show
+    const [floorNumberVal, setFloorNumberVal] = useState(null);
+    const [roomNameVal, setRoomNameVal] = useState(null);
+    const [toastState, setToastState] = useState(false);
 
     // Test Data
     const [rooms, setRooms] = useState([
@@ -31,7 +35,7 @@ export default function RoomManager() {
 
     const RoomTableRow = ({ room }) => {
         return (
-            <TableRow className="bg-white dark:border-gray-700 dark:bg-gray-800">
+            <TableRow className="bg-white border-gray-300 dark:border-gray-700 dark:bg-gray-800">
                 <TableCell>{room.floor}</TableCell>
                 <TableCell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
                     {room.room_name}
@@ -47,8 +51,18 @@ export default function RoomManager() {
     };
 
     function editModal(id: number) {
+        setSelectedRoom(rooms.find(r => r.id === id).id);
+        setFloorNumberVal(rooms.find(r => r.id === id).floor);
+        setRoomNameVal(rooms.find(r => r.id === id).room_name);
         setOpenModal(true);
-        setSelectedRoom(id);
+    }
+
+    function discardEntry() {
+        setSelectedRoom(null);
+        setFloorNumberVal(null);
+        setRoomNameVal(null);
+        setOpenWarningModal(false);
+        setOpenModal(false);
     }
 
     function showWarning(color: string) {
@@ -59,7 +73,7 @@ export default function RoomManager() {
     return (
         <div className="p-8 font-sans">
             <div className={"flex items-center justify-between"}>
-                <h1 className={"my-6 font-bold text-2xl"}>Manage Rooms:</h1>
+                <h1 className={"mb-8 font-bold text-2xl"}>Manage Rooms:</h1>
                 <div className={"flex space-x-3"}>
                     <Button color={"alternative"}>Export</Button>
                     <Button>Add Room</Button>
@@ -87,20 +101,35 @@ export default function RoomManager() {
         {/*  Modals  */}
             {/*  Edit Modal  */}
             <Modal size={"sm"} show={openModal} onClose={() => setOpenModal(false)}>
-                <ModalHeader>Editing Room: {rooms[selectedRoom]?.room_name}</ModalHeader>
+                <div className={"flex grow p-4 w-full items-center border-b border-gray-300 dark:border-gray-700"}>
+                    <h1>Editing Room: {rooms[selectedRoom]?.room_name}</h1>
+                    <div className={"flex grow justify-end"}>
+                        <Button outline color={"dark"} className={"p-2"} onClick={() => showWarning("red")}>
+                            <HiOutlineTrash color={"red"} className={"size-6"}/>
+                        </Button>
+                    </div>
+                </div>
                 <ModalBody>
                     <div className="grid grid-cols-3 gap-4 space-y-6">
                         <div>
                             <div className="mb-2 block">
                                 <Label htmlFor="floor">Floor</Label>
                             </div>
-                            <TextInput id="floor" type="number" placeholder="1" required />
+                            <TextInput id="floor" type="number"
+                                       placeholder="1"
+                                       value={floorNumberVal}
+                                       onChange={(e) => setFloorNumberVal(e.target.value)}
+                                       required />
                         </div>
                         <div className={"col-span-2"}>
                             <div className="mb-2 block">
                                 <Label htmlFor="roomName">Room Name</Label>
                             </div>
-                            <TextInput id="roomName" type="email" placeholder="101" required />
+                            <TextInput id="roomName" type="text"
+                                       placeholder="e.g. 101"
+                                       value={roomNameVal}
+                                       onChange={(e) => setRoomNameVal(e.target.value)}
+                                       required />
                         </div>
                         <div className={"col-span-2"}>
                             <div className="mb-2 block">
@@ -116,7 +145,7 @@ export default function RoomManager() {
                     </div>
                 </ModalBody>
                 <ModalFooter className={"justify-end"}>
-                    <Button color="alternative" onClick={() => showWarning("red")}>
+                    <Button color="alternative" onClick={() => showWarning("yellow")}>
                         Discard
                     </Button>
                     <Button onClick={() => showWarning("default")}>Save</Button>
@@ -129,7 +158,20 @@ export default function RoomManager() {
                 <ModalBody>
                     <div className="text-center">
                         {warningType=="red"?(<>
-                            <HiOutlineExclamationCircle className="mx-auto mb-4 h-14 w-14 text-gray-400 dark:text-gray-200" />
+                            <HiOutlineTrash color={"red"} className="mx-auto mb-4 h-14 w-14 text-gray-400 dark:text-gray-200" />
+                            <h3 className="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
+                                Are you sure you want to delete this entry?
+                            </h3>
+                            <div className="flex justify-center gap-4">
+                                <Button color="alternative" onClick={() => setOpenWarningModal(false)}>
+                                    No, cancel
+                                </Button>
+                                <Button color="red" onClick={() => discardEntry()}>
+                                    Yes, I'm sure
+                                </Button>
+                            </div>
+                            </>):(<>
+                            <HiOutlineExclamationCircle color={"yellow"} className="mx-auto mb-4 h-14 w-14 text-gray-400 dark:text-gray-200" />
                             <h3 className="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
                                 Are you sure you want to discard all changes?
                             </h3>
@@ -137,20 +179,7 @@ export default function RoomManager() {
                                 <Button color="alternative" onClick={() => setOpenWarningModal(false)}>
                                     No, cancel
                                 </Button>
-                                <Button color="red" onClick={() => setOpenWarningModal(false)}>
-                                    Yes, I'm sure
-                                </Button>
-                            </div>
-                            </>):(<>
-                            <FaSave className="mx-auto mb-4 h-14 w-14 text-gray-400 dark:text-gray-200" />
-                            <h3 className="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
-                                Save all changes?
-                            </h3>
-                            <div className="flex justify-center gap-4">
-                                <Button color="alternative" onClick={() => setOpenWarningModal(false)}>
-                                    No, cancel
-                                </Button>
-                                <Button color="default" onClick={() => setOpenWarningModal(false)}>
+                                <Button color="yellow" onClick={() => discardEntry()}>
                                     Yes, I'm sure
                                 </Button>
                             </div>
@@ -158,6 +187,15 @@ export default function RoomManager() {
                     </div>
                 </ModalBody>
             </Modal>
+
+            {/* Toast */}
+            <Toast hidden={!toastState} className={"fixed z-60 bottom-10 right-10"}>
+                <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-green-100 text-green-500 dark:bg-green-800 dark:text-green-200">
+                    <HiCheck className="h-5 w-5" />
+                </div>
+                <div className="ml-3 text-sm font-normal">Saved successfully.</div>
+                <ToastToggle />
+            </Toast>
         </div>
     );
 }
