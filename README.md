@@ -63,23 +63,35 @@ If installing manually, install the required packages using:
 
 ```bash
 npm install -D tailwindcss postcss autoprefixer
-npx tailwindcss init -p
+```
+
+and create the config in the project root if missing: 
+### tailwind.config.js
+
+```js
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./node_modules/flowbite-react/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [
+    require("flowbite/plugin")
+  ],
+}
 ```
 
 ---
 
-### Flowbite
+### Flowbite & Flowbite React
 
 ```bash
-npm install flowbite
-```
-
----
-
-### Flowbite React
-
-```bash
-npm install flowbite-react
+npm install flowbite flowbite-react
 ```
 
 ---
@@ -96,6 +108,14 @@ npm install exceljs
 
 ```bash
 npm install react-icons
+```
+
+---
+
+### Postgres
+
+```bash
+npm install postgres
 ```
 
 ---
