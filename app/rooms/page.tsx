@@ -11,7 +11,7 @@ import {
     TableRow,
     Label,
     TextInput, Select, Toast,
-    ToastToggle, Tooltip
+    ToastToggle, Tooltip, Pagination
 } from "flowbite-react";
 import {useEffect, useRef, useState} from "react";
 import {
@@ -19,10 +19,9 @@ import {
     HiExclamation,
     HiOutlineExclamationCircle,
     HiOutlineTrash,
-    HiQuestionMarkCircle,
     HiSearch
 } from "react-icons/hi";
-import {fetchRooms, insertRoom} from "@/services/userService";
+import {fetchRooms, fetchRoomsCount, insertRoom} from "@/services/userService";
 
 export default function RoomManager() {
     const [editModal, setEditModal] = useState(false);
@@ -40,6 +39,13 @@ export default function RoomManager() {
     const [search, setSearch] = useState("");
     const [rooms, setRooms] = useState([]);
 
+    // pagination consts
+    const [currentPage, setCurrentPage] = useState(1);
+    const [rowCount, setrowCount] = useState(0);
+    const itemsPerPage = 15;
+    const startItem = ((currentPage - 1) * itemsPerPage) + 1;
+    const endItem = Math.min(currentPage * itemsPerPage, rowCount);  // Math.min to ensure not to show a number higher than the total rows
+
     // // Test Data
     // const [rooms, setRooms] = useState([
     //     { id: 1, floor: 1, room_name: 'Comlab 1', room_type: 'Computer Lab' },
@@ -49,21 +55,37 @@ export default function RoomManager() {
 
     useEffect(() => {
         const loadInitialData = async () => {
-            const data = await fetchRooms();
+            const data = await fetchRooms(search, currentPage);
             setRooms(data);
         };
+
+        const loadRowCount = async () => {
+            const rowCount = await fetchRoomsCount();
+            setrowCount(rowCount);
+        }
+
+        if (showToast) {
+            const timer = setTimeout(() => {
+                setShowToast(false);
+            }, 5000); // 5000ms = 5 seconds
+
+            // Cleanup function: clears the timer if the component
+            // unmounts or if showToast changes before 5s is up
+            return () => clearTimeout(timer);
+        }
+
+        loadRowCount()
         loadInitialData();
-    }, []);
+    }, [currentPage, showToast, search]);
 
     const RoomTableRow = ({ room }) => {
         return (
             <TableRow className="bg-white border-gray-300 dark:border-gray-700 dark:bg-gray-800">
-                <TableCell>{room.floor}</TableCell>
                 <TableCell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
                     {room.room_name}
                 </TableCell>
                 <TableCell>{room.room_type}</TableCell>
-                <TableCell>
+                <TableCell className={"flex justify-end"}>
                     <Button color="alternative" onClick={() => editModalValue(room.id)}>
                         Edit
                     </Button>
@@ -95,7 +117,11 @@ export default function RoomManager() {
 
     // Queries
 
-    async function submitRoom() {
+    const onPageChange = (page: number) => {
+        setCurrentPage(page);
+    };
+
+    async function submitRoom() { // Add Room
         if (!roomNameVal || !roomTypeVal) {
             console.error("Missing values!");
             return;
@@ -108,21 +134,10 @@ export default function RoomManager() {
         if (stat === "201") {
             discardEntry();
 
-            const data = await fetchRooms();
+            const data = await fetchRooms("", currentPage);
             setRooms(data);
         }
     }
-
-    const handleSearch = async (e: React.SyntheticEvent) => {
-        // This stops the page from refreshing
-        e.preventDefault();
-
-        // Ensure we send a string to your service
-        const searchTerm = search || "";
-
-        const data = await fetchRooms(searchTerm);
-        setRooms(data);
-    };
 
     function deleteRow() {
 
@@ -131,7 +146,7 @@ export default function RoomManager() {
     }
 
     return (
-        <div className="p-8 font-sans">
+        <div className="p-8 font-sans w-180">
             <div className={"flex items-center justify-between"}>
                 <h1 className={"mb-8 font-bold text-2xl"}>Manage Rooms:</h1>
                 <div className={"flex space-x-3"}>
@@ -141,22 +156,16 @@ export default function RoomManager() {
             </div>
 
             {/* Searchbox*/}
-            <form onSubmit={handleSearch} className="flex space-x-2">
-                <TextInput
-                    className="mb-4 w-62"
-                    placeholder="Search..."
-                    value={search || ""}
-                    onChange={(e) => setSearch(e.target.value)}
-                />
-                <Button type="submit" color="alternative">
-                    <HiSearch/>
-                </Button>
-            </form>
+            <TextInput
+                className="mb-4 w-62"
+                placeholder="Search..."
+                value={search || ""}
+                onChange={(e) => setSearch(e.target.value)}
+            />
 
             <Table hoverable>
                 <TableHead>
                     <TableRow>
-                        <TableHeadCell>Floor</TableHeadCell>
                         <TableHeadCell>Room</TableHeadCell>
                         <TableHeadCell>Type</TableHeadCell>
                         <TableHeadCell>
@@ -165,13 +174,34 @@ export default function RoomManager() {
                     </TableRow>
                 </TableHead>
                 <TableBody className="divide-y">
-                    {rooms.map((room) => (
-                        <RoomTableRow key={room.id} room={room} />
-                    ))}
+                    {rooms.length > 0 ? (
+                        rooms.map((room) => (
+                            <RoomTableRow key={room.room_id} room={room} />
+                        ))
+                    ) : (
+                        <TableRow className="bg-white border-gray-300 dark:border-gray-700 dark:bg-gray-800">
+                            <TableCell colSpan={3} className="whitespace-nowrap font-medium text-center text-gray-900 dark:text-white">
+                                No rooms found matching your search.
+                            </TableCell>
+                        </TableRow>
+                    )}
                 </TableBody>
             </Table>
 
-        {/*  Modals  */}
+            {/* Pagination */}
+            <div className={"mt-6"}>
+                <h1 className="text-center">
+                    {rowCount > 0
+                        ? `Showing ${startItem} to ${endItem} of ${rowCount} Entries`
+                        : "No rooms found"
+                    }
+                </h1>
+                <div className="flex overflow-x-auto sm:justify-center">
+                    <Pagination currentPage={currentPage} totalPages={100} onPageChange={onPageChange} showIcons />
+                </div>
+            </div>
+
+            {/* --- Modals --- */}
             {/*  Add Modal  */}
             <Modal size={"sm"} show={addModal} initialFocus={AddModalRoomNameInput} onClose={() => setAddModal(false)}>
                 <ModalHeader>Add Room</ModalHeader>

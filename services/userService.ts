@@ -1,5 +1,6 @@
 'use server'
 import sql from '@/lib/db';
+import {revalidatePath} from 'next/cache';
 
 /* Status Codes
         *
@@ -13,36 +14,53 @@ import sql from '@/lib/db';
         * 503 - Service Unavailable (server is temporarily overloaded or down for maintenance)
         * */
 
-export async function fetchRooms(search = "") {
-    try {
-        const val = search.trim() === "" ? null : search;
+/** ---  ROOMS --- **/
+    export async function fetchRooms(search = "", page:number) {
+        try {
+            const val = search.trim() === "" ? null : search;
+            const offset = (page - 1) * 15;
 
-        // In 'postgres.js', you call the function directly with tagged template literals
-        // OR as a function for dynamic parameters:
-        const rooms = await sql`
-            SELECT * FROM get_rooms(${val})
+            const rooms = await sql`
+                SELECT * FROM get_rooms(${val}, ${offset})
+            `;
+
+            return rooms;
+        } catch (error) {
+            console.error("DB Error:", error);
+            return [];
+        }
+    }
+
+    export async function fetchRoomsCount(p_room_name = null) {
+        try {
+            const result = await sql`
+                SELECT get_rooms_count(${p_room_name})
+            `;
+
+            // result is an array like: [{ get_rooms_count: 15 }]
+            // Return 0 if the array is empty, otherwise return the value
+            return result.length > 0 ? result[0].get_rooms_count : 0;
+
+        } catch (error) {
+            console.error("DB Error:", error);
+            return 0;
+        }
+    }
+
+    export async function insertRoom(name: string, type: string) {
+        try {
+            // Tagged template literals automatically prevent SQL Injection
+            await sql`
+          INSERT INTO rooms (room_name, room_type)
+          VALUES (${name}, ${type})
         `;
 
-        // 'postgres.js' returns the array of rows directly, NOT an object with a .rows property
-        return rooms;
-    } catch (error) {
-        console.error("DB Error:", error);
-        return [];
+            // This clears the Next.js cache so the new room shows up instantly
+            revalidatePath('/rooms');
+
+            return "201";
+        } catch (error) {
+            console.error(error);
+            return "500";
+        }
     }
-}
-
-export async function insertRoom(room_name: string, room_type: string) {
-    try {
-        // Log the inputs to be 100% sure what's being sent
-        console.log("Attempting to insert:", { room_name, room_type });
-
-        await sql`SELECT * FROM create_room(${room_name}, ${room_type})`;
-        return "201";
-    } catch (error: any) {
-        // THIS IS THE MOST IMPORTANT LINE:
-        // It will show "column 'floor' does not exist" or "unique constraint violation"
-        console.error("FULL DATABASE ERROR:", error.message);
-
-        return "500";
-    }
-}
