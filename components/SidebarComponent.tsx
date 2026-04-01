@@ -9,6 +9,9 @@ export function SidebarComponent() {
     return (
         <Sidebar className={"h-dvh"}>
             <SidebarItems>
+                <SidebarItemGroup className={"flex items-center"}>
+                    <h1 className={"font-bold mx-5 text-xl"}>𝒜</h1> ACEHUB
+                </SidebarItemGroup>
                 <SidebarItemGroup>
                     <SidebarItem as={Link} href="/" icon={HiChartPie}>
                         Dashboard
