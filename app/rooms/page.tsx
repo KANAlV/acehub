@@ -1,48 +1,60 @@
 "use client"
 import {
     Button,
+    Dropdown,
+    DropdownItem,
+    Label,
     Modal,
     ModalBody,
     ModalFooter,
     ModalHeader,
+    Pagination,
+    Progress,
+    Select,
     Table,
-    TableBody, TableCell, TableHead,
+    TableBody,
+    TableCell,
+    TableHead,
     TableHeadCell,
     TableRow,
-    Label,
-    TextInput, Select, Toast,
-    ToastToggle, Tooltip, Pagination, Progress
+    TextInput,
+    Toast,
+    ToastToggle
 } from "flowbite-react";
 import {useEffect, useRef, useState} from "react";
-import {
-    HiCheck,
-    HiExclamation,
-    HiOutlineExclamationCircle,
-    HiOutlineTrash,
-    HiSearch
-} from "react-icons/hi";
-import {deleteRoom, fetchRooms, fetchRoomsCount, insertRoom, updateRoom} from "@/services/userService";
+import {HiCheck, HiExclamation, HiOutlineExclamationCircle, HiOutlineTrash} from "react-icons/hi";
+import {deleteRoom, fetchRooms, fetchRoomsCount, getAllRoomsData, insertRoom, updateRoom} from "@/services/userService";
 
 export default function RoomManager() {
+    const [rooms, setRooms] = useState([]); // room rows are stored here
+
+    // UI consts
     const [editModal, setEditModal] = useState(false);
     const [addModal, setAddModal] = useState(false);
     const [openWarningModal, setOpenWarningModal] = useState(false);
     const [warningType, setWarningType] = useState(""); // Track What warning will show
-    const [selectedRoom, setSelectedRoom] = useState(0); // Track the room being edited
-    const [roomNameVal, setRoomNameVal] = useState("");
-    const [roomTypeVal, setRoomTypeVal] = useState("Lecture");
-    const [showToast, setShowToast] = useState(false);
+
     const [activeChanges, setActiveChanges] = useState(false); // Track if there are changes in edit to toggle between cancel and discard
     const AddModalRoomNameInput = useRef<HTMLInputElement>(null); // for initialFocus of AddModal
     const EditModalRoomNameInput = useRef<HTMLInputElement>(null); // for initialFocus of EditModal
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const [showToast, setShowToast] = useState(false);
     const [progress, setProgress] = useState(100); // Toast progress bar
+
+    // form useStates
+    const [selectedRoom, setSelectedRoom] = useState(0); // Track the room being edited
+    const [roomNameVal, setRoomNameVal] = useState("");
+    const [roomTypeVal, setRoomTypeVal] = useState("Lecture");
+
+    // Search
     const [search, setSearch] = useState("");
-    const [rooms, setRooms] = useState([]);
+    const [debouncedSearch, setDebouncedSearch] = useState(search);
 
     // pagination consts
-    const [currentPage, setCurrentPage] = useState(1);
-    const [rowCount, setrowCount] = useState(1);
     const itemsPerPage = 10;
+    const [currentPage, setCurrentPage] = useState(1);
+    const [rowCount, setRowCount] = useState(1);
     const totalPageCount = Math.ceil(rowCount / itemsPerPage);
     const startItem = ((currentPage - 1) * itemsPerPage) + 1;
     const endItem = Math.min(currentPage * itemsPerPage, rowCount);  // Math.min to ensure not to show a number higher than the total rows
@@ -59,6 +71,7 @@ export default function RoomManager() {
         "500": "Server error. Please try again later."
     };
 
+    /** UI Functions **/
     function editModalValue(id: number) {
         const room = rooms.find(r => r.room_id == id);
 
@@ -105,7 +118,7 @@ export default function RoomManager() {
         const rowCount = await fetchRoomsCount(search);
 
         console.log(`[DATA_LIFECYCLE]: Total matching rooms in DB: ${rowCount}`);
-        setrowCount(rowCount);
+        setRowCount(rowCount);
     }
 
     const onPageChange = (page: number) => {
@@ -132,8 +145,8 @@ export default function RoomManager() {
             console.log("[UI_UPDATE]: Room created successfully. Clearing form and refreshing list.");
             discardEntry();
             setSearch("");
-            loadRowCount();
-            loadInitialData();
+            await loadRowCount();
+            await loadInitialData();
         } else {
             console.error(`[UI_ERROR]: Room creation failed with status: ${stat}`);
         }
@@ -157,8 +170,8 @@ export default function RoomManager() {
             console.log(`[UI_UPDATE]: Update successful. Resetting view and refreshing data.`);
             discardEntry();
             setSearch("");
-            loadRowCount();
-            loadInitialData();
+            await loadRowCount();
+            await loadInitialData();
         } else {
             console.warn(`[UI_WARN]: Update failed. No UI refresh triggered.`);
         }
@@ -180,30 +193,220 @@ export default function RoomManager() {
             console.log(`[UI_UPDATE]: Deletion successful. Resetting view and refreshing data.`);
             discardEntry();
             setSearch("");
-            loadRowCount();
-            loadInitialData();
+            await loadRowCount();
+            await loadInitialData();
         } else {
             console.warn(`[UI_WARN]: Delete failed. No UI refresh triggered.`);
         }
     }
 
+    /** Import/Export **/
+    async function handleExportToExcel() {
+        try {
+            const rooms = await getAllRoomsData();
+
+            if (!rooms || rooms.length === 0) {
+                return "404";
+            }
+
+            const ExcelJS = (await import('exceljs')).default;
+            const { saveAs } = await import('file-saver');
+
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Rooms Inventory');
+
+            worksheet.columns = [
+                { header: 'ID', key: 'room_id', width: 10 },
+                { header: 'Room Name', key: 'room_name', width: 35 },
+                { header: 'Type', key: 'room_type', width: 20 },
+                { header: 'Created At', key: 'created_at', width: 25 }
+            ];
+
+            const headerRow = worksheet.getRow(1);
+            headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
+            headerRow.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: '2C3E50' }
+            };
+
+            worksheet.addRows(rooms);
+            worksheet.getColumn('created_at').numFmt = 'yyyy-mm-dd hh:mm';
+
+            worksheet.autoFilter = 'A1:D1';
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+
+            saveAs(blob, `Rooms_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+            return "200";
+        } catch (error) {
+            console.error("[EXPORT_UI_ERROR]:", error);
+            return "500";
+        }
+    }
+
+    async function downloadImportTemplate() {
+        try {
+            console.log("[TEMPLATE_START]: Generating Import Template...");
+
+            // 1. Dynamic Imports
+            const ExcelJS = (await import('exceljs')).default;
+            const { saveAs } = await import('file-saver');
+
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Import Template');
+
+            // 2. Define Columns
+            worksheet.columns = [
+                { header: 'Room Name', key: 'name', width: 30 },
+                { header: 'Room Type', key: 'type', width: 25 }
+            ];
+
+            // 3. Style Header (Green for "Go/Template")
+            const headerRow = worksheet.getRow(1);
+            headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
+            headerRow.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: '16A34A' } // Tailwind green-600
+            };
+
+            // 4. Add Sample Row
+            worksheet.addRow({ name: 'Example Room 101', type: 'Lecture' });
+
+            // 5. Add Data Validation (The Dropdown Menu in Excel)
+            // This ensures the user picks from your specific list
+            const typeOptions = [
+                'Lecture',
+                'Computer Lab',
+                'Culinary Lab',
+                'Mock Bar',
+                'Mock Hotel',
+                'Gym',
+                'AVR'
+            ];
+
+            // Apply validation to the first 100 rows in the 'Type' column (Column B)
+            for (let i = 2; i <= 100; i++) {
+                worksheet.getCell(`B${i}`).dataValidation = {
+                    type: 'list',
+                    allowBlank: true,
+                    formulae: [`"${typeOptions.join(',')}"`],
+                    showErrorMessage: true,
+                    errorTitle: 'Invalid Room Type',
+                    error: 'Please select a type from the dropdown list.'
+                };
+            }
+
+            // 6. Generate and Save
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+
+            saveAs(blob, `Room_Import_Template.xlsx`);
+
+            console.log("[TEMPLATE_SUCCESS]: Template downloaded.");
+            return "200";
+        } catch (error) {
+            console.error("[TEMPLATE_ERROR]:", error);
+            return "500";
+        }
+    }
+
+    async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        console.log(`[UI_ACTION]: Starting import for file: ${file.name}`);
+
+        try {
+            const ExcelJS = (await import('exceljs')).default;
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.load(await file.arrayBuffer());
+
+            const worksheet = workbook.getWorksheet(1);
+            const rows: { name: string, type: string }[] = [];
+
+            worksheet?.eachRow((row, rowNumber) => {
+                if (rowNumber > 1) { // Skip header
+                    const name = row.getCell(1).value?.toString().trim();
+                    const type = row.getCell(2).value?.toString().trim();
+                    if (name && type) rows.push({ name, type });
+                }
+            });
+
+            if (rows.length === 0) {
+                setStatusCode("400");
+                setShowToast(true);
+                return;
+            }
+
+            let hasConflict = false;
+            for (const room of rows) {
+                const res = await insertRoom(room.name, room.type);
+                if (res === "409") hasConflict = true;
+                if (res === "500") throw new Error("DB Failure");
+            }
+
+            // If at least one room was a duplicate, we show 409, otherwise 201
+            setStatusCode(hasConflict && rows.length === 1 ? "409" : "201");
+            setShowToast(true);
+
+            await loadRowCount();
+            await loadInitialData();
+
+        } catch (error) {
+            console.error("[IMPORT_ERROR]:", error);
+            setStatusCode("500");
+            setShowToast(true);
+        } finally {
+            e.target.value = ""; // Reset input
+        }
+    }
+
     /** Updates **/
-    useEffect(() => { // Fetching Rows
-        loadRowCount()
-        loadInitialData();
-    }, [currentPage, search]);
+    useEffect(() => {
+        let isCancelled = false; // Cleanup flag to prevent race conditions
+
+        const fetchData = async () => {
+            try {
+                // Run in parallel to save time
+                await Promise.all([
+                    loadRowCount(),
+                    loadInitialData()
+                ]);
+
+                if (isCancelled) return;
+                console.log("[LIFECYCLE]: Page data refreshed.");
+            } catch (error) {
+                console.error("[LIFECYCLE_ERROR]: Failed to sync rooms:", error);
+            }
+        };
+
+        fetchData().catch((err) => {
+            console.error("[CRITICAL_ERROR]: Fetch failed in useEffect", err);
+        });
+
+        return () => {
+            isCancelled = true; // 2. Cancel state updates if component re-renders
+        };
+    }, [currentPage, debouncedSearch]);
 
     useEffect(() => { // Toast
         if (showToast) {
             console.log(`[UI_TOAST]: Toast appeared. Status: ${statusCode}. Starting 5s countdown.`);
 
             setProgress(100);
-            loadRowCount();
+            loadRowCount().catch(err => console.error("Failed to refresh row count:", err));
 
             const interval = setInterval(() => {
                 setProgress((prev) => {
-                    const nextValue = Math.max(0, prev - (100 / (5000 / 50)));
-                    return nextValue;
+                    return Math.max(0, prev - (100 / (5000 / 50)));
                 });
             }, 50);
 
@@ -222,6 +425,16 @@ export default function RoomManager() {
 
     useEffect(() => { // Resetting Page to 1 When Searching
         setCurrentPage(1);
+    }, [debouncedSearch]);
+
+    useEffect(() => { // Adds 1 sec delay to querying while typing
+        const handler = setTimeout(() => {
+            setDebouncedSearch(search);
+        }, 1000); // 1000ms = 1 seconds
+
+        return () => {
+            clearTimeout(handler); // Cancel the timer if the user types
+        };
     }, [search]);
 
     const RoomTableRow = ({ room }) => {
@@ -241,16 +454,22 @@ export default function RoomManager() {
     };
 
     return (
-        <div className="p-8 h-full w-full overflow-x-auto font-sans w-180">
+        <div className="p-8 h-full w-full overflow-x-auto font-sans">
             <div className={"flex items-center justify-between"}>
                 <h1 className={"mb-4 font-bold text-2xl"}>Manage Rooms:</h1>
                 <div className={"flex space-x-3"}>
-                    <Button color={"alternative"}>Export</Button>
+                    <Dropdown color={"alternative"} label={"Actions"} dismissOnClick={false}>
+                        <DropdownItem onClick={() => downloadImportTemplate()}>Get Import Template</DropdownItem>
+                        <DropdownItem onClick={() => fileInputRef.current?.click()}>
+                            Import
+                        </DropdownItem>
+                        <DropdownItem onClick={() => handleExportToExcel()}>Export</DropdownItem>
+                    </Dropdown>
                     <Button onClick={() => setAddModal(true)}>Add Room</Button>
                 </div>
             </div>
 
-            {/* Searchbox*/}
+            {/* SearchBox*/}
             <TextInput
                 className="mb-4 w-62"
                 placeholder="Search..."
@@ -486,8 +705,6 @@ export default function RoomManager() {
                         {["200", "201", "204"].includes(statusCode) && (
                             <HiCheck className="h-5 w-5" />
                         )}
-                        {statusCode == "409"? (<HiExclamation className="h-5 w-5" />):null}
-                        {statusCode == "500"? (<HiExclamation className="h-5 w-5" />):null}
                         {["404", "409", "500"].includes(statusCode) && (
                             <HiExclamation className="h-5 w-5" />
                         )}
@@ -505,6 +722,14 @@ export default function RoomManager() {
                 </div>
                 <Progress size={"sm"} className={"mt-2 mb-0 pb-0"} progress={progress}/>
             </Toast>
+
+            <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept=".xlsx"
+                onChange={handleImport}
+            />
         </div>
     );
 }

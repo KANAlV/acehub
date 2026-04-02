@@ -13,6 +13,7 @@ This project was built using the following tools and libraries:
 * **Flowbite React** – React components built on Flowbite
 * **Tailwind CSS** – Utility-first CSS framework
 * **ExcelJS** – Library used to generate and export Excel schedule files
+* **FileSaver.js** – Library used to trigger the browser download of generated files
 * **React Icons** – Icon library for React
 * **Node Package Manager (npm)** – version **10.8.2**
 
@@ -96,10 +97,10 @@ npm install flowbite flowbite-react
 
 ---
 
-### ExcelJS
+### ExcelJS & FileSaver.js
 
 ```bash
-npm install exceljs
+npm install exceljs file-saver
 ```
 
 ---

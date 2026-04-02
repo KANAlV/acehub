@@ -4,7 +4,7 @@ import {revalidatePath} from 'next/cache';
 
 /* Status Codes
         *
-        * 200 - all clear (returned req succesfully)
+        * 200 - all clear / returned req successfully (used after updating)
         * 201 - req success and creation of new resource
         * 204 - req success but no data back (used after deleting something)
         * 400 - bad request
@@ -152,3 +152,17 @@ export async function deleteRoom(id: number) {
     }
 }
 
+export async function getAllRoomsData() {
+    try {
+        console.log(`[DB_FETCH]: Fetching all rooms for export.`);
+
+        // Use the SQL function we fixed earlier
+        const rooms = await sql`SELECT * FROM get_all_rooms()`;
+
+        // Return raw data to the frontend
+        return JSON.parse(JSON.stringify(rooms));
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch export data:", error);
+        throw new Error("Failed to fetch rooms");
+    }
+}

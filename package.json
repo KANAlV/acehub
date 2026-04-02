@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "exceljs": "^4.4.0",
+    "file-saver": "^2.0.5",
     "flowbite": "^4.0.1",
     "flowbite-react": "^0.12.17",
     "next": "16.1.6",
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/file-saver": "^2.0.7",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
