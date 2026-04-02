@@ -21,7 +21,7 @@ import {
     Toast,
     ToastToggle
 } from "flowbite-react";
-import {useEffect, useRef, useState} from "react";
+import React, {useEffect, useRef, useState} from "react";
 import {HiCheck, HiExclamation, HiOutlineExclamationCircle, HiOutlineTrash} from "react-icons/hi";
 import {deleteRoom, fetchRooms, fetchRoomsCount, getAllRoomsData, insertRoom, updateRoom} from "@/services/userService";
 
@@ -320,9 +320,7 @@ export default function RoomManager() {
 
     async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0];
-        if (!file) return;
-
-        console.log(`[UI_ACTION]: Starting import for file: ${file.name}`);
+        if (!file || !e.target) return;
 
         try {
             const ExcelJS = (await import('exceljs')).default;
@@ -333,7 +331,7 @@ export default function RoomManager() {
             const rows: { name: string, type: string }[] = [];
 
             worksheet?.eachRow((row, rowNumber) => {
-                if (rowNumber > 1) { // Skip header
+                if (rowNumber > 1) {
                     const name = row.getCell(1).value?.toString().trim();
                     const type = row.getCell(2).value?.toString().trim();
                     if (name && type) rows.push({ name, type });
@@ -347,14 +345,27 @@ export default function RoomManager() {
             }
 
             let hasConflict = false;
+            let successCount = 0;
+
             for (const room of rows) {
                 const res = await insertRoom(room.name, room.type);
-                if (res === "409") hasConflict = true;
-                if (res === "500") throw new Error("DB Failure");
+
+                if (res === "500") {
+                    setStatusCode("500");
+                    setShowToast(true);
+                    return; // Kill the process on server error
+                }
+
+                if (res === "409") {
+                    hasConflict = true;
+                } else {
+                    successCount++;
+                }
             }
 
-            // If at least one room was a duplicate, we show 409, otherwise 201
-            setStatusCode(hasConflict && rows.length === 1 ? "409" : "201");
+            // Logic: If we added at least one thing, call it a success (201)
+            // If we added nothing because everything was a duplicate, show 409
+            setStatusCode(successCount > 0 ? "201" : "409");
             setShowToast(true);
 
             await loadRowCount();
@@ -365,7 +376,7 @@ export default function RoomManager() {
             setStatusCode("500");
             setShowToast(true);
         } finally {
-            e.target.value = ""; // Reset input
+            if (e.target) e.target.value = "";
         }
     }
 
