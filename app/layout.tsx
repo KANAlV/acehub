@@ -26,7 +26,7 @@ export default function RootLayout({
     return (
         <html lang="en">
         <body
-            className={`flex ${geistSans.variable} ${geistMono.variable} antialiased`}
+            className={`block md:flex ${geistSans.variable} ${geistMono.variable} antialiased`}
         >
             <SidebarComponent/>
             <div className={"w-dvw h-dvh overflow-auto"}>

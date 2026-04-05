@@ -27,6 +27,7 @@ import {deleteRoom, fetchRooms, fetchRoomsCount, getAllRoomsData, insertRoom, up
 
 export default function RoomManager() {
     const [rooms, setRooms] = useState([]); // room rows are stored here
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // UI consts
     const [editModal, setEditModal] = useState(false);
@@ -37,7 +38,6 @@ export default function RoomManager() {
     const [activeChanges, setActiveChanges] = useState(false); // Track if there are changes in edit to toggle between cancel and discard
     const AddModalRoomNameInput = useRef<HTMLInputElement>(null); // for initialFocus of AddModal
     const EditModalRoomNameInput = useRef<HTMLInputElement>(null); // for initialFocus of EditModal
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [showToast, setShowToast] = useState(false);
     const [progress, setProgress] = useState(100); // Toast progress bar
@@ -448,6 +448,7 @@ export default function RoomManager() {
         };
     }, [search]);
 
+    /** Table Rows **/
     const RoomTableRow = ({ room }) => {
         return (
             <TableRow className="bg-white border-gray-300 dark:border-gray-700 dark:bg-gray-800">
@@ -489,33 +490,35 @@ export default function RoomManager() {
             />
 
             {/* Table */}
-            <Table hoverable>
-                <TableHead>
-                    <TableRow>
-                        <TableHeadCell>Room</TableHeadCell>
-                        <TableHeadCell>Type</TableHeadCell>
-                        <TableHeadCell>
-                            <span className="sr-only">Edit</span>
-                        </TableHeadCell>
-                    </TableRow>
-                </TableHead>
-                <TableBody className="divide-y">
-                    {rooms.length > 0 ? (
-                        rooms.map((room) => (
-                            <RoomTableRow key={room.room_id} room={room}/>
-                        ))
-                    ) : (
-                        <TableRow className="bg-white border-gray-300 dark:border-gray-700 dark:bg-gray-800">
-                            <TableCell colSpan={3} className="whitespace-nowrap font-medium text-center text-gray-900 dark:text-white">
-                                No rooms found.
-                            </TableCell>
+            <div className={"w-full md:w-auto h-auto overflow-x-scroll md:overflow-clip"}>
+                <Table hoverable>
+                    <TableHead>
+                        <TableRow>
+                            <TableHeadCell>Room</TableHeadCell>
+                            <TableHeadCell>Type</TableHeadCell>
+                            <TableHeadCell>
+                                <span className="sr-only">Edit</span>
+                            </TableHeadCell>
                         </TableRow>
-                    )}
-                </TableBody>
-            </Table>
+                    </TableHead>
+                    <TableBody className="divide-y">
+                        {rooms.length > 0 ? (
+                            rooms.map((room) => (
+                                <RoomTableRow key={room.room_id} room={room}/>
+                            ))
+                        ) : (
+                            <TableRow className="bg-white border-gray-300 dark:border-gray-700 dark:bg-gray-800">
+                                <TableCell colSpan={3} className="whitespace-nowrap font-medium text-center text-gray-900 dark:text-white">
+                                    No rooms found.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
 
             {/* Pagination */}
-            <div className={"mt-6"}>
+            <div className={"mt-6 justify-self-center"}>
                 <h1 className="text-center">
                     {rowCount > 0
                         ? `Showing ${startItem} to ${endItem} of ${rowCount} Entries`

@@ -166,3 +166,86 @@ export async function getAllRoomsData() {
         throw new Error("Failed to fetch rooms");
     }
 }
+
+/** --- Courses --- **/
+export async function fetchProgramCount(p_program_name: string) {
+    const searchLabel = p_program_name.trim() === "" ? "all programs" : `filter: "${p_program_name}"`;
+
+    try {
+        const result = await sql`
+            SELECT get_program_count(${p_program_name})
+        `;
+
+        // The column name in the result will be 'get_program_count'
+        const count = result.length > 0 ? result[0].get_program_count : 0;
+
+        console.log(`[DB_FETCH]: Program count requested (${searchLabel}) | Result: ${count}`);
+        return count;
+
+    } catch (error) {
+        console.error(`[DB_ERROR]: Failed to fetch program count for "${p_program_name}":`, error);
+        return 0;
+    }
+}
+
+export async function insertProgram(
+    p_program_code: string,
+    p_program_name: string,
+    p_level: string,
+    p_sections: any
+) {
+    const checkIfExists = await sql`
+        SELECT 1 FROM programs
+        WHERE program_code = ${p_program_code}
+            LIMIT 1
+    `;
+
+    if (checkIfExists.length > 0) return "409";
+
+    try {
+        // Add the explicit cast ::program_level here
+        await sql`
+            SELECT create_program(
+                           ${p_program_code},
+                           ${p_program_name},
+                           ${p_level}::program_level,
+                           ${p_sections}
+                   )
+        `;
+
+        revalidatePath('/programs');
+
+        console.log(`[${new Date().toISOString()}] DB_SUCCESS: Program Created`, {
+            code: p_program_code
+        });
+
+        return "201";
+    } catch (error) {
+        console.error(`[DB_ERROR]: Failed to execute create_program for "${p_program_code}":`, error);
+        return "500";
+    }
+}
+
+export async function fetchPrograms(search = "", page: number) {
+    const ITEMS_PER_PAGE = 10;
+
+    try {
+        const val = search.trim() === "" ? null : search;
+        const offset = (page - 1) * ITEMS_PER_PAGE;
+
+        const rooms = await sql`
+            SELECT * FROM get_programs(${val}, ${offset})
+        `;
+
+        // Log search term, page number, and how many results actually came back
+        console.log(
+            `[DB_FETCH]: Programs | Page: ${page} | Search: "${search || 'none'}" | Found: ${rooms.length}`
+        );
+
+        return rooms;
+    } catch (error) {
+        // Including the search and page in the error helps reproduce the crash
+        console.error(`[DB_ERROR]: Failed to fetch programs (Page: ${page}, Search: "${search}"):`, error);
+        return [];
+    }
+}
