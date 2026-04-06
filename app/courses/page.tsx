@@ -793,19 +793,20 @@ export default function CoursesManager() {
                 </div>
             </div>
 
+            {/** Toast **/}
             <Toast className={`fixed block z-60 bottom-10 right-10 transition-opacity duration-500
                 ${showToast ? 'opacity-100' : 'opacity-0 pointer-events-none'}
             `}>
                 <div className={"flex items-center"}>
                     <div className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg
                        ${["200", "201", "204"].includes(statusCode) && ("bg-green-100 text-green-500 dark:bg-green-800 dark:text-green-200")}
-                       ${statusCode == "409"? "bg-yellow-100 text-yellow-500 dark:bg-yellow-800 dark:text-yellow-200":null}
+                       ${["400", "409"].includes(statusCode) && ("bg-yellow-100 text-yellow-500 dark:bg-yellow-800 dark:text-yellow-200")}
                        ${statusCode == "500"? "bg-red-100 text-red-500 dark:bg-red-800 dark:text-red-200":null}
                     `}>
                         {["200", "201", "204"].includes(statusCode) && (
                             <HiCheck className="h-5 w-5" />
                         )}
-                        {["404", "409", "500"].includes(statusCode) && (
+                        {["400", "404", "409", "500"].includes(statusCode) && (
                             <HiExclamation className="h-5 w-5" />
                         )}
 

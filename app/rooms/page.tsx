@@ -341,6 +341,15 @@ export default function RoomManager() {
             const worksheet = workbook.getWorksheet(1);
             const rows: { name: string, type: string }[] = [];
 
+            // FORMAT VALIDATION: Ensure headers match
+            const firstHeader = worksheet?.getRow(1).getCell(1).value?.toString();
+            if (firstHeader !== 'Room Name') {
+                setStatusCode("400");
+                setLoading(false);
+                setShowToast(true);
+                return;
+            }
+
             worksheet?.eachRow((row, rowNumber) => {
                 if (rowNumber > 1) {
                     const name = row.getCell(1).value?.toString().trim();
@@ -746,13 +755,13 @@ export default function RoomManager() {
                 <div className={"flex items-center"}>
                     <div className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg
                        ${["200", "201", "204"].includes(statusCode) && ("bg-green-100 text-green-500 dark:bg-green-800 dark:text-green-200")}
-                       ${statusCode == "409"? "bg-yellow-100 text-yellow-500 dark:bg-yellow-800 dark:text-yellow-200":null}
+                       ${["400", "409"].includes(statusCode) && ("bg-yellow-100 text-yellow-500 dark:bg-yellow-800 dark:text-yellow-200")}
                        ${statusCode == "500"? "bg-red-100 text-red-500 dark:bg-red-800 dark:text-red-200":null}
                     `}>
                         {["200", "201", "204"].includes(statusCode) && (
                             <HiCheck className="h-5 w-5" />
                         )}
-                        {["404", "409", "500"].includes(statusCode) && (
+                        {["400", "404", "409", "500"].includes(statusCode) && (
                             <HiExclamation className="h-5 w-5" />
                         )}
 
