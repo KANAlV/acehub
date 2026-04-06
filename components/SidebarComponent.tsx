@@ -67,7 +67,7 @@ export function SidebarComponent() {
     }
     return (
         <>
-            <div className={"flex md:hidden py-1 bg-slate-700"}>
+            <div className={"flex md:hidden py-1 dark:bg-slate-800"}>
                 <Button
                     outline
                     color={"alternative"}
@@ -88,7 +88,7 @@ export function SidebarComponent() {
                 </DrawerItems>
             </Drawer>
 
-            <div className={"hidden md:block"}>
+            <div className={"hidden md:block dark:bg-slate-800"}>
                 <div className={"flex my-2 items-center"}>
                     <p className={"font-bold mx-5 text-xl"}>𝒜</p> ACEHUB
                 </div>

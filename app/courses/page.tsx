@@ -3,7 +3,7 @@
 import {
     Button,
     Dropdown,
-    DropdownItem, Pagination, Progress,
+    DropdownItem, Label, Modal, ModalBody, ModalFooter, ModalHeader, Pagination, Progress, Select,
     Table,
     TableBody, TableCell,
     TableHead,
@@ -12,16 +12,41 @@ import {
     TextInput, Toast, ToastToggle, Tooltip
 } from "flowbite-react";
 import React, {useEffect, useRef, useState} from "react";
-import {fetchProgramCount, fetchPrograms, insertProgram} from "@/services/userService.ts";
-import {HiCheck, HiExclamation} from "react-icons/hi";
+import {
+    insertProgram,
+    fetchProgramCount,
+    fetchPrograms,
+    getAllProgramsData,
+    updateProgram,
+    deleteProgram
+} from "@/services/userService.ts";
+import {HiCheck, HiExclamation, HiOutlineExclamationCircle, HiOutlineTrash} from "react-icons/hi";
 
 export default function CoursesManager() {
-    const [programs, setPrograms] = useState([]); // room rows are stored here
+    const [loading, setLoading] = useState(true); // spinner state
+    const [programs, setPrograms] = useState([]); // program rows are stored here
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // search
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState(search);
+
+    // UI consts
+    const [editModal, setEditModal] = useState(false);
+    const [addModal, setAddModal] = useState(false);
+    const [openWarningModal, setOpenWarningModal] = useState(false);
+    const [warningType, setWarningType] = useState(""); // Track What warning will show
+
+    // form useStates
+    const [selectedProgram, setSelectedProgram] = useState(""); // Track the program being edited
+    const [programNameVal, setProgramNameVal] = useState("");
+    const [academicLevelVal, setAcademicLevelVal] = useState("College");
+    const [programSections, setProgramSections] = useState([]);
+
+    const [activeChanges, setActiveChanges] = useState(false); // Track if there are changes in edit to toggle between cancel and discard
+    const AddModalProgramNameInput = useRef<HTMLInputElement>(null); // for initialFocus of AddModal
+    const EditModalProgramNameInput = useRef<HTMLInputElement>(null); // for initialFocus of EditModal
+
 
     // Toast
     const [showToast, setShowToast] = useState(false);
@@ -46,54 +71,132 @@ export default function CoursesManager() {
         "500": "Server error. Please try again later."
     };
 
+    /** UI Functions **/
+    function editModalValue(id: string) {
+        const program = programs.find(p => p.program_code == id);
+
+        if (!program) {
+            console.error(`[UI_ERROR]: Could not find program with code ${id} in local state.`);
+            return;
+        }
+
+        console.log(`[UI_ACTION]: Opening Edit Modal for Program: "${program.program_name}" (ID: ${id})`);
+
+        setSelectedProgram(program.program_code);
+        setProgramNameVal(program.program_name);
+        setAcademicLevelVal(program.level);
+
+        // Flatten the JSONB object {"1": ["111"], "2": ["211"]} into ["111", "211"]
+        const flattenedSections = program.sections
+            ? Object.values(program.sections).flat() as string[]
+            : [];
+
+        setProgramSections(flattenedSections);
+        setEditModal(true);
+    }
+
+    function showWarning(color: string) {
+        console.log(`[UI_INTERRUPT]: Showing warning modal. Level: ${color}`);
+        setWarningType(color);
+        setOpenWarningModal(true);
+    }
+
+    function discardEntry() {
+        console.log("[UI_ACTION]: Discarding entry and closing all modals. Resetting form state.");
+        setSelectedProgram("");
+        setProgramNameVal("");
+        setAcademicLevelVal("College");
+        setProgramSections([]);
+        setOpenWarningModal(false);
+        setEditModal(false);
+        setActiveChanges(false);
+        setAddModal(false);
+    }
+
+    const removeSection = (sectionToRemove: string) => {
+        setProgramSections(prev => prev.filter(s => s !== sectionToRemove));
+    };
+
     /** Import/Export **/
-    // async function handleExportToExcel() {
-    //     try {
-    //         const rooms = await getAllRoomsData();
-    //
-    //         if (!rooms || rooms.length === 0) {
-    //             return "404";
-    //         }
-    //
-    //         const ExcelJS = (await import('exceljs')).default;
-    //         const { saveAs } = await import('file-saver');
-    //
-    //         const workbook = new ExcelJS.Workbook();
-    //         const worksheet = workbook.addWorksheet('Rooms Inventory');
-    //
-    //         worksheet.columns = [
-    //             { header: 'ID', key: 'room_id', width: 10 },
-    //             { header: 'Room Name', key: 'room_name', width: 35 },
-    //             { header: 'Type', key: 'room_type', width: 20 },
-    //             { header: 'Created At', key: 'created_at', width: 25 }
-    //         ];
-    //
-    //         const headerRow = worksheet.getRow(1);
-    //         headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
-    //         headerRow.fill = {
-    //             type: 'pattern',
-    //             pattern: 'solid',
-    //             fgColor: { argb: '2C3E50' }
-    //         };
-    //
-    //         worksheet.addRows(rooms);
-    //         worksheet.getColumn('created_at').numFmt = 'yyyy-mm-dd hh:mm';
-    //
-    //         worksheet.autoFilter = 'A1:D1';
-    //
-    //         const buffer = await workbook.xlsx.writeBuffer();
-    //         const blob = new Blob([buffer], {
-    //             type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    //         });
-    //
-    //         saveAs(blob, `Rooms_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
-    //
-    //         return "200";
-    //     } catch (error) {
-    //         console.error("[EXPORT_UI_ERROR]:", error);
-    //         return "500";
-    //     }
-    // }
+    async function handleProgramExport() {
+        try {
+            const programs = await getAllProgramsData();
+
+            if (!programs || programs.length === 0) {
+                return "404";
+            }
+
+            const ExcelJS = (await import('exceljs')).default;
+            const { saveAs } = await import('file-saver');
+
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Programs Export');
+
+            // 1. Define Columns (A to I) - SHS uses 1xx/2xx logic
+            worksheet.columns = [
+                { header: 'Program Code', key: 'code', width: 15 },
+                { header: 'Program Name', key: 'name', width: 45 },
+                { header: 'Level', key: 'level', width: 15 },
+                { header: 'Grade 11 (1xx)', key: 'g11', width: 22 },
+                { header: 'Grade 12 (2xx)', key: 'g12', width: 22 },
+                { header: '1st Year (1xx-2xx)', key: 'y1', width: 22 },
+                { header: '2nd Year (3xx-4xx)', key: 'y2', width: 22 },
+                { header: '3rd Year (5xx-6xx)', key: 'y3', width: 22 },
+                { header: '4th Year (7xx-8xx)', key: 'y4', width: 22 },
+            ];
+
+            // 2. Header Styling
+            const headerRow = worksheet.getRow(1);
+            headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
+            headerRow.height = 25;
+
+            const fills = {
+                green: { type: 'pattern', pattern: 'solid', fgColor: { argb: '16A34A' } } as const,
+                orange: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'EA580C' } } as const,
+                blue: { type: 'pattern', pattern: 'solid', fgColor: { argb: '1D4ED8' } } as const
+            };
+
+            ['A1', 'B1', 'C1'].forEach(c => worksheet.getCell(c).fill = fills.green);
+            ['D1', 'E1'].forEach(c => worksheet.getCell(c).fill = fills.orange);
+            ['F1', 'G1', 'H1', 'I1'].forEach(c => worksheet.getCell(c).fill = fills.blue);
+
+            // 3. Data Transformation
+            const flattenedData = programs.map(p => {
+                const s = p.sections || {};
+
+                return {
+                    code: p.program_code,
+                    name: p.program_name,
+                    level: p.level,
+
+                    // SHS Mapping: G11 uses 1xx, G12 uses 2xx
+                    g11: [s["11"]].filter(Boolean).flat().join(', '),
+                    g12: [s["12"]].filter(Boolean).flat().join(', '),
+
+                    // College Mapping: Grouping Semesters by Year
+                    y1: [s["1"], s["2"]].filter(Boolean).flat().join(', '),
+                    y2: [s["3"], s["4"]].filter(Boolean).flat().join(', '),
+                    y3: [s["5"], s["6"]].filter(Boolean).flat().join(', '),
+                    y4: [s["7"], s["8"]].filter(Boolean).flat().join(', '),
+                };
+            });
+
+            worksheet.addRows(flattenedData);
+
+            // 4. Finalize and Download
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+
+            saveAs(blob, `Programs_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+            return "200";
+        } catch (error) {
+            console.error("[EXPORT_ERROR]:", error);
+            return "500";
+        }
+    }
 
     async function downloadProgramTemplate() {
         try {
@@ -108,8 +211,8 @@ export default function CoursesManager() {
                 { header: 'Program Code', key: 'code', width: 15 },
                 { header: 'Program Name', key: 'name', width: 45 },
                 { header: 'Level', key: 'level', width: 15 },
-                { header: 'Grade 11 (1xx/2xx)', key: 'g11', width: 22 },
-                { header: 'Grade 12 (3xx/4xx)', key: 'g12', width: 22 },
+                { header: 'Grade 11 (1xx)', key: 'g11', width: 22 },
+                { header: 'Grade 12 (2xx)', key: 'g12', width: 22 },
                 { header: '1st Year (1xx-2xx)', key: 'y1', width: 22 },
                 { header: '2nd Year (3xx-4xx)', key: 'y2', width: 22 },
                 { header: '3rd Year (5xx-6xx)', key: 'y3', width: 22 },
@@ -137,8 +240,8 @@ export default function CoursesManager() {
                     code: 'EXAMPLE-SHS',
                     name: '[EXAMPLE] Science & Technology',
                     level: 'SHS',
-                    g11: '111, 211',
-                    g12: '311, 411',
+                    g11: '111, 112',
+                    g12: '211, 212',
                     y1: '', y2: '', y3: '', y4: ''
                 },
                 {
@@ -207,8 +310,8 @@ export default function CoursesManager() {
             const firstDigit = section.charAt(0);
 
             if (isSHS) {
-                // Map SHS: 1-2 -> "11", 3-4 -> "12"
-                const shsKey = (firstDigit === "1" || firstDigit === "2") ? "11" : "12";
+                // Map SHS: 1 -> "11", 2 -> "12"
+                const shsKey = (firstDigit === "1") ? "11" : "12";
                 if (!semesterMap[shsKey]) semesterMap[shsKey] = [];
                 semesterMap[shsKey].push(section);
             } else {
@@ -225,6 +328,8 @@ export default function CoursesManager() {
         const file = e.target.files?.[0];
         if (!file || !e.target) return;
 
+        setLoading(true);
+
         try {
             const ExcelJS = (await import('exceljs')).default;
             const workbook = new ExcelJS.Workbook();
@@ -236,6 +341,7 @@ export default function CoursesManager() {
             const firstHeader = worksheet?.getRow(1).getCell(1).value?.toString();
             if (firstHeader !== 'Program Code') {
                 setStatusCode("400");
+                setLoading(false);
                 setShowToast(true);
                 return;
             }
@@ -271,6 +377,7 @@ export default function CoursesManager() {
 
             if (programsToImport.length === 0) {
                 setStatusCode("400");
+                setLoading(false);
                 setShowToast(true);
                 return;
             }
@@ -283,6 +390,7 @@ export default function CoursesManager() {
 
                 if (res === "500") {
                     setStatusCode("500");
+                    setLoading(false);
                     setShowToast(true);
                     return;
                 }
@@ -291,6 +399,7 @@ export default function CoursesManager() {
             }
 
             setStatusCode(successCount > 0 ? "201" : "409");
+            setLoading(false);
             setShowToast(true);
 
             await loadProgramCount();
@@ -306,6 +415,130 @@ export default function CoursesManager() {
     } // Main Import Function for Programs
 
     /** Queries **/
+    async function submitProgram() {
+        if (!selectedProgram || !programNameVal || !academicLevelVal) {
+            console.warn("[UI_VALIDATION]: Submission blocked. Missing Program Code, Name, or Level.");
+            return;
+        }
+
+        setLoading(true);
+
+        // 2. Manual JSONB Conversion (The "Bucket" logic)
+        const p_section = programSections.reduce((acc: Record<string, string[]>, section: string) => {
+            const firstDigit = section.charAt(0);
+            let key = "";
+
+            if (academicLevelVal === 'SHS') {
+                key = (firstDigit === "1") ? "11" : "12";
+            } else {
+                // College Year Grouping: 1-2->Y1, 3-4->Y2, 5-6->Y3, 7-8->Y4
+                const digit = parseInt(firstDigit);
+                if (digit === 1 || digit === 2) key = "1";
+                else if (digit === 3 || digit === 4) key = "2";
+                else if (digit === 5 || digit === 6) key = "3";
+                else if (digit === 7 || digit === 8) key = "4";
+            }
+
+            if (key) {
+                if (!acc[key]) acc[key] = [];
+                acc[key].push(section);
+            }
+            return acc;
+        }, {});
+
+        console.log(`[UI_ACTION]: Submitting new program: "${programNameVal}" [${selectedProgram}]`);
+        console.log(`[DATA_PREP]: Sections formatted for DB:`, p_section);
+
+        // 3. Call the Insert Service
+        const stat = await insertProgram(selectedProgram, programNameVal, academicLevelVal, p_section);
+
+        console.log(`[API_RESPONSE]: Insert Program returned status: ${stat}`);
+
+        setStatusCode(stat);
+        setLoading(false);
+        setShowToast(true);
+
+        // 4. Handle Success (201 Created)
+        if (stat === "201") {
+            console.log("[UI_UPDATE]: Program created successfully. Resetting UI and refreshing data.");
+            discardEntry(); // Clears inputs and closes drawer/modal
+            setSearch("");
+            await loadProgramCount();
+            await loadProgramData();
+        } else {
+            console.error(`[UI_ERROR]: Program creation failed with status: ${stat}`);
+        }
+    }
+
+    async function updateEntry() {
+        const p_code = selectedProgram;
+        const p_name = programNameVal;
+        const p_level = academicLevelVal;
+
+        // Convert the flat array [programSections] into the JSONB object { "key": ["values"] }
+        const p_section = programSections.reduce((acc: Record<string, string[]>, section: string) => {
+            const firstDigit = section.charAt(0);
+
+            // Logic: SHS uses 11/12, College uses the first digit (1-8)
+            const key = p_level === 'SHS'
+                ? (firstDigit === "1" ? "11" : "12")
+                : firstDigit;
+
+            if (!acc[key]) acc[key] = [];
+            acc[key].push(section);
+
+            return acc;
+        }, {});
+
+        setLoading(true);
+
+        console.log(`[UI_ACTION]: Initiating update for Program Code: ${p_code}`);
+        console.log(`[DATA_PREP]: Formatted sections for DB:`, p_section);
+
+        const stat = await updateProgram(p_code, p_name, p_level, p_section);
+
+        console.log(`[API_RESPONSE]: Update Program ${p_code} returned status: ${stat}`);
+
+        setStatusCode(stat);
+        setLoading(false);
+        setShowToast(true);
+
+        if (stat === "200") {
+            console.log(`[UI_UPDATE]: Update successful. Resetting view and refreshing data.`);
+            discardEntry();
+            setSearch("");
+            await loadProgramCount();
+            await loadProgramData();
+        } else {
+            console.warn(`[UI_WARN]: Update failed. No UI refresh triggered.`);
+        }
+    }
+
+    async function deleteRow() {
+        const id = selectedProgram;
+        setLoading(true);
+
+        console.log(`[UI_ACTION]: Initiating delete for Program Code: ${id}`);
+
+        const stat = await deleteProgram(id);
+
+        console.log(`[API_RESPONSE]: Delete Program ${id} returned status: ${stat}`);
+
+        setStatusCode(stat);
+        setLoading(false);
+        setShowToast(true);
+
+        if (stat === "204") {
+            console.log(`[UI_UPDATE]: Deletion successful. Resetting view and refreshing data.`);
+            discardEntry();
+            setSearch("");
+            await loadProgramCount();
+            await loadProgramData();
+        } else {
+            console.warn(`[UI_WARN]: Delete failed. No UI refresh triggered.`);
+        }
+    }
+
     const loadProgramData = async () => {
         console.log(`[DATA_LIFECYCLE]: Fetching programs for Page ${currentPage} (Search: "${search || 'none'}")`);
 
@@ -339,7 +572,10 @@ export default function CoursesManager() {
                     loadProgramData()
                 ]);
 
-                if (isCancelled) return;
+                if (isCancelled) {
+                    setLoading(false);
+                    return;
+                }
                 console.log("[LIFECYCLE]: Page data refreshed.");
             } catch (error) {
                 console.error("[LIFECYCLE_ERROR]: Failed to sync rooms:", error);
@@ -383,6 +619,7 @@ export default function CoursesManager() {
 
     useEffect(() => { // Resetting Page to 1 When Searching
         setCurrentPage(1);
+        setLoading(false);
     }, [debouncedSearch]);
 
     useEffect(() => { // Adds 1 sec delay to querying while typing
@@ -397,18 +634,26 @@ export default function CoursesManager() {
 
     /** UI **/
     const ProgramSectionTooltip = ({ sections, level }: { sections: any, level: string }) => {
-        if (!sections || Object.keys(sections).length === 0) return <span>No sections</span>;
+        if (!sections || Object.keys(sections).length === 0) return <span className="p-2">No sections</span>;
+
+        // Base wrapper to ensure the tooltip doesn't collapse
+        const wrapperClass = "p-2 text-sm md:text-base min-w-[220px] max-w-[300px] space-y-2";
 
         if (level === 'SHS') {
             return (
-                <div className="p-2 text-lg space-y-1">
-                    <div><span className="font-bold text-blue-400">G11:</span> {sections["11"]?.join(', ') || '—'}</div>
-                    <div><span className="font-bold text-blue-400">G12:</span> {sections["12"]?.join(', ') || '—'}</div>
+                <div className={wrapperClass}>
+                    <div className="flex justify-between border-b border-gray-700 pb-1">
+                        <span className="font-bold text-blue-400">Grade 11:</span>
+                        <span className="text-right ml-4">{sections["11"]?.join(', ') || '—'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className="font-bold text-blue-400">Grade 12:</span>
+                        <span className="text-right ml-4">{sections["12"]?.join(', ') || '—'}</span>
+                    </div>
                 </div>
             );
         }
 
-        // College Layout (1-8 mapped to Year 1-4)
         const years = [
             { label: 'Yr.1', s1: "1", s2: "2" },
             { label: 'Yr.2', s1: "3", s2: "4" },
@@ -417,22 +662,27 @@ export default function CoursesManager() {
         ];
 
         return (
-            <div className="p-2 text-lg">
-                <div className="grid grid-cols-3 border-b border-gray-600 pb-1 mb-1 font-bold text-center">
-                    <div></div>
-                    <div>1 Sem</div>
-                    <div>2 Sem</div>
+            <div className={wrapperClass}>
+                <div className="grid grid-cols-3 border-b border-gray-600 pb-1 mb-1 font-bold text-xs uppercase tracking-wider">
+                    <div>Year</div>
+                    <div className="text-center">Sem 1</div>
+                    <div className="text-center">Sem 2</div>
                 </div>
                 {years.map((y) => (
-                    <div key={y.label} className="grid grid-cols-3 gap-x-4 border-b border-gray-700/50 py-0.5">
-                        <div className="font-bold text-blue-400">{y.label}:</div>
-                        <div className="text-center">{sections[y.s1]?.join(', ') || '—'}</div>
-                        <div className="text-center">{sections[y.s2]?.join(', ') || '—'}</div>
+                    <div key={y.label} className="grid grid-cols-3 gap-x-2 border-b border-gray-700/50 py-1 items-center">
+                        <div className="font-bold text-blue-400">{y.label}</div>
+                        {/* Use break-words in case there are many sections */}
+                        <div className="text-center text-xs wrap-break-word px-1 border-r border-gray-700/30">
+                            {sections[y.s1]?.join(', ') || '—'}
+                        </div>
+                        <div className="text-center text-xs wrap-break-word px-1">
+                            {sections[y.s2]?.join(', ') || '—'}
+                        </div>
                     </div>
                 ))}
             </div>
         );
-    }; // Tooltip Content
+    };
 
     const ProgramTableRow = ({ program }) => {
         return (
@@ -443,7 +693,10 @@ export default function CoursesManager() {
                 <TableCell>{program.program_name}</TableCell>
                 <TableCell>{program.level}</TableCell>
                 <TableCell>
-                    <Tooltip placement={"bottom"} content={<ProgramSectionTooltip sections={program.sections} level={program.level} />}>
+                    <Tooltip
+                        placement={"left"}
+                        style={"auto"}
+                        content={<ProgramSectionTooltip sections={program.sections} level={program.level} />}>
                         <div className="max-w-30 truncate">
                             {program.sections
                                 ? Object.values(program.sections).flat().join(', ')
@@ -452,7 +705,7 @@ export default function CoursesManager() {
                     </Tooltip>
                 </TableCell>
                 <TableCell className={"flex justify-end"}>
-                    <Button color="alternative">
+                    <Button color="alternative" onClick={() => editModalValue(program.program_code)}>
                         Edit
                     </Button>
                 </TableCell>
@@ -462,6 +715,19 @@ export default function CoursesManager() {
 
     return (
         <div className="p-8 h-full w-full overflow-x-auto font-sans">
+            {/** Loading Spinner **/}
+            <div className={`${loading? "":"hidden"} fixed inset-0 z-9999 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm cursor-wait`}>
+                {/* The Spinner Container */}
+                <div className="flex flex-col items-center gap-4">
+                    <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600"></div>
+
+                    {/* Optional: Add a text label to let users know what's happening */}
+                    <p className="text-white font-semibold text-lg drop-shadow-md">
+                        Processing Data...
+                    </p>
+                </div>
+            </div>
+
             <div className={"flex items-center justify-between"}>
                 <h1 className={"mb-4 font-bold text-2xl"}>Manage Courses:</h1>
                 <div className={"flex space-x-3"}>
@@ -470,9 +736,9 @@ export default function CoursesManager() {
                         <DropdownItem onClick={() => fileInputRef.current?.click()}>
                             Import
                         </DropdownItem>
-                        {/*<DropdownItem onClick={() => handleExportToExcel()}>Export</DropdownItem>*/}
+                        <DropdownItem onClick={() => handleProgramExport()}>Export</DropdownItem>
                     </Dropdown>
-                    {/*<Button onClick={() => setAddModal(true)}>Add Room</Button>*/}
+                    <Button onClick={() => setAddModal(true)}>Add Room</Button>
                 </div>
             </div>
 
@@ -556,6 +822,258 @@ export default function CoursesManager() {
                 </div>
                 <Progress size={"sm"} className={"mt-2 mb-0 pb-0"} progress={progress}/>
             </Toast>
+
+            {/** Modals **/}
+            {/*  Add Modal  */}
+            <Modal size={"sm"} show={addModal} initialFocus={AddModalProgramNameInput} onClose={() => setAddModal(false)}>
+                <ModalHeader>Add Program</ModalHeader>
+                <ModalBody>
+                    <div className="flex gap-4 space-y-6">
+                        <div className={"w-4/10"}>
+                            <div className="mb-2 block">
+                                <Label htmlFor="programCode">Program Code</Label>
+                            </div>
+                            <TextInput id="programCode" type="text"
+                                       placeholder="e.g. BSIT"
+                                       value={selectedProgram}
+                                       onChange={(e) => {
+                                           setSelectedProgram(e.target.value)
+                                           setActiveChanges(true)
+                                       }}
+                                       required />
+                        </div>
+                        <div className={"w-6/10"}>
+                            <div className="mb-2 block">
+                                <Label htmlFor="programName">Program Name</Label>
+                            </div>
+                            <TextInput id="programName" type="text" ref={AddModalProgramNameInput}
+                                       placeholder="e.g. BS Tourism Management"
+                                       value={programNameVal}
+                                       onChange={(e) => {
+                                           setProgramNameVal(e.target.value)
+                                           setActiveChanges(true)
+                                       }}
+                                       required />
+                        </div>
+                    </div>
+                    <div className={"flex space-x-2.5"}>
+                        <div>
+                            <div className="mb-2 block">
+                                <Label htmlFor="acadLvl">Program Type</Label>
+                            </div>
+                            <Select id="acadLvl"
+                                    className={"w-40"}
+                                    value={academicLevelVal}
+                                    onChange={(e) => {
+                                        setAcademicLevelVal(e.target.value)
+                                        setActiveChanges(true)
+                                    }
+                                    }>
+                                <option>{academicLevelVal}</option>
+                                {academicLevelVal != "SHS"? (<option>SHS</option>):null}
+                                {academicLevelVal != "College"? (<option>College</option>):null}
+                            </Select>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="sections">Offered Sections</Label>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                            {programSections.map((section, index) => (
+                                <Button
+                                    key={`${section}-${index}`}
+                                    size="xs"
+                                    color="gray"
+                                    className="flex items-center"
+                                >
+                                    {section}
+                                    <span
+                                        className="ml-2 cursor-pointer text-red-500 hover:text-red-700 font-bold"
+                                        onClick={() => removeSection(section)}
+                                    >
+                                        ×
+                                    </span>
+                                </Button>
+                            ))}
+                        </div>
+
+                        <TextInput
+                            id="sectionInput"
+                            placeholder="Type section (e.g. 111) and press Enter"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    const val = e.currentTarget.value.trim();
+                                    if (val && !programSections.includes(val)) {
+                                        setProgramSections([...programSections, val]);
+                                        e.currentTarget.value = ""; // Clear input
+                                    }
+                                }
+                            }}
+                        />
+                    </div>
+                </ModalBody>
+                <ModalFooter>
+                    <div className={"flex w-full justify-end space-x-2"}>
+                        {activeChanges == true?(<>
+                            <Button color="alternative" onClick={() => showWarning("yellow")}>
+                                Discard
+                            </Button>
+                        </>):(<>
+                            <Button color="alternative" onClick={() => discardEntry()}>
+                                Cancel
+                            </Button>
+                        </>)}
+
+                        <Button onClick={() => submitProgram()}>Save</Button>
+                    </div>
+                </ModalFooter>
+            </Modal>
+
+            {/*  Edit Modal  */}
+            <Modal size={"sm"} show={editModal} initialFocus={EditModalProgramNameInput} onClose={() => setEditModal(false)}>
+                <ModalHeader>Editing Program: {selectedProgram}</ModalHeader>
+                <ModalBody>
+                    <div className="flex gap-4 space-y-6">
+                        <div className={"col-span-2"}>
+                            <div className="mb-2 block">
+                                <Label htmlFor="programName">Program Name</Label>
+                            </div>
+                            <TextInput id="programName" type="text" ref={EditModalProgramNameInput}
+                                       placeholder="e.g. BS Tourism Management"
+                                       value={programNameVal}
+                                       onChange={(e) => {
+                                           setProgramNameVal(e.target.value)
+                                           setActiveChanges(true)
+                                       }}
+                                       required />
+                        </div>
+                    </div>
+                    <div className={"flex space-x-2.5"}>
+                        <div>
+                            <div className="mb-2 block">
+                                <Label htmlFor="acadLvl">Program Type</Label>
+                            </div>
+                            <Select id="acadLvl"
+                                    className={"w-40"}
+                                    value={academicLevelVal}
+                                    onChange={(e) => {
+                                        setAcademicLevelVal(e.target.value)
+                                        setActiveChanges(true)
+                                    }
+                                    }>
+                                <option>{academicLevelVal}</option>
+                                {academicLevelVal != "SHS"? (<option>SHS</option>):null}
+                                {academicLevelVal != "College"? (<option>College</option>):null}
+                            </Select>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="sections">Offered Sections</Label>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                            {programSections.map((section, index) => (
+                                <Button
+                                    key={`${section}-${index}`}
+                                    size="xs"
+                                    color="gray"
+                                    className="flex items-center"
+                                >
+                                    {section}
+                                    <span
+                                        className="ml-2 cursor-pointer text-red-500 hover:text-red-700 font-bold"
+                                        onClick={() => removeSection(section)}
+                                    >
+                                        ×
+                                    </span>
+                                </Button>
+                            ))}
+                        </div>
+
+                        <TextInput
+                            id="sectionInput"
+                            placeholder="Type section (e.g. 111) and press Enter"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    const val = e.currentTarget.value.trim();
+                                    if (val && !programSections.includes(val)) {
+                                        setProgramSections([...programSections, val]);
+                                        e.currentTarget.value = ""; // Clear input
+                                    }
+                                }
+                            }}
+                        />
+                    </div>
+                </ModalBody>
+                <ModalFooter>
+                    <Button outline color={"dark"} className={"p-2"} onClick={() => showWarning("red")}>
+                        <HiOutlineTrash color={"red"} className={"size-6"}/>
+                    </Button>
+                    <div className={"flex w-full justify-end space-x-2"}>
+                        {activeChanges == true?(<>
+                            <Button color="alternative" onClick={() => showWarning("yellow")}>
+                                Discard
+                            </Button>
+                        </>):(<>
+                            <Button color="alternative" onClick={() => discardEntry()}>
+                                Cancel
+                            </Button>
+                        </>)}
+
+                        <Button onClick={() => showWarning("default")}>Save</Button>
+                    </div>
+                </ModalFooter>
+            </Modal>
+
+            {/*  Warning Modal  */}
+            <Modal show={openWarningModal} size="md" onClose={() => setOpenWarningModal(false)} popup>
+                <ModalHeader />
+                <ModalBody>
+                    <div className="text-center">
+                        {warningType=="red"?(
+                            <> {/* Delete Confirmation */}
+                                <HiOutlineTrash className="mx-auto mb-4 h-14 w-14 text-gray-400 dark:text-gray-200" />
+                                <h3 className="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
+                                    Are you sure you want to delete this entry?
+                                </h3>
+                                <div className="flex justify-center gap-4">
+                                    <Button color="alternative" onClick={() => setOpenWarningModal(false)}>
+                                        No, cancel
+                                    </Button>
+                                    <Button color="red" onClick={() => deleteRow()}>
+                                        Yes, I'm sure
+                                    </Button>
+                                </div>
+                            </>):(
+                            warningType == "yellow"? (<> {/* Discard Confirmation */}
+                                <HiOutlineExclamationCircle className="mx-auto mb-4 h-14 w-14 text-gray-400 dark:text-gray-200" />
+                                <h3 className="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
+                                    Are you sure you want to discard all changes?
+                                </h3>
+                                <div className="flex justify-center gap-4">
+                                    <Button color="alternative" onClick={() => setOpenWarningModal(false)}>
+                                        No, cancel
+                                    </Button>
+                                    <Button color="yellow" onClick={() => discardEntry()}>
+                                        Yes, I'm sure
+                                    </Button>
+                                </div>
+                            </>):(<> {/* Update Confirmation */}
+                                <HiOutlineExclamationCircle className="mx-auto mb-4 h-14 w-14 text-gray-400 dark:text-gray-200" />
+                                <h3 className="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
+                                    Are you sure you want to save all changes?
+                                </h3>
+                                <div className="flex justify-center gap-4">
+                                    <Button color="alternative" onClick={() => setOpenWarningModal(false)}>
+                                        No, cancel
+                                    </Button>
+                                    <Button color="default" onClick={() => updateEntry()}>
+                                        Yes, I'm sure
+                                    </Button>
+                                </div>
+                            </>)
+                        )
+                        }
+                    </div>
+                </ModalBody>
+            </Modal>
 
             <input
                 type="file"

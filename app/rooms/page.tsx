@@ -26,6 +26,7 @@ import {HiCheck, HiExclamation, HiOutlineExclamationCircle, HiOutlineTrash} from
 import {deleteRoom, fetchRooms, fetchRoomsCount, getAllRoomsData, insertRoom, updateRoom} from "@/services/userService";
 
 export default function RoomManager() {
+    const [loading, setLoading] = useState(true); // spinner state
     const [rooms, setRooms] = useState([]); // room rows are stored here
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -112,6 +113,7 @@ export default function RoomManager() {
 
         console.log(`[DATA_LIFECYCLE]: Rooms loaded. Count: ${data.length}`);
         setRooms(data);
+        setLoading(false);
     }
 
     const loadRowCount = async () => {
@@ -132,6 +134,8 @@ export default function RoomManager() {
             return;
         }
 
+        setLoading(true);
+
         console.log(`[UI_ACTION]: Submitting new room: "${roomNameVal}" (${roomTypeVal})`);
 
         const stat = await insertRoom(roomNameVal, roomTypeVal);
@@ -139,6 +143,7 @@ export default function RoomManager() {
         console.log(`[API_RESPONSE]: Insert Room returned status: ${stat}`);
 
         setStatusCode(stat);
+        setLoading(false);
         setShowToast(true);
 
         if (stat === "201") {
@@ -156,6 +161,7 @@ export default function RoomManager() {
         const r_id = selectedRoom;
         const r_name = roomNameVal;
         const r_type = roomTypeVal;
+        setLoading(true);
 
         console.log(`[UI_ACTION]: Initiating update for Room ID: ${r_id}`);
 
@@ -164,6 +170,7 @@ export default function RoomManager() {
         console.log(`[API_RESPONSE]: Update Room ${r_id} returned status: ${stat}`);
 
         setStatusCode(stat);
+        setLoading(false);
         setShowToast(true);
 
         if (stat === "200") {
@@ -179,6 +186,7 @@ export default function RoomManager() {
 
     async function deleteRow() {
         const id = selectedRoom;
+        setLoading(true);
 
         console.log(`[UI_ACTION]: Initiating delete for Room ID: ${id}`);
 
@@ -187,6 +195,7 @@ export default function RoomManager() {
         console.log(`[API_RESPONSE]: Delete Room ${id} returned status: ${stat}`);
 
         setStatusCode(stat);
+        setLoading(false);
         setShowToast(true);
 
         if (stat === "204") {
@@ -322,6 +331,8 @@ export default function RoomManager() {
         const file = e.target.files?.[0];
         if (!file || !e.target) return;
 
+        setLoading(true);
+
         try {
             const ExcelJS = (await import('exceljs')).default;
             const workbook = new ExcelJS.Workbook();
@@ -340,6 +351,7 @@ export default function RoomManager() {
 
             if (rows.length === 0) {
                 setStatusCode("400");
+                setLoading(false);
                 setShowToast(true);
                 return;
             }
@@ -352,6 +364,7 @@ export default function RoomManager() {
 
                 if (res === "500") {
                     setStatusCode("500");
+                    setLoading(false);
                     setShowToast(true);
                     return; // Kill the process on server error
                 }
@@ -366,6 +379,7 @@ export default function RoomManager() {
             // Logic: If we added at least one thing, call it a success (201)
             // If we added nothing because everything was a duplicate, show 409
             setStatusCode(successCount > 0 ? "201" : "409");
+            setLoading(false);
             setShowToast(true);
 
             await loadRowCount();
@@ -374,7 +388,6 @@ export default function RoomManager() {
         } catch (error) {
             console.error("[IMPORT_ERROR]:", error);
             setStatusCode("500");
-            setShowToast(true);
         } finally {
             if (e.target) e.target.value = "";
         }
@@ -392,18 +405,24 @@ export default function RoomManager() {
                     loadInitialData()
                 ]);
 
-                if (isCancelled) return;
+                if (isCancelled) {
+                    setLoading(false);
+                    return;
+                }
                 console.log("[LIFECYCLE]: Page data refreshed.");
             } catch (error) {
+                setLoading(false);
                 console.error("[LIFECYCLE_ERROR]: Failed to sync rooms:", error);
             }
         };
 
         fetchData().catch((err) => {
+            setLoading(false);
             console.error("[CRITICAL_ERROR]: Fetch failed in useEffect", err);
         });
 
         return () => {
+            setLoading(false);
             isCancelled = true; // 2. Cancel state updates if component re-renders
         };
     }, [currentPage, debouncedSearch]);
@@ -435,6 +454,7 @@ export default function RoomManager() {
     }, [showToast]);
 
     useEffect(() => { // Resetting Page to 1 When Searching
+        setLoading(true);
         setCurrentPage(1);
     }, [debouncedSearch]);
 
@@ -467,6 +487,19 @@ export default function RoomManager() {
 
     return (
         <div className="p-8 h-full w-full overflow-x-auto font-sans">
+            {/** Loading Spinner **/}
+            <div className={`${loading? "":"hidden"} fixed inset-0 z-9999 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm cursor-wait`}>
+                {/* The Spinner Container */}
+                <div className="flex flex-col items-center gap-4">
+                    <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600"></div>
+
+                    {/* Optional: Add a text label to let users know what's happening */}
+                    <p className="text-white font-semibold text-lg drop-shadow-md">
+                        Processing Data...
+                    </p>
+                </div>
+            </div>
+
             <div className={"flex items-center justify-between"}>
                 <h1 className={"mb-4 font-bold text-2xl"}>Manage Rooms:</h1>
                 <div className={"flex space-x-3"}>

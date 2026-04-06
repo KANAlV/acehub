@@ -156,7 +156,6 @@ export async function getAllRoomsData() {
     try {
         console.log(`[DB_FETCH]: Fetching all rooms for export.`);
 
-        // Use the SQL function we fixed earlier
         const rooms = await sql`SELECT * FROM get_all_rooms()`;
 
         // Return raw data to the frontend
@@ -247,5 +246,83 @@ export async function fetchPrograms(search = "", page: number) {
         // Including the search and page in the error helps reproduce the crash
         console.error(`[DB_ERROR]: Failed to fetch programs (Page: ${page}, Search: "${search}"):`, error);
         return [];
+    }
+}
+
+export async function getAllProgramsData() {
+    try {
+        console.log(`[DB_FETCH]: Fetching all programs for export.`);
+
+        const programs = await sql`SELECT * FROM get_all_programs()`;
+
+        // Return raw data to the frontend
+        return JSON.parse(JSON.stringify(programs));
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch export data:", error);
+        throw new Error("Failed to fetch programs");
+    }
+}
+
+export async function updateProgram(p_code: string, p_name: string, p_level: string, p_sections: any) {
+    const nameConflict = await sql`
+        SELECT 1 FROM programs 
+        WHERE program_name = ${p_name} AND program_code != ${p_code} 
+        LIMIT 1
+    `;
+
+    if (nameConflict.length > 0) {
+        console.warn(`[DB_CONFLICT]: Cannot update Program ${p_code}. Name "${p_name}" is already taken.`);
+        return "409";
+    }
+
+    try {
+        console.log(`[DB_UPDATE]: Attempting to update Program ${p_code} to Name: "${p_name}", Level: "${p_level}"`);
+
+        // 2. Call your custom SQL function
+        // Note: Your SQL function returns 'void', so we check for execution success
+        await sql`SELECT update_program(${p_code}, ${p_name}, ${p_level}, ${p_sections})`;
+
+        // 3. Revalidate the specific path for your programs table
+        revalidatePath('/courses');
+
+        console.log(`[${new Date().toISOString()}] DB_SUCCESS: Program Updated`, {
+            code: p_code,
+            newName: p_name,
+            newLevel: p_level,
+            sections: p_sections
+        });
+
+        return "200";
+    } catch (error) {
+        console.error(`[DB_ERROR]: Failed to update program ${p_code}:`, error);
+
+        // Handle specific Postgres errors (like foreign key or type mismatches)
+        return "500";
+    }
+}
+
+export async function deleteProgram(id: string) {
+    try {
+        console.log(`[DB_DELETE]: Attempting to delete program code: ${id}`);
+
+        const result = await sql`
+            SELECT delete_program(${id})
+        `;
+
+        const isDeleted = result.length > 0 && result[0].delete_program;
+
+        if (isDeleted) {
+            console.log(`[DB_SUCCESS]: Program ${id} deleted successfully.`);
+            revalidatePath('/courses');
+            return "204";
+        }
+
+        console.warn(`[DB_WARN]: Delete failed - Program ${id} not found (404).`);
+        return "404";
+
+    } catch (error) {
+        // 3. The "Something broke" log
+        console.error(`[DB_ERROR]: Failed to delete program ${id}:`, error);
+        return "500";
     }
 }
