@@ -25,7 +25,7 @@ export function SidebarComponent() {
 
     const sideBar = () => {
         return(
-            <Sidebar className={"h-full"}>
+            <Sidebar className={"h-auto"}>
                 <SidebarItems>
                     <SidebarItemGroup>
                         <SidebarItem as={Link} href="/" icon={HiChartPie} onClick={() => setIsOpen(false)}>
