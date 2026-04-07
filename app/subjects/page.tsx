@@ -590,7 +590,7 @@ export default function SubjectsManager() {
 
                     {/** AQ Tags **/}
                     <div>
-                        <Label>Academic Qualifications (AQ - e.g. IT, CS)</Label>
+                        <Label>Academic Qualifications (AQ - e.g. IT)</Label>
                         <div className="flex flex-wrap gap-2 mb-2">
                             {aqTags.map(tag => (
                                 <Badge key={tag} color="info" className="flex items-center gap-1">
