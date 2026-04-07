@@ -14,7 +14,7 @@ import {revalidatePath} from 'next/cache';
         * 503 - Service Unavailable (server is temporarily overloaded or down for maintenance)
         * */
 
-/** ---  ROOMS --- **/
+/** ---  Rooms --- **/
 export async function fetchRoomsCount(p_room_name: string) {
     // Determine search label for cleaner logging
     const searchLabel = p_room_name.trim() === "" ? "all rooms" : `filter: "${p_room_name}"`;
@@ -324,5 +324,112 @@ export async function deleteProgram(id: string) {
         // 3. The "Something broke" log
         console.error(`[DB_ERROR]: Failed to delete program ${id}:`, error);
         return "500";
+    }
+}
+
+/** --- Subjects --- **/
+export async function insertSubject(subject_code: string, subject_name: string, requirements: any, program_code: string) {
+    try {
+        console.log(`[DB_INSERT]: Creating subject: ${subject_code}`);
+
+        await sql`
+            SELECT insert_subject(
+               ${subject_code},
+               ${subject_name},
+               ${requirements},
+               ${program_code}
+            )
+        `;
+
+        revalidatePath('/subjects');
+        return "201";
+    } catch (error: any) {
+        console.error("[DB_ERROR]: Subject creation failed:", error);
+
+        // Handle Foreign Key violation (Program code doesn't exist)
+        if (error.code === '23503') return "400";
+        // Handle Duplicate Subject Code
+        if (error.code === '23505') return "409";
+
+        return "500";
+    }
+}
+
+export async function fetchSubjects(search: string, page: number) {
+    try {
+        const itemsPerPage = 10;
+        const offset = (page - 1) * itemsPerPage;
+
+        return await sql`
+            SELECT * FROM fetch_subjects(
+                ${search}, 
+                ${itemsPerPage}, 
+                ${offset}
+            )
+        `;
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch subjects:", error);
+        return [];
+    }
+}
+
+export async function fetchSubjectCount(search: string) {
+    try {
+        const result = await sql`
+            SELECT count FROM fetch_subject_count(${search})
+        `;
+
+        return parseInt(result[0]?.count || "0");
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch subject count:", error);
+        return 0;
+    }
+}
+
+export async function updateSubject(subject_code: string, subject_name: string, requirements: any, program_code: string) {
+    try {
+        console.log(`[DB_UPDATE]: Updating subject: ${subject_code}`);
+
+        await sql`
+            SELECT update_subject(
+                ${subject_code}, 
+                ${subject_name}, 
+                ${requirements}, 
+                ${program_code}
+            )
+        `;
+
+        revalidatePath('/subjects');
+        return "200";
+    } catch (error) {
+        console.error("[DB_ERROR]: Subject update failed:", error);
+        return "500";
+    }
+}
+
+export async function deleteSubject(subject_code: string) {
+    try {
+        console.log(`[DB_DELETE]: Deleting subject: ${subject_code}`);
+
+        await sql`
+            SELECT delete_subject(${subject_code})
+        `;
+
+        revalidatePath('/subjects');
+        return "204";
+    } catch (error) {
+        console.error("[DB_ERROR]: Subject deletion failed:", error);
+        return "500";
+    }
+}
+
+export async function getProgramList() {
+    try {
+        return await sql`
+            SELECT program_code, program_name FROM programs ORDER BY program_code ASC
+        `;
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch program list:", error);
+        return [];
     }
 }
