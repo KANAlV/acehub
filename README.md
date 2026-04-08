@@ -118,6 +118,13 @@ npm install react-icons
 ```bash
 npm install postgres
 ```
+---
+
+### Azure
+
+```bash
+npm install @azure/msal-react @azure/msal-browser
+```
 
 ---
 

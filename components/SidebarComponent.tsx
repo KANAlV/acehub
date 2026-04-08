@@ -17,9 +17,15 @@ import {
 } from "react-icons/hi";
 import Link from "next/link";
 import {useState} from "react";
+import { usePathname } from "next/navigation";
 
 export function SidebarComponent() {
+    const pathname = usePathname();
     const [isOpen, setIsOpen] = useState(false);
+
+    if (pathname === "/") {
+        return null;
+    }
 
     const handleClose = () => setIsOpen(false);
 

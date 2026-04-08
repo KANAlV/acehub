@@ -13,7 +13,37 @@ import {revalidatePath} from 'next/cache';
         * 500 - Internal Server Error (catch-all)
         * 503 - Service Unavailable (server is temporarily overloaded or down for maintenance)
         * */
+/** --- Login --- **/
+export interface User {
+    id?: number;
+    username: string;
+    email: string;
+    hash_password?: string;
+}
 
+export async function getOrCreateUser(email: string, name: string) {
+    try {
+        // 1. Check if user exists
+        const existingUser = await sql`
+            SELECT * FROM users WHERE email = ${email}
+        `;
+
+        if (existingUser.length > 0) {
+            return existingUser[0];
+        }
+
+        const newUser = await sql`
+            INSERT INTO users (username, email, hash_password)
+            VALUES (${name}, ${email}, 'OAUTH_USER')
+            RETURNING *
+        `;
+
+        return newUser[0];
+    } catch (error) {
+        console.error("Database Error:", error);
+        throw new Error("Failed to sync user with database.");
+    }
+}
 /** ---  ROOMS --- **/
 export async function fetchRoomsCount(p_room_name: string) {
     // Determine search label for cleaner logging
