@@ -2,17 +2,37 @@
 import sql from '@/lib/db';
 import {revalidatePath} from 'next/cache';
 
-/* Status Codes
-        *
-        * 200 - all clear / returned req successfully (used after updating)
-        * 201 - req success and creation of new resource
-        * 204 - req success but no data back (used after deleting something)
-        * 400 - bad request
-        * 401 - unauthorized
-        * 403 - forbidden
-        * 500 - Internal Server Error (catch-all)
-        * 503 - Service Unavailable (server is temporarily overloaded or down for maintenance)
-        * */
+/** --- Login --- **/
+export interface User {
+    id?: number;
+    username: string;
+    email: string;
+    hash_password?: string;
+}
+
+export async function getOrCreateUser(email: string, name: string) {
+    try {
+        // 1. Check if user exists
+        const existingUser = await sql`
+            SELECT * FROM users WHERE email = ${email}
+        `;
+
+        if (existingUser.length > 0) {
+            return existingUser[0];
+        }
+
+        const newUser = await sql`
+            INSERT INTO users (username, email, hash_password)
+            VALUES (${name}, ${email}, 'OAUTH_USER')
+            RETURNING *
+        `;
+
+        return newUser[0];
+    } catch (error) {
+        console.error("Database Error:", error);
+        throw new Error("Failed to sync user with database.");
+    }
+}
 
 /** ---  Rooms --- **/
 export async function fetchRoomsCount(p_room_name: string) {

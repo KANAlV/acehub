@@ -15,6 +15,7 @@ This project was built using the following tools and libraries:
 * **ExcelJS** – Library used to generate and export Excel schedule files
 * **FileSaver.js** – Library used to trigger the browser download of generated files
 * **React Icons** – Icon library for React
+* **Azure** – Microsoft Login
 * **Node Package Manager (npm)** – version **10.8.2**
 
 ---
@@ -117,6 +118,14 @@ npm install react-icons
 
 ```bash
 npm install postgres
+```
+
+---
+
+### Azure
+
+```bash
+npm install @azure/msal-react @azure/msal-browser
 ```
 
 ---

@@ -17,9 +17,24 @@ import {
 } from "react-icons/hi";
 import Link from "next/link";
 import {useState} from "react";
+import { usePathname } from "next/navigation";
+import { useMsal } from "@azure/msal-react";
 
 export function SidebarComponent() {
     const [isOpen, setIsOpen] = useState(false);
+    const pathname = usePathname();
+    const { instance } = useMsal();
+
+    if (pathname === "/") {
+        return null;
+    }
+
+    const handleLogout = () => {
+        setIsOpen(false);
+        instance.logoutRedirect({
+            postLogoutRedirectUri: "/",
+        });
+    };
 
     const handleClose = () => setIsOpen(false);
 
@@ -57,8 +72,13 @@ export function SidebarComponent() {
                         <SidebarItem as={Link} href="#" icon={BiBuoy}>
                             Help (*)
                         </SidebarItem>
-                        <SidebarItem as={Link} href="#" icon={HiLogout} onClick={() => setIsOpen(false)}>
-                            Log Out (*)
+                        <SidebarItem
+                            as="button"
+                            icon={HiLogout}
+                            onClick={handleLogout}
+                            className="w-full text-left"
+                        >
+                            Log Out
                         </SidebarItem>
                     </SidebarItemGroup>
                 </SidebarItems>
