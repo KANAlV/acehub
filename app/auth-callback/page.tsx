@@ -1,16 +1,10 @@
 "use client";
-import { useEffect } from "react";
-import { useMsal } from "@azure/msal-react";
 
 export default function AuthCallback() {
-    const { instance } = useMsal();
-
-    useEffect(() => {
-        // This handles the redirect/popup response and closes the window
-        instance.handleRedirectPromise().catch((error) => {
-            console.error(error);
-        });
-    }, [instance]);
-
-    return <div className="flex items-center justify-center h-screen">Processing login...</div>;
+    return (
+        <div className="flex flex-col items-center justify-center h-screen space-y-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <p className="text-gray-600 dark:text-gray-400 font-medium">Completing secure sign-in...</p>
+        </div>
+    );
 }

@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState, ReactNode } from "react";
-import { PublicClientApplication } from "@azure/msal-browser";
+import { PublicClientApplication, InteractionStatus } from "@azure/msal-browser";
 import { MsalProvider, useMsal } from "@azure/msal-react";
 import { msalconfig } from "@/app/authConfig.ts";
 import { useRouter, usePathname } from "next/navigation";
 
-// Initialize outside to prevent re-renders
 export const msalInstance = new PublicClientApplication(msalconfig);
 
 function AuthHandler({ children }: { children: ReactNode }) {
@@ -16,8 +15,11 @@ function AuthHandler({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         const handleAuth = async () => {
+            // Only handle auth once interaction is complete
+            if (inProgress !== InteractionStatus.None) return;
+
             try {
-                // If a redirect is being handled (after login)
+                // This checks if we just arrived back from a redirect
                 const response = await instance.handleRedirectPromise();
 
                 if (response) {
@@ -35,38 +37,35 @@ function AuthHandler({ children }: { children: ReactNode }) {
                     });
 
                     if (syncResponse.ok) {
-                        // After successful login, send to dashboard
                         router.push('/dashboard');
                     } else {
                         const data = await syncResponse.json();
-                        alert(data.error || "Unauthorized domain.");
+                        alert(data.error || "Login validation failed.");
                         instance.logoutRedirect();
                     }
                 } else {
-                    // Check if user is logged in for protected routes
+                    // No new redirect to handle. Check current session status.
+                    const isLoggedIn = accounts.length > 0;
                     const isLoginPage = pathname === "/";
                     const isAuthCallback = pathname === "/auth-callback";
-                    const isLoggedIn = accounts.length > 0;
 
-                    // If on login page and already logged in, send to dashboard
-                    if (isLoginPage && isLoggedIn) {
-                        router.push("/dashboard");
-                        return;
-                    }
-
-                    // Protect non-login pages
-                    if (!isLoggedIn && !isLoginPage && !isAuthCallback) {
-                        router.push("/");
+                    if (isLoggedIn) {
+                        if (isLoginPage || isAuthCallback) {
+                            router.push("/dashboard");
+                        }
+                    } else {
+                        // Not logged in. Only allow access to login or auth callback.
+                        if (!isLoginPage && !isAuthCallback) {
+                            router.push("/");
+                        }
                     }
                 }
             } catch (error) {
-                console.error("MSAL Redirect Error:", error);
+                console.error("MSAL Auth Error:", error);
             }
         };
 
-        if (inProgress === "none") {
-            handleAuth();
-        }
+        handleAuth();
     }, [instance, inProgress, accounts, router, pathname]);
 
     return <>{children}</>;
