@@ -1,3 +1,5 @@
+"use client"; // Need this to use usePathname
+
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
