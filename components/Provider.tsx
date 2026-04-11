@@ -14,43 +14,59 @@ function AuthHandler({ children }: { children: ReactNode }) {
     const pathname = usePathname();
 
     useEffect(() => {
-        // IMPORTANT: If MSAL is still processing the redirect or logging in, 
-        // stop here. This prevents the "not logged in" logic from 
-        // running too early.
-        if (inProgress !== InteractionStatus.None) {
-            return;
-        }
+        const handleAuth = async () => {
+            // Only handle auth once interaction is complete
+            if (inProgress !== InteractionStatus.None) return;
 
-        const isLoggedIn = accounts.length > 0;
-        const isLoginPage = pathname === "/";
-        const isAuthCallback = pathname === "/auth-callback";
+            try {
+                // This checks if we just arrived back from a redirect
+                const response = await instance.handleRedirectPromise();
 
-        if (isLoggedIn) {
-            // If logged in and on a "guest" page, move to dashboard
-            if (isLoginPage || isAuthCallback) {
-                
-                // Optional: Sync with backend before redirecting
-                const account = accounts[0];
-                fetch('/api/auth/sync', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        email: account.username.toLowerCase(),
-                        name: account.name,
-                    }),
-                }).then((res) => {
-                    if (res.ok) {
-                        router.push("/dashboard");
+                if (response) {
+                    const account = response.account;
+                    const userEmail = account.username.toLowerCase().trim();
+
+                    // Sync with backend
+                    const syncResponse = await fetch('/api/auth/sync', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            email: userEmail,
+                            name: account.name,
+                        }),
+                    });
+
+                    if (syncResponse.ok) {
+                        router.push('/dashboard');
+                    } else {
+                        const data = await syncResponse.json();
+                        alert(data.error || "Login validation failed.");
+                        instance.logoutRedirect();
                     }
-                });
+                } else {
+                    // No new redirect to handle. Check current session status.
+                    const isLoggedIn = accounts.length > 0;
+                    const isLoginPage = pathname === "/";
+                    const isAuthCallback = pathname === "/auth-callback";
+
+                    if (isLoggedIn) {
+                        if (isLoginPage || isAuthCallback) {
+                            router.push("/dashboard");
+                        }
+                    } else {
+                        // Not logged in. Only allow access to login or auth callback.
+                        if (!isLoginPage && !isAuthCallback) {
+                            router.push("/");
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("MSAL Auth Error:", error);
             }
-        } else {
-            // Not logged in: Redirect to login if trying to access private routes
-            if (!isLoginPage && !isAuthCallback) {
-                router.push("/");
-            }
-        }
-    }, [accounts, inProgress, pathname, router]); // Re-runs whenever accounts or status change
+        };
+
+        handleAuth();
+    }, [instance, inProgress, accounts, router, pathname]);
 
     return <>{children}</>;
 }
