@@ -1,5 +1,3 @@
-"use client"; // Need this to use usePathname
-
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -27,28 +25,17 @@ export default function RootLayout({
                                    }: Readonly<{
     children: React.ReactNode;
 }>) {
-    const pathname = usePathname();
-
-    // Check if we are on the auth-callback page
-    const isAuthCallback = pathname === "/auth-callback";
-    
     return (
         <html lang="en">
         <body
             className={`block md:flex ${geistSans.variable} ${geistMono.variable} antialiased`}
         >
-        {isAuthCallback ? (
-            // 1. NO PROVIDER HERE: Just render the children (the callback page)
-            <div className="w-dvw h-dvh">{children}</div>
-        ) : (
-            // 2. NORMAL FLOW: Wrap everything in Providers
             <Providers>
                 <SidebarComponent />
                     <div className="w-dvw h-dvh overflow-auto">
                         {children}
                     </div>
             </Providers>
-        )}
         </body>
         </html>
     );
