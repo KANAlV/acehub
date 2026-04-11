@@ -1,6 +1,4 @@
-const redirUri = typeof window !== "undefined"
-    ? window.location.origin + "/auth-callback"
-    : process.env.NEXT_PUBLIC_REDIRECT_URI;
+const redirUri =  process.env.NEXT_PUBLIC_REDIRECT_URI;
 
 export const msalconfig = {
     auth: {
