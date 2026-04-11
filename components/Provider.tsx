@@ -39,9 +39,6 @@ function AuthHandler({ children }: { children: ReactNode }) {
 
                         if (syncResponse.ok) {
                             router.replace('/dashboard');
-                        } else {
-                            // Only log out if the backend explicitly rejects the user
-                            instance.logoutRedirect();
                         }
                     } catch (error) {
                         console.error("Backend Sync Failed:", error);
