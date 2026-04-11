@@ -5,7 +5,7 @@ export const msalconfig = {
         redirectUri: process.env.NEXT_PUBLIC_REDIRECT_URI || "http://localhost:3000/auth-callback",
     },
     cache: {
-        cacheLocation: "sessionStorage", 
+        cacheLocation: "localStorage", 
         storeAuthStateInCookie: true,
     }
 };
