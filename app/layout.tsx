@@ -24,17 +24,27 @@ export default function RootLayout({
                                    }: Readonly<{
     children: React.ReactNode;
 }>) {
+
+    // Check if we are on the auth-callback page
+    const isAuthCallback = pathname === "/auth-callback";
+    
     return (
         <html lang="en">
         <body
             className={`block md:flex ${geistSans.variable} ${geistMono.variable} antialiased`}
         >
-        <Providers>
-            <SidebarComponent/>
-            <div className={"w-dvw h-dvh overflow-auto"}>
-                {children}
-            </div>
-        </Providers>
+        {isAuthCallback ? (
+            // 1. NO PROVIDER HERE: Just render the children (the callback page)
+            <div className="w-dvw h-dvh">{children}</div>
+        ) : (
+            // 2. NORMAL FLOW: Wrap everything in Providers
+            <Providers>
+                <SidebarComponent />
+                    <div className="w-dvw h-dvh overflow-auto">
+                        {children}
+                    </div>
+            </Providers>
+        )}
         </body>
         </html>
     );
