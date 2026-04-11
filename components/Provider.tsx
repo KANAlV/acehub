@@ -20,7 +20,7 @@ function AuthHandler({ children }: { children: ReactNode }) {
 
             try {
                 // This checks if we just arrived back from a redirect
-                const response = await instance.getAllAccounts();
+                const response = await instance.handleRedirectPromise();
 
                 if (response) {
                     const account = response.account;
