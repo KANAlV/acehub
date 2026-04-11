@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import {SidebarComponent} from "@/components/SidebarComponent";
 import {Providers} from "components/Provider.tsx";
+import { usePathname } from "next/navigation";
 
 const geistSans = Geist({
     variable: "--font-geist-sans",
@@ -24,6 +25,7 @@ export default function RootLayout({
                                    }: Readonly<{
     children: React.ReactNode;
 }>) {
+    const pathname = usePathname();
 
     // Check if we are on the auth-callback page
     const isAuthCallback = pathname === "/auth-callback";
