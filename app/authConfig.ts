@@ -1,14 +1,12 @@
-const redirUri =  process.env.NEXT_PUBLIC_REDIRECT_URI;
-
 export const msalconfig = {
     auth: {
         clientId: "40bafd50-ad27-4b77-a8cd-0b43e911ee82",
         authority: "https://login.microsoftonline.com/organizations",
-        redirectUri: redirUri,
+        redirectUri: process.env.NEXT_PUBLIC_REDIRECT_URI || "http://localhost:3000/auth-callback",
     },
     cache: {
-        cacheLocation: "sessionStorage", // This helps maintain session on refresh
-        storeAuthStateInCookie: false,
+        cacheLocation: "sessionStorage", 
+        storeAuthStateInCookie: true,
     }
 };
 
