@@ -14,59 +14,49 @@ function AuthHandler({ children }: { children: ReactNode }) {
     const pathname = usePathname();
 
     useEffect(() => {
-        const handleAuth = async () => {
-            // Only handle auth once interaction is complete
-            if (inProgress !== InteractionStatus.None) return;
+        // 1. Wait until MSAL has finished all background work (including redirects)
+        if (inProgress !== InteractionStatus.None) return;
 
-            try {
-                // This checks if we just arrived back from a redirect
-                const response = await instance.handleRedirectPromise();
+        const isLoggedIn = accounts.length > 0;
+        const isLoginPage = pathname === "/";
+        const isAuthCallback = pathname === "/auth-callback";
 
-                if (response) {
-                    const account = response.account;
-                    const userEmail = account.username.toLowerCase().trim();
+        const checkAuth = async () => {
+            if (isLoggedIn) {
+                // If we are on a login or callback page but have an account, sync & move
+                if (isLoginPage || isAuthCallback) {
+                    const account = accounts[0];
+                    
+                    try {
+                        const syncResponse = await fetch('/api/auth/sync', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                email: account.username.toLowerCase().trim(),
+                                name: account.name,
+                            }),
+                        });
 
-                    // Sync with backend
-                    const syncResponse = await fetch('/api/auth/sync', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            email: userEmail,
-                            name: account.name,
-                        }),
-                    });
-
-                    if (syncResponse.ok) {
-                        router.push('/dashboard');
-                    } else {
-                        const data = await syncResponse.json();
-                        alert(data.error || "Login validation failed.");
-                        instance.logoutRedirect();
-                    }
-                } else {
-                    // No new redirect to handle. Check current session status.
-                    const isLoggedIn = accounts.length > 0;
-                    const isLoginPage = pathname === "/";
-                    const isAuthCallback = pathname === "/auth-callback";
-
-                    if (isLoggedIn) {
-                        if (isLoginPage || isAuthCallback) {
-                            router.push("/dashboard");
+                        if (syncResponse.ok) {
+                            router.replace('/dashboard');
+                        } else {
+                            // Only log out if the backend explicitly rejects the user
+                            instance.logoutRedirect();
                         }
-                    } else {
-                        // Not logged in. Only allow access to login or auth callback.
-                        if (!isLoginPage && !isAuthCallback) {
-                            router.push("/");
-                        }
+                    } catch (error) {
+                        console.error("Backend Sync Failed:", error);
                     }
                 }
-            } catch (error) {
-                console.error("MSAL Auth Error:", error);
+            } else {
+                // If NOT logged in and trying to access internal pages, kick to home
+                if (!isLoginPage && !isAuthCallback) {
+                    router.replace("/");
+                }
             }
         };
 
-        handleAuth();
-    }, [instance, inProgress, accounts, router, pathname]);
+        checkAuth();
+    }, [inProgress, accounts, pathname, router, instance]);
 
     return <>{children}</>;
 }
