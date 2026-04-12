@@ -23,7 +23,7 @@ import {
 } from "flowbite-react";
 import React, {useEffect, useRef, useState} from "react";
 import {HiCheck, HiExclamation, HiOutlineExclamationCircle, HiOutlineTrash} from "react-icons/hi";
-import {deleteRoom, fetchRooms, fetchRoomsCount, getAllRoomsData, insertRoom, updateRoom} from "@/services/userService";
+import {deleteRoom, fetchRooms, fetchRoomsCount, getAllRoomsData, insertRoom, updateRoom} from "@/services/userService.ts";
 
 export default function RoomManager() {
     const [loading, setLoading] = useState(true); // spinner state

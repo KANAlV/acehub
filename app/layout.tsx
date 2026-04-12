@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-import {SidebarComponent} from "@/components/SidebarComponent";
-import {Providers} from "components/Provider.tsx";
+import "@/app/globals.css";
+import {Providers} from "@/components/Provider.tsx";
 
 const geistSans = Geist({
     variable: "--font-geist-sans",
@@ -30,10 +29,7 @@ export default function RootLayout({
             className={`block md:flex ${geistSans.variable} ${geistMono.variable} antialiased`}
         >
             <Providers>
-                <SidebarComponent />
-                    <div className="w-dvw h-dvh overflow-auto">
-                        {children}
-                    </div>
+                {children}
             </Providers>
         </body>
         </html>

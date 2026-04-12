@@ -25,7 +25,9 @@ export function SidebarComponent() {
     const pathname = usePathname();
     const { instance } = useMsal();
 
-    if (pathname === "/") {
+    const show = pathname === "/" || pathname === "/login" || pathname === "/auth-callback";
+
+    if (show) {
         return null;
     }
 

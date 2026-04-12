@@ -48,13 +48,15 @@ function AuthHandler({ children }: { children: ReactNode }) {
                     // No new redirect to handle. Check current session status.
                     const isLoggedIn = accounts.length > 0;
                     const isLoginPage = pathname === "/";
+                    const isLoggingIn = pathname === "/login";
                     const isAuthCallback = pathname === "/auth-callback";
 
                     if (isLoggedIn) {
                         if (isLoginPage || isAuthCallback) {
                             router.push("/dashboard");
                         }
-                    } else {
+                    } else if (isLoggingIn) {}
+                    else {
                         // Not logged in. Only allow access to login or auth callback.
                         if (!isLoginPage && !isAuthCallback) {
                             router.push("/");
