@@ -38,10 +38,12 @@ function AuthHandler({ children }: { children: ReactNode }) {
 
                     if (syncResponse.ok) {
                         router.push('/dashboard');
+                        return;
                     } else {
                         const data = await syncResponse.json();
                         alert(data.error || "Login validation failed.");
-                        instance.logoutRedirect();
+                        await instance.logoutRedirect();
+                        return;
                     }
 
                 } else {
