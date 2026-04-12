@@ -15,54 +15,46 @@ function AuthHandler({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         const handleAuth = async () => {
-            // Only handle auth once interaction is complete
+            // Wait for MSAL to be ready
             if (inProgress !== InteractionStatus.None) return;
 
             try {
-                // This checks if we just arrived back from a redirect
+                // If there's an account, handle potential redirection loops
+                const isLoggedIn = accounts.length > 0;
+                const isLoginPage = pathname === "/" || pathname === "/login";
+                const isAuthCallback = pathname === "/auth-callback";
+
+                // Check for a pending redirect result first
                 const response = await instance.handleRedirectPromise();
 
                 if (response) {
                     const account = response.account;
                     const userEmail = account.username.toLowerCase().trim();
 
-                    // Sync with backend
                     const syncResponse = await fetch('/api/auth/sync', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            email: userEmail,
-                            name: account.name,
-                        }),
+                        body: JSON.stringify({ email: userEmail, name: account.name }),
                     });
 
                     if (syncResponse.ok) {
                         router.push('/dashboard');
-                        return;
                     } else {
                         const data = await syncResponse.json();
                         alert(data.error || "Login validation failed.");
                         await instance.logoutRedirect();
-                        return;
                     }
+                    return;
+                }
 
+                // Normal Route Protection
+                if (isLoggedIn) {
+                    if (isLoginPage || isAuthCallback) {
+                        router.push("/dashboard");
+                    }
                 } else {
-                    // No new redirect to handle. Check current session status.
-                    const isLoggedIn = accounts.length > 0;
-                    const isLandingPage = pathname === "/";
-                    const isLoginPage = pathname === "/login";
-                    const isAuthCallback = pathname === "/auth-callback";
-
-                    if (isLoggedIn) {
-                        if (isLoginPage || isAuthCallback) {
-                            router.push("/dashboard");
-                        }
-                    } else if (isLandingPage) {}
-                    else {
-                        // Not logged in. Only allow access to login or auth callback.
-                        if (!isLoginPage && !isAuthCallback) {
-                            router.push("/");
-                        }
+                    if (!isLoginPage && !isAuthCallback) {
+                        router.push("/");
                     }
                 }
             } catch (error) {
@@ -80,9 +72,7 @@ export function Providers({ children }: { children: ReactNode }) {
     const [initialized, setInitialized] = useState(false);
 
     useEffect(() => {
-        msalInstance.initialize().then(() => {
-            setInitialized(true);
-        });
+        msalInstance.initialize().then(() => setInitialized(true));
     }, []);
 
     if (!initialized) return null;
