@@ -12,19 +12,13 @@ function AuthHandler({ children }: { children: ReactNode }) {
     const { instance, inProgress, accounts } = useMsal();
     const router = useRouter();
     const pathname = usePathname();
+    const [isHandlingRedirect, setIsHandlingRedirect] = useState(true);
 
     useEffect(() => {
-        const handleAuth = async () => {
-            // Wait for MSAL to be ready
+        const processAuth = async () => {
             if (inProgress !== InteractionStatus.None) return;
 
             try {
-                // If there's an account, handle potential redirection loops
-                const isLoggedIn = accounts.length > 0;
-                const isLoginPage = pathname === "/" || pathname === "/login";
-                const isAuthCallback = pathname === "/auth-callback";
-
-                // Check for a pending redirect result first
                 const response = await instance.handleRedirectPromise();
 
                 if (response) {
@@ -39,31 +33,44 @@ function AuthHandler({ children }: { children: ReactNode }) {
 
                     if (syncResponse.ok) {
                         router.push('/dashboard');
+                        return;
                     } else {
                         const data = await syncResponse.json();
                         alert(data.error || "Login validation failed.");
                         await instance.logoutRedirect();
-                    }
-                    return;
-                }
-
-                // Normal Route Protection
-                if (isLoggedIn) {
-                    if (isLoginPage || isAuthCallback) {
-                        router.push("/dashboard");
-                    }
-                } else {
-                    if (!isLoginPage && !isAuthCallback) {
-                        router.push("/");
+                        return;
                     }
                 }
+                
+                // Finished checking for a redirect response
+                setIsHandlingRedirect(false);
             } catch (error) {
                 console.error("MSAL Auth Error:", error);
+                setIsHandlingRedirect(false);
             }
         };
 
-        handleAuth();
-    }, [instance, inProgress, accounts, router, pathname]);
+        processAuth();
+    }, [instance, inProgress, router]);
+
+    useEffect(() => {
+        // Wait for redirect processing to finish before enforcing route guards
+        if (inProgress !== InteractionStatus.None || isHandlingRedirect) return;
+
+        const isLoggedIn = accounts.length > 0;
+        const isLoginPage = pathname === "/" || pathname === "/login";
+        const isAuthCallback = pathname === "/auth-callback";
+
+        if (isLoggedIn) {
+            if (isLoginPage || isAuthCallback) {
+                router.push("/dashboard");
+            }
+        } else {
+            if (!isLoginPage && !isAuthCallback) {
+                router.push("/");
+            }
+        }
+    }, [inProgress, accounts, pathname, router, isHandlingRedirect]);
 
     return <>{children}</>;
 }
