@@ -42,7 +42,6 @@ function AuthHandler({ children }: { children: ReactNode }) {
                     }
                 }
                 
-                // Finished checking for a redirect response
                 setIsHandlingRedirect(false);
             } catch (error) {
                 console.error("MSAL Auth Error:", error);
@@ -54,7 +53,6 @@ function AuthHandler({ children }: { children: ReactNode }) {
     }, [instance, inProgress, router]);
 
     useEffect(() => {
-        // Wait for redirect processing to finish before enforcing route guards
         if (inProgress !== InteractionStatus.None || isHandlingRedirect) return;
 
         const isLoggedIn = accounts.length > 0;
@@ -71,6 +69,15 @@ function AuthHandler({ children }: { children: ReactNode }) {
             }
         }
     }, [inProgress, accounts, pathname, router, isHandlingRedirect]);
+
+    // Don't show page content until redirect is handled
+    if (isHandlingRedirect || inProgress !== InteractionStatus.None) {
+        return (
+            <div className="flex flex-col items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+        );
+    }
 
     return <>{children}</>;
 }
