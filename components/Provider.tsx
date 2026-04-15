@@ -32,6 +32,7 @@ function AuthHandler({ children }: { children: ReactNode }) {
                     });
 
                     if (syncResponse.ok) {
+                        setIsHandlingRedirect(false);
                         router.push('/dashboard');
                         return;
                     } else {
@@ -52,6 +53,18 @@ function AuthHandler({ children }: { children: ReactNode }) {
         processAuth();
     }, [instance, inProgress, router]);
 
+    // Emergency Timeout: If stuck, reveal the page content
+    useEffect(() => {
+        if (!isHandlingRedirect && inProgress === InteractionStatus.None) return;
+
+        const timer = setTimeout(() => {
+            console.warn("Auth check taking too long. Revealing page content...");
+            setIsHandlingRedirect(false);
+        }, 5000);
+
+        return () => clearTimeout(timer);
+    }, [isHandlingRedirect, inProgress]);
+
     useEffect(() => {
         if (inProgress !== InteractionStatus.None || isHandlingRedirect) return;
 
@@ -70,11 +83,19 @@ function AuthHandler({ children }: { children: ReactNode }) {
         }
     }, [inProgress, accounts, pathname, router, isHandlingRedirect]);
 
-    // Don't show page content until redirect is handled
+    const isAuthPage = pathname === "/" || pathname === "/login" || pathname === "/auth-callback";
+
+    // Only block rendering with a spinner if we are in a "waiting" state AND on an auth-related page.
     if (isHandlingRedirect || inProgress !== InteractionStatus.None) {
+        if (!isAuthPage) {
+            return <>{children}</>;
+        }
+
         return (
-            <div className="flex flex-col items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
+            <div className="flex flex-col items-center justify-center w-screen h-screen bg-gray-50 dark:bg-gray-900 text-center px-6">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <p className="mt-4 text-gray-600 dark:text-gray-400 font-medium">Authenticating...</p>
+                <p className="mt-2 text-xs text-gray-400">If you are stuck, please refresh the page or wait.</p>
             </div>
         );
     }

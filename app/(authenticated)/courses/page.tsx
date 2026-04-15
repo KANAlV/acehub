@@ -9,7 +9,7 @@ import {
     TableHead,
     TableHeadCell,
     TableRow,
-    TextInput, Toast, ToastToggle, Tooltip
+    TextInput, Toast, ToastToggle
 } from "flowbite-react";
 import React, {useEffect, useRef, useState} from "react";
 import {
@@ -41,7 +41,6 @@ export default function CoursesManager() {
     const [selectedProgram, setSelectedProgram] = useState(""); // Track the program being edited
     const [programNameVal, setProgramNameVal] = useState("");
     const [academicLevelVal, setAcademicLevelVal] = useState("College");
-    const [programSections, setProgramSections] = useState([]);
 
     const [activeChanges, setActiveChanges] = useState(false); // Track if there are changes in edit to toggle between cancel and discard
     const AddModalProgramNameInput = useRef<HTMLInputElement>(null); // for initialFocus of AddModal
@@ -85,13 +84,6 @@ export default function CoursesManager() {
         setSelectedProgram(program.program_code);
         setProgramNameVal(program.program_name);
         setAcademicLevelVal(program.level);
-
-        // Flatten the JSONB object {"1": ["111"], "2": ["211"]} into ["111", "211"]
-        const flattenedSections = program.sections
-            ? Object.values(program.sections).flat() as string[]
-            : [];
-
-        setProgramSections(flattenedSections);
         setEditModal(true);
     }
 
@@ -106,16 +98,11 @@ export default function CoursesManager() {
         setSelectedProgram("");
         setProgramNameVal("");
         setAcademicLevelVal("College");
-        setProgramSections([]);
         setOpenWarningModal(false);
         setEditModal(false);
         setActiveChanges(false);
         setAddModal(false);
     }
-
-    const removeSection = (sectionToRemove: string) => {
-        setProgramSections(prev => prev.filter(s => s !== sectionToRemove));
-    };
 
     /** Import/Export **/
     async function handleProgramExport() {
@@ -132,17 +119,11 @@ export default function CoursesManager() {
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Programs Export');
 
-            // 1. Define Columns (A to I) - SHS uses 1xx/2xx logic
+            // 1. Define Columns (A to C) - Removed sections
             worksheet.columns = [
                 { header: 'Program Code', key: 'code', width: 15 },
                 { header: 'Program Name', key: 'name', width: 45 },
                 { header: 'Level', key: 'level', width: 15 },
-                { header: 'Grade 11 (1xx)', key: 'g11', width: 22 },
-                { header: 'Grade 12 (2xx)', key: 'g12', width: 22 },
-                { header: '1st Year (1xx-2xx)', key: 'y1', width: 22 },
-                { header: '2nd Year (3xx-4xx)', key: 'y2', width: 22 },
-                { header: '3rd Year (5xx-6xx)', key: 'y3', width: 22 },
-                { header: '4th Year (7xx-8xx)', key: 'y4', width: 22 },
             ];
 
             // 2. Header Styling
@@ -150,36 +131,15 @@ export default function CoursesManager() {
             headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
             headerRow.height = 25;
 
-            const fills = {
-                green: { type: 'pattern', pattern: 'solid', fgColor: { argb: '16A34A' } } as const,
-                orange: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'EA580C' } } as const,
-                blue: { type: 'pattern', pattern: 'solid', fgColor: { argb: '1D4ED8' } } as const
-            };
-
-            ['A1', 'B1', 'C1'].forEach(c => worksheet.getCell(c).fill = fills.green);
-            ['D1', 'E1'].forEach(c => worksheet.getCell(c).fill = fills.orange);
-            ['F1', 'G1', 'H1', 'I1'].forEach(c => worksheet.getCell(c).fill = fills.blue);
+            const fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '16A34A' } } as const;
+            ['A1', 'B1', 'C1'].forEach(c => worksheet.getCell(c).fill = fill);
 
             // 3. Data Transformation
-            const flattenedData = programs.map(p => {
-                const s = p.sections || {};
-
-                return {
-                    code: p.program_code,
-                    name: p.program_name,
-                    level: p.level,
-
-                    // SHS Mapping: G11 uses 1xx, G12 uses 2xx
-                    g11: [s["11"]].filter(Boolean).flat().join(', '),
-                    g12: [s["12"]].filter(Boolean).flat().join(', '),
-
-                    // College Mapping: Grouping Semesters by Year
-                    y1: [s["1"], s["2"]].filter(Boolean).flat().join(', '),
-                    y2: [s["3"], s["4"]].filter(Boolean).flat().join(', '),
-                    y3: [s["5"], s["6"]].filter(Boolean).flat().join(', '),
-                    y4: [s["7"], s["8"]].filter(Boolean).flat().join(', '),
-                };
-            });
+            const flattenedData = programs.map(p => ({
+                code: p.program_code,
+                name: p.program_name,
+                level: p.level
+            }));
 
             worksheet.addRows(flattenedData);
 
@@ -206,53 +166,32 @@ export default function CoursesManager() {
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Programs Template');
 
-            // 1. Define Columns (A to I)
+            // 1. Define Columns (A to C)
             worksheet.columns = [
                 { header: 'Program Code', key: 'code', width: 15 },
                 { header: 'Program Name', key: 'name', width: 45 },
                 { header: 'Level', key: 'level', width: 15 },
-                { header: 'Grade 11 (1xx)', key: 'g11', width: 22 },
-                { header: 'Grade 12 (2xx)', key: 'g12', width: 22 },
-                { header: '1st Year (1xx-2xx)', key: 'y1', width: 22 },
-                { header: '2nd Year (3xx-4xx)', key: 'y2', width: 22 },
-                { header: '3rd Year (5xx-6xx)', key: 'y3', width: 22 },
-                { header: '4th Year (7xx-8xx)', key: 'y4', width: 22 },
             ];
 
-            // 2. Apply Header Styles (Green, Orange, Blue)
+            // 2. Apply Header Styles
             const headerRow = worksheet.getRow(1);
             headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
             headerRow.height = 25;
 
-            const fills = {
-                green: { type: 'pattern', pattern: 'solid', fgColor: { argb: '16A34A' } } as const,
-                orange: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'EA580C' } } as const,
-                blue: { type: 'pattern', pattern: 'solid', fgColor: { argb: '1D4ED8' } } as const
-            };
+            const fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '16A34A' } } as const;
+            ['A1', 'B1', 'C1'].forEach(c => worksheet.getCell(c).fill = fill);
 
-            ['A1', 'B1', 'C1'].forEach(c => worksheet.getCell(c).fill = fills.green);
-            ['D1', 'E1'].forEach(c => worksheet.getCell(c).fill = fills.orange);
-            ['F1', 'G1', 'H1', 'I1'].forEach(c => worksheet.getCell(c).fill = fills.blue);
-
-            // 3. Add Example Rows (Italicized and Gray)
+            // 3. Add Example Rows
             const examples = [
                 {
                     code: 'EXAMPLE-SHS',
                     name: '[EXAMPLE] Science & Technology',
-                    level: 'SHS',
-                    g11: '111, 112',
-                    g12: '211, 212',
-                    y1: '', y2: '', y3: '', y4: ''
+                    level: 'SHS'
                 },
                 {
                     code: 'EXAMPLE-COL',
                     name: '[EXAMPLE] BS Information Technology',
-                    level: 'College',
-                    g11: '', g12: '',
-                    y1: '111, 112, 211',
-                    y2: '311, 411',
-                    y3: '511',
-                    y4: '711, 811'
+                    level: 'College'
                 }
             ];
 
@@ -265,7 +204,7 @@ export default function CoursesManager() {
 
             // 4. Dropdown Validation for Level (Starting Row 5)
             const levelOptions = ['SHS', 'College'];
-            for (let i = 5; i <= 200; i++) {
+            for (let i = 2; i <= 200; i++) {
                 worksheet.getCell(`C${i}`).dataValidation = {
                     type: 'list',
                     allowBlank: false,
@@ -275,10 +214,6 @@ export default function CoursesManager() {
                     error: 'Please select SHS or College.'
                 };
             }
-
-            // 5. Tooltips
-            worksheet.getCell('D1').note = 'SHS: Enter sections starting with 1-4 (Sem 1-4 logic).';
-            worksheet.getCell('F1').note = 'College: Use 1xx for Sem 1, 2xx for Sem 2, etc.';
 
             const buffer = await workbook.xlsx.writeBuffer();
             const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -290,39 +225,6 @@ export default function CoursesManager() {
             return "500";
         }
     }
-
-    function formatSectionsForDB(level: string, data: any) {
-        const semesterMap: Record<string, string[]> = {};
-        const isSHS = level === 'SHS';
-
-        // Combine relevant year/grade columns based on level
-        const rawInput = isSHS
-            ? `${data.g11},${data.g12}`
-            : `${data.y1},${data.y2},${data.y3},${data.y4}`;
-
-        const sections = rawInput.split(',').map((s: string) => s.trim()).filter(Boolean);
-
-        sections.forEach(section => {
-            // REGEX VALIDATION: Must be exactly 3 digits starting with 1-8 (e.g., 111)
-            const isValidFormat = /^[1-8]\d{2}$/.test(section);
-            if (!isValidFormat) return;
-
-            const firstDigit = section.charAt(0);
-
-            if (isSHS) {
-                // Map SHS: 1 -> "11", 2 -> "12"
-                const shsKey = (firstDigit === "1") ? "11" : "12";
-                if (!semesterMap[shsKey]) semesterMap[shsKey] = [];
-                semesterMap[shsKey].push(section);
-            } else {
-                // Map College: 1 -> "1", 2 -> "2", etc.
-                if (!semesterMap[firstDigit]) semesterMap[firstDigit] = [];
-                semesterMap[firstDigit].push(section);
-            }
-        });
-
-        return semesterMap;
-    } // Helper to convert Excel columns into the 1-8 (College) or 11-12 (SHS) JSON format.
 
     async function handleProgramImport(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0];
@@ -358,21 +260,7 @@ export default function CoursesManager() {
                 // GUARD: Skip Examples and Empty Rows
                 if (!code || code.includes("EXAMPLE") || !level) return;
 
-                const sectionData = {
-                    g11: row.getCell(4).value?.toString() || "",
-                    g12: row.getCell(5).value?.toString() || "",
-                    y1:  row.getCell(6).value?.toString() || "",
-                    y2:  row.getCell(7).value?.toString() || "",
-                    y3:  row.getCell(8).value?.toString() || "",
-                    y4:  row.getCell(9).value?.toString() || ""
-                };
-
-                const formattedSections = formatSectionsForDB(level, sectionData);
-
-                // Skip if no valid sections were parsed
-                if (Object.keys(formattedSections).length === 0) return;
-
-                programsToImport.push({ code, name, level, semester_sections: formattedSections });
+                programsToImport.push({ code, name, level, semester_sections: {} });
             });
 
             if (programsToImport.length === 0) {
@@ -386,7 +274,7 @@ export default function CoursesManager() {
             let hasConflict = false;
 
             for (const program of programsToImport) {
-                const res = await insertProgram(program.code, program.name, program.level, program.semester_sections);
+                const res = await insertProgram(program.code, program.name, program.level);
 
                 if (res === "500") {
                     setStatusCode("500");
@@ -412,7 +300,7 @@ export default function CoursesManager() {
         } finally {
             if (e.target) e.target.value = "";
         }
-    } // Main Import Function for Programs
+    }
 
     /** Queries **/
     async function submitProgram() {
@@ -423,34 +311,13 @@ export default function CoursesManager() {
 
         setLoading(true);
 
-        // 2. Manual JSONB Conversion (The "Bucket" logic)
-        const p_section = programSections.reduce((acc: Record<string, string[]>, section: string) => {
-            const firstDigit = section.charAt(0);
-            let key = "";
-
-            if (academicLevelVal === 'SHS') {
-                key = (firstDigit === "1") ? "11" : "12";
-            } else {
-                // College Year Grouping: 1-2->Y1, 3-4->Y2, 5-6->Y3, 7-8->Y4
-                const digit = parseInt(firstDigit);
-                if (digit === 1 || digit === 2) key = "1";
-                else if (digit === 3 || digit === 4) key = "2";
-                else if (digit === 5 || digit === 6) key = "3";
-                else if (digit === 7 || digit === 8) key = "4";
-            }
-
-            if (key) {
-                if (!acc[key]) acc[key] = [];
-                acc[key].push(section);
-            }
-            return acc;
-        }, {});
+        // Sections removed, sending empty object
+        const p_section = {};
 
         console.log(`[UI_ACTION]: Submitting new program: "${programNameVal}" [${selectedProgram}]`);
-        console.log(`[DATA_PREP]: Sections formatted for DB:`, p_section);
 
         // 3. Call the Insert Service
-        const stat = await insertProgram(selectedProgram, programNameVal, academicLevelVal, p_section);
+        const stat = await insertProgram(selectedProgram, programNameVal, academicLevelVal);
 
         console.log(`[API_RESPONSE]: Insert Program returned status: ${stat}`);
 
@@ -475,27 +342,14 @@ export default function CoursesManager() {
         const p_name = programNameVal;
         const p_level = academicLevelVal;
 
-        // Convert the flat array [programSections] into the JSONB object { "key": ["values"] }
-        const p_section = programSections.reduce((acc: Record<string, string[]>, section: string) => {
-            const firstDigit = section.charAt(0);
-
-            // Logic: SHS uses 11/12, College uses the first digit (1-8)
-            const key = p_level === 'SHS'
-                ? (firstDigit === "1" ? "11" : "12")
-                : firstDigit;
-
-            if (!acc[key]) acc[key] = [];
-            acc[key].push(section);
-
-            return acc;
-        }, {});
+        // Sections removed, sending empty object
+        const p_section = {};
 
         setLoading(true);
 
         console.log(`[UI_ACTION]: Initiating update for Program Code: ${p_code}`);
-        console.log(`[DATA_PREP]: Formatted sections for DB:`, p_section);
 
-        const stat = await updateProgram(p_code, p_name, p_level, p_section);
+        const stat = await updateProgram(p_code, p_name, p_level);
 
         console.log(`[API_RESPONSE]: Update Program ${p_code} returned status: ${stat}`);
 
@@ -632,58 +486,6 @@ export default function CoursesManager() {
         };
     }, [search]);
 
-    /** UI **/
-    const ProgramSectionTooltip = ({ sections, level }: { sections: any, level: string }) => {
-        if (!sections || Object.keys(sections).length === 0) return <span className="p-2">No sections</span>;
-
-        // Base wrapper to ensure the tooltip doesn't collapse
-        const wrapperClass = "p-2 text-sm md:text-base min-w-[220px] max-w-[300px] space-y-2";
-
-        if (level === 'SHS') {
-            return (
-                <div className={wrapperClass}>
-                    <div className="flex justify-between border-b border-gray-700 pb-1">
-                        <span className="font-bold text-blue-400">Grade 11:</span>
-                        <span className="text-right ml-4">{sections["11"]?.join(', ') || '—'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                        <span className="font-bold text-blue-400">Grade 12:</span>
-                        <span className="text-right ml-4">{sections["12"]?.join(', ') || '—'}</span>
-                    </div>
-                </div>
-            );
-        }
-
-        const years = [
-            { label: 'Yr.1', s1: "1", s2: "2" },
-            { label: 'Yr.2', s1: "3", s2: "4" },
-            { label: 'Yr.3', s1: "5", s2: "6" },
-            { label: 'Yr.4', s1: "7", s2: "8" },
-        ];
-
-        return (
-            <div className={wrapperClass}>
-                <div className="grid grid-cols-3 border-b border-gray-600 pb-1 mb-1 font-bold text-xs uppercase tracking-wider">
-                    <div>Year</div>
-                    <div className="text-center">Sem 1</div>
-                    <div className="text-center">Sem 2</div>
-                </div>
-                {years.map((y) => (
-                    <div key={y.label} className="grid grid-cols-3 gap-x-2 border-b border-gray-700/50 py-1 items-center">
-                        <div className="font-bold text-blue-400">{y.label}</div>
-                        {/* Use break-words in case there are many sections */}
-                        <div className="text-center text-xs wrap-break-word px-1 border-r border-gray-700/30">
-                            {sections[y.s1]?.join(', ') || '—'}
-                        </div>
-                        <div className="text-center text-xs wrap-break-word px-1">
-                            {sections[y.s2]?.join(', ') || '—'}
-                        </div>
-                    </div>
-                ))}
-            </div>
-        );
-    };
-
     const ProgramTableRow = ({ program }) => {
         return (
             <TableRow className="bg-white border-gray-300 dark:border-gray-700 dark:bg-gray-800">
@@ -692,18 +494,6 @@ export default function CoursesManager() {
                 </TableCell>
                 <TableCell>{program.program_name}</TableCell>
                 <TableCell>{program.level}</TableCell>
-                <TableCell>
-                    <Tooltip
-                        placement={"left"}
-                        style={"auto"}
-                        content={<ProgramSectionTooltip sections={program.sections} level={program.level} />}>
-                        <div className="max-w-30 truncate">
-                            {program.sections
-                                ? Object.values(program.sections).flat().join(', ')
-                                : 'No sections'}
-                        </div>
-                    </Tooltip>
-                </TableCell>
                 <TableCell className={"flex justify-end"}>
                     <Button color="alternative" onClick={() => editModalValue(program.program_code)}>
                         Edit
@@ -758,7 +548,6 @@ export default function CoursesManager() {
                             <TableHeadCell>Code</TableHeadCell>
                             <TableHeadCell>Program Name</TableHeadCell>
                             <TableHeadCell>Academic Lvl.</TableHeadCell>
-                            <TableHeadCell>Offered Sections</TableHeadCell>
                             <TableHeadCell>
                                 <span className="sr-only">Edit</span>
                             </TableHeadCell>
@@ -876,41 +665,6 @@ export default function CoursesManager() {
                             </Select>
                         </div>
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="sections">Offered Sections</Label>
-                        <div className="flex flex-wrap gap-2 mb-2">
-                            {programSections.map((section, index) => (
-                                <Button
-                                    key={`${section}-${index}`}
-                                    size="xs"
-                                    color="gray"
-                                    className="flex items-center"
-                                >
-                                    {section}
-                                    <span
-                                        className="ml-2 cursor-pointer text-red-500 hover:text-red-700 font-bold"
-                                        onClick={() => removeSection(section)}
-                                    >
-                                        ×
-                                    </span>
-                                </Button>
-                            ))}
-                        </div>
-
-                        <TextInput
-                            id="sectionInput"
-                            placeholder="Type section (e.g. 111) and press Enter"
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    const val = e.currentTarget.value.trim();
-                                    if (val && !programSections.includes(val)) {
-                                        setProgramSections([...programSections, val]);
-                                        e.currentTarget.value = ""; // Clear input
-                                    }
-                                }
-                            }}
-                        />
-                    </div>
                 </ModalBody>
                 <ModalFooter>
                     <div className={"flex w-full justify-end space-x-2"}>
@@ -966,41 +720,6 @@ export default function CoursesManager() {
                                 {academicLevelVal != "College"? (<option>College</option>):null}
                             </Select>
                         </div>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="sections">Offered Sections</Label>
-                        <div className="flex flex-wrap gap-2 mb-2">
-                            {programSections.map((section, index) => (
-                                <Button
-                                    key={`${section}-${index}`}
-                                    size="xs"
-                                    color="gray"
-                                    className="flex items-center"
-                                >
-                                    {section}
-                                    <span
-                                        className="ml-2 cursor-pointer text-red-500 hover:text-red-700 font-bold"
-                                        onClick={() => removeSection(section)}
-                                    >
-                                        ×
-                                    </span>
-                                </Button>
-                            ))}
-                        </div>
-
-                        <TextInput
-                            id="sectionInput"
-                            placeholder="Type section (e.g. 111) and press Enter"
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    const val = e.currentTarget.value.trim();
-                                    if (val && !programSections.includes(val)) {
-                                        setProgramSections([...programSections, val]);
-                                        e.currentTarget.value = ""; // Clear input
-                                    }
-                                }
-                            }}
-                        />
                     </div>
                 </ModalBody>
                 <ModalFooter>

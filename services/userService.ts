@@ -211,7 +211,6 @@ export async function insertProgram(
     p_program_code: string,
     p_program_name: string,
     p_level: string,
-    p_sections: any
 ) {
     const checkIfExists = await sql`
         SELECT 1 FROM programs
@@ -225,11 +224,10 @@ export async function insertProgram(
         // Add the explicit cast ::program_level here
         await sql`
             SELECT create_program(
-                           ${p_program_code},
-                           ${p_program_name},
-                           ${p_level}::program_level,
-                           ${p_sections}
-                   )
+               ${p_program_code},
+               ${p_program_name},
+               ${p_level}::program_level,
+           )
         `;
 
         revalidatePath('/programs');
@@ -283,7 +281,7 @@ export async function getAllProgramsData() {
     }
 }
 
-export async function updateProgram(p_code: string, p_name: string, p_level: string, p_sections: any) {
+export async function updateProgram(p_code: string, p_name: string, p_level: string) {
     const nameConflict = await sql`
         SELECT 1 FROM programs 
         WHERE program_name = ${p_name} AND program_code != ${p_code} 
@@ -300,7 +298,7 @@ export async function updateProgram(p_code: string, p_name: string, p_level: str
 
         // 2. Call your custom SQL function
         // Note: Your SQL function returns 'void', so we check for execution success
-        await sql`SELECT update_program(${p_code}, ${p_name}, ${p_level}, ${p_sections})`;
+        await sql`SELECT update_program(${p_code}, ${p_name}, ${p_level})`;
 
         // 3. Revalidate the specific path for your programs table
         revalidatePath('/courses');
@@ -308,8 +306,7 @@ export async function updateProgram(p_code: string, p_name: string, p_level: str
         console.log(`[${new Date().toISOString()}] DB_SUCCESS: Program Updated`, {
             code: p_code,
             newName: p_name,
-            newLevel: p_level,
-            sections: p_sections
+            newLevel: p_level
         });
 
         return "200";

@@ -13,7 +13,7 @@ import {
 import { BiBuoy } from "react-icons/bi";
 import {
     HiLibrary, HiChartPie, HiBookOpen, HiClipboardCheck, HiTable, HiAcademicCap, HiViewBoards, HiBriefcase, HiLogout,
-    HiOutlineMenu
+    HiOutlineMenu, HiUserGroup
 } from "react-icons/hi";
 import Link from "next/link";
 import {useState} from "react";
@@ -23,7 +23,7 @@ import { useMsal } from "@azure/msal-react";
 export function SidebarComponent() {
     const [isOpen, setIsOpen] = useState(false);
     const pathname = usePathname();
-    const { instance } = useMsal();
+    const { instance, accounts } = useMsal();
 
     const show = pathname === "/" || pathname === "/login" || pathname === "/auth-callback";
 
@@ -31,11 +31,30 @@ export function SidebarComponent() {
         return null;
     }
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         setIsOpen(false);
-        instance.logoutRedirect({
-            postLogoutRedirectUri: "/",
-        });
+        
+        try {
+            // This clears the account from the local MSAL cache (session/cookies)
+            // without redirecting to the global Microsoft logout page.
+            if (accounts.length > 0) {
+                // @ts-ignore
+                await instance.logout({
+                    account: accounts[0],
+                    onRedirectNavigate: () => {
+                        // Return false to prevent MSAL from redirecting to Microsoft's logout page
+                        return false; 
+                    }
+                });
+            }
+        } catch (error) {
+            console.error("Local logout failed:", error);
+        } finally {
+            // Manually clear any remaining storage if necessary and redirect to home
+            sessionStorage.clear();
+            localStorage.clear();
+            window.location.href = "/";
+        }
     };
 
     const handleClose = () => setIsOpen(false);
@@ -48,7 +67,7 @@ export function SidebarComponent() {
                         <SidebarItem as={Link} href="/" icon={HiChartPie} onClick={() => setIsOpen(false)}>
                             Dashboard (WIP)
                         </SidebarItem>
-                        <SidebarItem as={Link} href="#" icon={HiTable} onClick={() => setIsOpen(false)}>
+                        <SidebarItem as={Link} href="/maintenance" icon={HiTable} onClick={() => setIsOpen(false)}>
                             Schedules (*)
                         </SidebarItem>
                         <SidebarItem as={Link} href="/rooms" icon={HiLibrary} onClick={() => setIsOpen(false)}>
@@ -57,14 +76,20 @@ export function SidebarComponent() {
                         <SidebarItem as={Link} href="/courses" icon={HiBriefcase} onClick={() => setIsOpen(false)}>
                             Courses
                         </SidebarItem>
-                        <SidebarItem as={Link} href="#" icon={HiAcademicCap} onClick={() => setIsOpen(false)}>
+                        <SidebarItem as={Link} href="/maintenance" icon={HiUserGroup} onClick={() => setIsOpen(false)}>
+                            Sections
+                        </SidebarItem>
+                        <SidebarItem as={Link} href="/maintenance" icon={HiAcademicCap} onClick={() => setIsOpen(false)}>
                             Teachers (*)
                         </SidebarItem>
                         <SidebarItem as={Link} href="/subjects" icon={HiBookOpen} onClick={() => setIsOpen(false)}>
                             Subjects
                         </SidebarItem>
-                        <SidebarItem as={Link} href="#" icon={HiClipboardCheck} onClick={() => setIsOpen(false)}>
+                        <SidebarItem as={Link} href="/maintenance" icon={HiClipboardCheck} onClick={() => setIsOpen(false)}>
                             Acad. Quals (*)
+                        </SidebarItem>
+                        <SidebarItem as={Link} href="/maintenance" icon={HiClipboardCheck} onClick={() => setIsOpen(false)}>
+                            FCCE (*)
                         </SidebarItem>
                         <SidebarItem as={Link} href="/testFunction" icon={HiViewBoards} onClick={() => setIsOpen(false)}>
                             test
