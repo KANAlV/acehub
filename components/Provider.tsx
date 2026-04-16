@@ -69,7 +69,7 @@ function AuthHandler({ children }: { children: ReactNode }) {
         if (inProgress !== InteractionStatus.None || isHandlingRedirect) return;
 
         const isLoggedIn = accounts.length > 0;
-        const isLoginPage = pathname === "/" || pathname === "/login";
+        const isLoginPage = pathname === "/";
         const isAuthCallback = pathname === "/auth-callback";
 
         if (isLoggedIn) {
@@ -83,7 +83,7 @@ function AuthHandler({ children }: { children: ReactNode }) {
         }
     }, [inProgress, accounts, pathname, router, isHandlingRedirect]);
 
-    const isAuthPage = pathname === "/" || pathname === "/login" || pathname === "/auth-callback";
+    const isAuthPage = pathname === "/" || pathname === "/auth-callback";
 
     // Only block rendering with a spinner if we are in a "waiting" state AND on an auth-related page.
     if (isHandlingRedirect || inProgress !== InteractionStatus.None) {

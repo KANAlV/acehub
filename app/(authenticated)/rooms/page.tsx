@@ -504,7 +504,7 @@ export default function RoomManager() {
 
                     {/* Optional: Add a text label to let users know what's happening */}
                     <p className="text-white font-semibold text-lg drop-shadow-md">
-                        Processing Data...
+                        Syncing Rooms...
                     </p>
                 </div>
             </div>

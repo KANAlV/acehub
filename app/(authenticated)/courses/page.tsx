@@ -202,7 +202,7 @@ export default function CoursesManager() {
 
             worksheet.addRow({}); // Visual Gap
 
-            // 4. Dropdown Validation for Level (Starting Row 5)
+            // 4. Dropdown Validation for Level (Starting Row 2)
             const levelOptions = ['SHS', 'College'];
             for (let i = 2; i <= 200; i++) {
                 worksheet.getCell(`C${i}`).dataValidation = {
@@ -260,7 +260,7 @@ export default function CoursesManager() {
                 // GUARD: Skip Examples and Empty Rows
                 if (!code || code.includes("EXAMPLE") || !level) return;
 
-                programsToImport.push({ code, name, level, semester_sections: {} });
+                programsToImport.push({ code, name, level });
             });
 
             if (programsToImport.length === 0) {
@@ -299,6 +299,7 @@ export default function CoursesManager() {
             setShowToast(true);
         } finally {
             if (e.target) e.target.value = "";
+            setLoading(false);
         }
     }
 
@@ -311,29 +312,23 @@ export default function CoursesManager() {
 
         setLoading(true);
 
-        // Sections removed, sending empty object
-        const p_section = {};
-
         console.log(`[UI_ACTION]: Submitting new program: "${programNameVal}" [${selectedProgram}]`);
 
-        // 3. Call the Insert Service
-        const stat = await insertProgram(selectedProgram, programNameVal, academicLevelVal);
-
-        console.log(`[API_RESPONSE]: Insert Program returned status: ${stat}`);
-
-        setStatusCode(stat);
-        setLoading(false);
-        setShowToast(true);
-
-        // 4. Handle Success (201 Created)
-        if (stat === "201") {
-            console.log("[UI_UPDATE]: Program created successfully. Resetting UI and refreshing data.");
-            discardEntry(); // Clears inputs and closes drawer/modal
-            setSearch("");
-            await loadProgramCount();
-            await loadProgramData();
-        } else {
-            console.error(`[UI_ERROR]: Program creation failed with status: ${stat}`);
+        try {
+            const stat = await insertProgram(selectedProgram, programNameVal, academicLevelVal);
+            setStatusCode(stat);
+            
+            if (stat === "201") {
+                discardEntry();
+                setSearch("");
+                await Promise.all([loadProgramCount(), loadProgramData()]);
+            }
+        } catch (error) {
+            console.error(`[UI_ERROR]: Program creation failed:`, error);
+            setStatusCode("500");
+        } finally {
+            setLoading(false);
+            setShowToast(true);
         }
     }
 
@@ -342,29 +337,24 @@ export default function CoursesManager() {
         const p_name = programNameVal;
         const p_level = academicLevelVal;
 
-        // Sections removed, sending empty object
-        const p_section = {};
-
         setLoading(true);
-
         console.log(`[UI_ACTION]: Initiating update for Program Code: ${p_code}`);
 
-        const stat = await updateProgram(p_code, p_name, p_level);
+        try {
+            const stat = await updateProgram(p_code, p_name, p_level);
+            setStatusCode(stat);
 
-        console.log(`[API_RESPONSE]: Update Program ${p_code} returned status: ${stat}`);
-
-        setStatusCode(stat);
-        setLoading(false);
-        setShowToast(true);
-
-        if (stat === "200") {
-            console.log(`[UI_UPDATE]: Update successful. Resetting view and refreshing data.`);
-            discardEntry();
-            setSearch("");
-            await loadProgramCount();
-            await loadProgramData();
-        } else {
-            console.warn(`[UI_WARN]: Update failed. No UI refresh triggered.`);
+            if (stat === "200") {
+                discardEntry();
+                setSearch("");
+                await Promise.all([loadProgramCount(), loadProgramData()]);
+            }
+        } catch (error) {
+            console.error(`[UI_ERROR]: Update failed:`, error);
+            setStatusCode("500");
+        } finally {
+            setLoading(false);
+            setShowToast(true);
         }
     }
 
@@ -374,116 +364,92 @@ export default function CoursesManager() {
 
         console.log(`[UI_ACTION]: Initiating delete for Program Code: ${id}`);
 
-        const stat = await deleteProgram(id);
+        try {
+            const stat = await deleteProgram(id);
+            setStatusCode(stat);
 
-        console.log(`[API_RESPONSE]: Delete Program ${id} returned status: ${stat}`);
-
-        setStatusCode(stat);
-        setLoading(false);
-        setShowToast(true);
-
-        if (stat === "204") {
-            console.log(`[UI_UPDATE]: Deletion successful. Resetting view and refreshing data.`);
-            discardEntry();
-            setSearch("");
-            await loadProgramCount();
-            await loadProgramData();
-        } else {
-            console.warn(`[UI_WARN]: Delete failed. No UI refresh triggered.`);
+            if (stat === "204") {
+                discardEntry();
+                setSearch("");
+                await Promise.all([loadProgramCount(), loadProgramData()]);
+            }
+        } catch (error) {
+            console.error(`[UI_ERROR]: Delete failed:`, error);
+            setStatusCode("500");
+        } finally {
+            setLoading(false);
+            setShowToast(true);
         }
     }
 
     const loadProgramData = async () => {
-        console.log(`[DATA_LIFECYCLE]: Fetching programs for Page ${currentPage} (Search: "${search || 'none'}")`);
-
         const data = await fetchPrograms(search, currentPage);
-
-        console.log(`[DATA_LIFECYCLE]: Rooms loaded. Count: ${data.length}`);
         setPrograms(data);
     }
 
     const loadProgramCount = async () => {
         const rowCount = await fetchProgramCount(search);
-
-        console.log(`[DATA_LIFECYCLE]: Total matching programs in DB: ${rowCount}`);
         setRowCount(rowCount);
     }
 
     const onPageChange = (page: number) => {
-        console.log(`[UI_NAVIGATION]: Moving to Page ${page}`);
         setCurrentPage(page);
     };
 
     /** Updates **/
     useEffect(() => {
-        let isCancelled = false; // Cleanup flag to prevent race conditions
+        let isCancelled = false;
 
         const fetchData = async () => {
+            setLoading(true); // START LOADING
             try {
-                // Run in parallel to save time
                 await Promise.all([
                     loadProgramCount(),
                     loadProgramData()
                 ]);
 
-                if (isCancelled) {
-                    setLoading(false);
-                    return;
-                }
+                if (isCancelled) return;
                 console.log("[LIFECYCLE]: Page data refreshed.");
             } catch (error) {
-                console.error("[LIFECYCLE_ERROR]: Failed to sync rooms:", error);
+                console.error("[LIFECYCLE_ERROR]: Failed to sync courses:", error);
+            } finally {
+                if (!isCancelled) setLoading(false); // STOP LOADING
             }
         };
 
-        fetchData().catch((err) => {
-            console.error("[CRITICAL_ERROR]: Fetch failed in useEffect", err);
-        });
+        fetchData();
 
         return () => {
-            isCancelled = true; // 2. Cancel state updates if component re-renders
+            isCancelled = true;
         };
     }, [currentPage, debouncedSearch]);
 
     useEffect(() => { // Toast
         if (showToast) {
-            console.log(`[UI_TOAST]: Toast appeared. Status: ${statusCode}. Starting 5s countdown.`);
-
             setProgress(100);
-            loadProgramCount().catch(err => console.error("Failed to refresh row count:", err));
-
             const interval = setInterval(() => {
-                setProgress((prev) => {
-                    return Math.max(0, prev - (100 / (5000 / 50)));
-                });
+                setProgress((prev) => Math.max(0, prev - (100 / (5000 / 50))));
             }, 50);
 
-            const timeout = setTimeout(() => {
-                console.log("[UI_TOAST]: 5s elapsed. Hiding toast automatically.");
-                setShowToast(false);
-            }, 5000);
+            const timeout = setTimeout(() => setShowToast(false), 5000);
 
             return () => {
-                console.log("[UI_TOAST]: Cleaning up timers (Effect reset).");
                 clearInterval(interval);
                 clearTimeout(timeout);
             };
         }
     }, [showToast]);
 
-    useEffect(() => { // Resetting Page to 1 When Searching
+    useEffect(() => { 
         setCurrentPage(1);
-        setLoading(false);
     }, [debouncedSearch]);
 
-    useEffect(() => { // Adds 1 sec delay to querying while typing
+    useEffect(() => { 
         const handler = setTimeout(() => {
             setDebouncedSearch(search);
-        }, 1000); // 1000ms = 1 seconds
+        }, 1000);
 
-        return () => {
-            clearTimeout(handler); // Cancel the timer if the user types
-        };
+        return () => clearTimeout(handler);
     }, [search]);
 
     const ProgramTableRow = ({ program }) => {
@@ -501,19 +467,16 @@ export default function CoursesManager() {
                 </TableCell>
             </TableRow>
         );
-    } // Table Rows
+    }
 
     return (
         <div className="p-8 h-full w-full overflow-x-auto font-sans">
             {/** Loading Spinner **/}
             <div className={`${loading? "":"hidden"} fixed inset-0 z-9999 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm cursor-wait`}>
-                {/* The Spinner Container */}
                 <div className="flex flex-col items-center gap-4">
                     <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600"></div>
-
-                    {/* Optional: Add a text label to let users know what's happening */}
                     <p className="text-white font-semibold text-lg drop-shadow-md">
-                        Processing Data...
+                        Syncing Courses...
                     </p>
                 </div>
             </div>
@@ -528,7 +491,7 @@ export default function CoursesManager() {
                         </DropdownItem>
                         <DropdownItem onClick={() => handleProgramExport()}>Export</DropdownItem>
                     </Dropdown>
-                    <Button onClick={() => setAddModal(true)}>Add Room</Button>
+                    <Button onClick={() => setAddModal(true)}>Add Course</Button>
                 </div>
             </div>
 
@@ -604,8 +567,6 @@ export default function CoursesManager() {
                         {STATUS_MESSAGES[statusCode] || "An unknown error occurred."}
                     </div>
                     <ToastToggle onDismiss={() => {
-                        console.log("[UI_ACTION]: User manually dismissed the toast.");
-
                         setShowToast(false);
                         setProgress(0);
                     }} />

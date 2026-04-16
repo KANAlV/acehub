@@ -226,7 +226,7 @@ export async function insertProgram(
             SELECT create_program(
                ${p_program_code},
                ${p_program_name},
-               ${p_level}::program_level,
+               ${p_level}::program_level
            )
         `;
 

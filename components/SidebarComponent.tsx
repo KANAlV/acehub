@@ -77,7 +77,7 @@ export function SidebarComponent() {
                             Courses
                         </SidebarItem>
                         <SidebarItem as={Link} href="/maintenance" icon={HiUserGroup} onClick={() => setIsOpen(false)}>
-                            Sections
+                            Sections (WIP)
                         </SidebarItem>
                         <SidebarItem as={Link} href="/maintenance" icon={HiAcademicCap} onClick={() => setIsOpen(false)}>
                             Teachers (*)
@@ -86,7 +86,7 @@ export function SidebarComponent() {
                             Subjects
                         </SidebarItem>
                         <SidebarItem as={Link} href="/maintenance" icon={HiClipboardCheck} onClick={() => setIsOpen(false)}>
-                            Acad. Quals (*)
+                            MAQ (*)
                         </SidebarItem>
                         <SidebarItem as={Link} href="/maintenance" icon={HiClipboardCheck} onClick={() => setIsOpen(false)}>
                             FCCE (*)
