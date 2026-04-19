@@ -345,16 +345,29 @@ export async function deleteProgram(id: string) {
 }
 
 /** --- Subjects --- **/
-export async function insertSubject(subject_code: string, subject_name: string, requirements: any, program_code: string) {
+export async function insertSubject(
+    curriculumn_version: string,
+    course_code: string,
+    course_name: string,
+    field_of_specialization: string,
+    lecture: number,
+    lab: number,
+    lab_type: string,
+    year_term: string
+) {
     try {
-        console.log(`[DB_INSERT]: Creating subject: ${subject_code}`);
+        console.log(`[DB_INSERT]: Creating subject: ${course_code} (${curriculumn_version})`);
 
         await sql`
-            SELECT insert_subject(
-               ${subject_code},
-               ${subject_name},
-               ${requirements},
-               ${program_code}
+            SELECT create_subject(
+               ${curriculumn_version},
+               ${course_code},
+               ${course_name},
+               ${field_of_specialization},
+               ${lecture},
+               ${lab},
+               ${lab_type},
+               ${year_term}
             )
         `;
 
@@ -362,12 +375,7 @@ export async function insertSubject(subject_code: string, subject_name: string, 
         return "201";
     } catch (error: any) {
         console.error("[DB_ERROR]: Subject creation failed:", error);
-
-        // Handle Foreign Key violation (Program code doesn't exist)
-        if (error.code === '23503') return "400";
-        // Handle Duplicate Subject Code
-        if (error.code === '23505') return "409";
-
+        if (error.code === '23505') return "409"; // Duplicate PK
         return "500";
     }
 }
@@ -403,16 +411,29 @@ export async function fetchSubjectCount(search: string) {
     }
 }
 
-export async function updateSubject(subject_code: string, subject_name: string, requirements: any, program_code: string) {
+export async function updateSubject(
+    curriculumn_version: string,
+    course_code: string,
+    course_name: string,
+    field_of_specialization: string,
+    lecture: number,
+    lab: number,
+    lab_type: string,
+    year_term: string
+) {
     try {
-        console.log(`[DB_UPDATE]: Updating subject: ${subject_code}`);
+        console.log(`[DB_UPDATE]: Updating subject: ${course_code} (${curriculumn_version})`);
 
         await sql`
             SELECT update_subject(
-                ${subject_code}, 
-                ${subject_name}, 
-                ${requirements}, 
-                ${program_code}
+                ${curriculumn_version},
+                ${course_code},
+                ${course_name},
+                ${field_of_specialization},
+                ${lecture},
+                ${lab},
+                ${lab_type},
+                ${year_term}
             )
         `;
 
@@ -424,12 +445,12 @@ export async function updateSubject(subject_code: string, subject_name: string, 
     }
 }
 
-export async function deleteSubject(subject_code: string) {
+export async function deleteSubject(curriculumn_version: string, course_code: string) {
     try {
-        console.log(`[DB_DELETE]: Deleting subject: ${subject_code}`);
+        console.log(`[DB_DELETE]: Deleting subject: ${course_code} (${curriculumn_version})`);
 
         await sql`
-            SELECT delete_subject(${subject_code})
+            SELECT delete_subject(${curriculumn_version}, ${course_code})
         `;
 
         revalidatePath('/subjects');

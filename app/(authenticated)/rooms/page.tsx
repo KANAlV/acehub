@@ -10,7 +10,7 @@ import {
     ModalHeader,
     Pagination,
     Progress,
-    Select,
+    Select, Spinner,
     Table,
     TableBody,
     TableCell,
@@ -24,6 +24,7 @@ import {
 import React, {useEffect, useRef, useState} from "react";
 import {HiCheck, HiExclamation, HiOutlineExclamationCircle, HiOutlineTrash} from "react-icons/hi";
 import {deleteRoom, fetchRooms, fetchRoomsCount, getAllRoomsData, insertRoom, updateRoom} from "@/services/userService.ts";
+import {VscSave} from "react-icons/vsc";
 
 export default function RoomManager() {
     const [loading, setLoading] = useState(true); // spinner state
@@ -500,9 +501,7 @@ export default function RoomManager() {
             <div className={`${loading? "":"hidden"} fixed inset-0 z-9999 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm cursor-wait`}>
                 {/* The Spinner Container */}
                 <div className="flex flex-col items-center gap-4">
-                    <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600"></div>
-
-                    {/* Optional: Add a text label to let users know what's happening */}
+                    <Spinner aria-label="Extra large spinner example" size="xl" />
                     <p className="text-white font-semibold text-lg drop-shadow-md">
                         Syncing Rooms...
                     </p>
@@ -605,13 +604,14 @@ export default function RoomManager() {
                                     setActiveChanges(true);
                                 }}
                             >
-                                <option value="Lecture">Lecture</option>
-                                <option value="Computer Lab">Computer Lab</option>
-                                <option value="Culinary Lab">Culinary Lab</option>
-                                <option value="Mock Bar">Mock Bar</option>
-                                <option value="Mock Hotel">Mock Hotel</option>
-                                <option value="Gym">Gym</option>
-                                <option value="AVR">AVR</option>
+                                <option>{roomTypeVal}</option>
+                                {roomTypeVal != "Lecture"? (<option>Lecture</option>):null}
+                                {roomTypeVal != "Computer Lab"? (<option>Computer Lab</option>):null}
+                                {roomTypeVal != "Culinary Lab"? (<option>Culinary Lab</option>):null}
+                                {roomTypeVal != "Mock Bar"? (<option>Mock Bar</option>):null}
+                                {roomTypeVal != "Mock Hotel"? (<option>Mock Hotel</option>):null}
+                                {roomTypeVal != "Gym"? (<option>Gym</option>):null}
+                                {roomTypeVal != "AVR"? (<option>AVR</option>):null}
                             </Select>
                         </div>
                     </div>
@@ -724,12 +724,12 @@ export default function RoomManager() {
                                         <Button color="alternative" onClick={() => setOpenWarningModal(false)}>
                                             No, cancel
                                         </Button>
-                                        <Button color="yellow" onClick={() => discardEntry()}>
+                                        <Button color="red" onClick={() => discardEntry()}>
                                             Yes, I'm sure
                                         </Button>
                                     </div>
                                 </>):(<> {/* Update Confirmation */}
-                                    <HiOutlineExclamationCircle className="mx-auto mb-4 h-14 w-14 text-gray-400 dark:text-gray-200" />
+                                    <VscSave className="mx-auto mb-4 h-14 w-14 text-gray-400 dark:text-gray-200" />
                                     <h3 className="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
                                         Are you sure you want to save all changes?
                                     </h3>

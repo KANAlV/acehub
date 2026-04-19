@@ -3,7 +3,7 @@
 import {
     Button,
     Dropdown,
-    DropdownItem, Label, Modal, ModalBody, ModalFooter, ModalHeader, Pagination, Progress, Select,
+    DropdownItem, Label, Modal, ModalBody, ModalFooter, ModalHeader, Pagination, Progress, Select, Spinner,
     Table,
     TableBody, TableCell,
     TableHead,
@@ -21,6 +21,7 @@ import {
     deleteProgram
 } from "@/services/userService.ts";
 import {HiCheck, HiExclamation, HiOutlineExclamationCircle, HiOutlineTrash} from "react-icons/hi";
+import { VscSave } from "react-icons/vsc";
 
 export default function CoursesManager() {
     const [loading, setLoading] = useState(true); // spinner state
@@ -474,7 +475,7 @@ export default function CoursesManager() {
             {/** Loading Spinner **/}
             <div className={`${loading? "":"hidden"} fixed inset-0 z-9999 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm cursor-wait`}>
                 <div className="flex flex-col items-center gap-4">
-                    <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600"></div>
+                    <Spinner aria-label="Extra large spinner example" size="xl" />
                     <p className="text-white font-semibold text-lg drop-shadow-md">
                         Syncing Courses...
                     </p>
@@ -732,12 +733,12 @@ export default function CoursesManager() {
                                     <Button color="alternative" onClick={() => setOpenWarningModal(false)}>
                                         No, cancel
                                     </Button>
-                                    <Button color="yellow" onClick={() => discardEntry()}>
+                                    <Button color="red" onClick={() => discardEntry()}>
                                         Yes, I'm sure
                                     </Button>
                                 </div>
                             </>):(<> {/* Update Confirmation */}
-                                <HiOutlineExclamationCircle className="mx-auto mb-4 h-14 w-14 text-gray-400 dark:text-gray-200" />
+                                <VscSave className="mx-auto mb-4 h-14 w-14 text-gray-400 dark:text-gray-200" />
                                 <h3 className="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
                                     Are you sure you want to save all changes?
                                 </h3>

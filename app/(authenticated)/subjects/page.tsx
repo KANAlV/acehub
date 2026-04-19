@@ -3,13 +3,13 @@
 import {
     Button,
     Dropdown,
-    DropdownItem, Label, Modal, ModalBody, ModalFooter, ModalHeader, Pagination, Progress, Select,
+    DropdownItem, Label, Modal, ModalBody, ModalFooter, ModalHeader, Pagination, Progress, Select, Spinner,
     Table,
     TableBody, TableCell,
     TableHead,
     TableHeadCell,
     TableRow,
-    TextInput, Toast, ToastToggle, Tooltip, Badge, Textarea
+    TextInput, Toast, ToastToggle
 } from "flowbite-react";
 import React, {useEffect, useRef, useState} from "react";
 import {
@@ -17,15 +17,15 @@ import {
     updateSubject,
     deleteSubject,
     fetchSubjects,
-    fetchSubjectCount,
-    getProgramList // We'll need this for the dropdown
+    fetchSubjectCount
 } from "@/services/userService.ts";
-import {HiCheck, HiExclamation, HiOutlineExclamationCircle, HiOutlineTrash, HiPlus} from "react-icons/hi";
+import {HiCheck, HiExclamation, HiOutlineExclamationCircle, HiOutlineTrash} from "react-icons/hi";
+import {limitNumericValueShort, sanitizeLongName} from "@/lib/validation.ts";
+import {VscSave} from "react-icons/vsc";
 
 export default function SubjectsManager() {
     const [loading, setLoading] = useState(true);
     const [subjects, setSubjects] = useState([]);
-    const [programs, setPrograms] = useState([]); // List for the Program Dropdown
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Search
@@ -37,21 +37,21 @@ export default function SubjectsManager() {
     const [addModal, setAddModal] = useState(false);
     const [openWarningModal, setOpenWarningModal] = useState(false);
     const [warningType, setWarningType] = useState("");
-    const [showReq, setShowReq] = useState(false);
-    const [activeSubject, setActiveSubject] = useState<any>(null);
 
     // Form useStates for Subjects
-    const [selectedSubjectCode, setSelectedSubjectCode] = useState("");
-    const [subjectNameVal, setSubjectNameVal] = useState("");
-    const [selectedProgramCode, setSelectedProgramCode] = useState("");
-
-    // Requirements split into AQ and Other
-    const [aqTags, setAqTags] = useState([]);
-    const [otherTags, setOtherTags] = useState([]);
+    const [curriculumnVersionVal, setCurriculumnVersionVal] = useState("");
+    const [courseCodeVal, setCourseCodeVal] = useState("");
+    const [courseNameVal, setCourseNameVal] = useState("");
+    const [specializationVal, setSpecializationVal] = useState("");
+    const [lectureVal, setLectureVal] = useState("0");
+    const [labVal, setLabVal] = useState("0");
+    const [labTypeVal, setLabTypeVal] = useState(""); 
+    const [yearVal, setYearVal] = useState("1");
+    const [termVal, setTermVal] = useState("1");
 
     const [activeChanges, setActiveChanges] = useState(false);
-    const AddModalSubjectNameInput = useRef<HTMLInputElement>(null);
-    const EditModalSubjectNameInput = useRef<HTMLInputElement>(null);
+    const AddModalCourseNameInput = useRef<HTMLInputElement>(null);
+    const EditModalCourseNameInput = useRef<HTMLInputElement>(null);
 
     // Toast
     const [showToast, setShowToast] = useState(false);
@@ -70,28 +70,31 @@ export default function SubjectsManager() {
         "200": "Subject updated successfully.",
         "201": "Subject created successfully.",
         "204": "Subject deleted successfully.",
-        "400": "Invalid data or program not found.",
-        "409": "Subject code already exists.",
+        "400": "Invalid data provided.",
+        "422": "Lab Type is required for Lab Units.",
+        "409": "Subject already exists in this curriculum version.",
+        "412": "Both Lecture and Lab cannot be zero.",
         "500": "Server error. Please try again later."
     };
 
     /** UI Functions **/
-    function viewRequirements(subject: any) {
-        setActiveSubject(subject);
-        setShowReq(true);
-    }
-
-    function editModalValue(code: string) {
-        const subject = subjects.find(s => s.subject_code === code);
+    function editModalValue(curVersion: string, courseCode: string) {
+        const subject = subjects.find(s => s.curriculumn_version === curVersion && s.course_code === courseCode);
         if (!subject) return;
 
-        setSelectedSubjectCode(subject.subject_code);
-        setSubjectNameVal(subject.subject_name);
-        setSelectedProgramCode(subject.program_code);
+        setCurriculumnVersionVal(subject.curriculumn_version);
+        setCourseCodeVal(subject.course_code);
+        setCourseNameVal(subject.course_name);
+        setSpecializationVal(subject.field_of_specialization || "");
+        setLectureVal(subject.lecture.toString() || "0");
+        setLabVal(subject.lab.toString() || "0");
+        setLabTypeVal(subject.lab_type || "");
 
-        // Extract from JSONB
-        setAqTags(subject.requirements?.aq || []);
-        setOtherTags(subject.requirements?.other || []);
+        if (subject["year-term"]) {
+            const [y, t] = subject["year-term"].split("-");
+            setYearVal(y || "1");
+            setTermVal(t || "1");
+        }
 
         setEditModal(true);
     }
@@ -102,26 +105,41 @@ export default function SubjectsManager() {
     }
 
     function discardEntry() {
-        setSelectedSubjectCode("");
-        setSubjectNameVal("");
-        setSelectedProgramCode("");
-        setAqTags([]);
-        setOtherTags([]);
+        setCurriculumnVersionVal("");
+        setCourseCodeVal("");
+        setCourseNameVal("");
+        setSpecializationVal("");
+        setLectureVal("0");
+        setLabVal("0");
+        setLabTypeVal("");
+        setYearVal("1");
+        setTermVal("1");
         setOpenWarningModal(false);
         setEditModal(false);
         setActiveChanges(false);
         setAddModal(false);
     }
 
-    const removeAqTag = (tagToRemove: string) => {
-        setAqTags(prev => prev.filter(t => t !== tagToRemove));
-        setActiveChanges(true);
-    };
+    /** Filtering **/
+    function limitCourseNameVal(inputText: string){
+        setCourseNameVal(sanitizeLongName(inputText));
+    }
 
-    const removeOtherTag = (tagToRemove: string) => {
-        setOtherTags(prev => prev.filter(t => t !== tagToRemove));
-        setActiveChanges(true);
-    };
+    function limitLabUnits(inputNum: string){
+        if (inputNum === "") {
+            setLabVal("0");
+            return;
+        }
+        setLabVal(limitNumericValueShort(inputNum));
+    }
+
+    function limitLectureUnits(inputNum: string){
+        if (inputNum === "") {
+            setLectureVal("0");
+            return;
+        }
+        setLectureVal(limitNumericValueShort(inputNum));
+    }
 
     /** Import/Export **/
     async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
@@ -138,9 +156,9 @@ export default function SubjectsManager() {
             const worksheet = workbook.getWorksheet(1);
             const rows: any[] = [];
 
-            // Header Validation (Now checking Column 1 for Program Code)
+            // Header Validation
             const firstHeader = worksheet?.getRow(1).getCell(1).value?.toString();
-            if (firstHeader !== 'Program Code') {
+            if (firstHeader !== 'Curriculum Version') {
                 setStatusCode("400");
                 setLoading(false);
                 setShowToast(true);
@@ -149,25 +167,28 @@ export default function SubjectsManager() {
 
             worksheet?.eachRow((row, rowNumber) => {
                 if (rowNumber > 1) {
-                    // Mapping based on new Column Order: Prog(1), Code(2), Name(3), AQ(4), Other(5)
-                    const rawProg = row.getCell(1).value?.toString().trim() || "";
-                    const rawCode = row.getCell(2).value?.toString().trim() || "";
-                    const rawName = row.getCell(3).value?.toString().trim() || "";
-                    const aqRaw = row.getCell(4).value?.toString() || "";
-                    const otherRaw = row.getCell(5).value?.toString() || "";
+                    const curVersion = row.getCell(1).value?.toString().trim() || "";
+                    const code = row.getCell(2).value?.toString().trim() || "";
+                    const name = row.getCell(3).value?.toString().trim() || "";
+                    const spec = row.getCell(4).value?.toString().trim() || "";
+                    const lec = parseFloat(row.getCell(5).value?.toString() || "0");
+                    const lab = parseFloat(row.getCell(6).value?.toString() || "0");
+                    const labType = row.getCell(7).value?.toString().trim() || "";
+                    const yearTerm = row.getCell(8).value?.toString().trim() || "1-1";
 
-                    const isExample = rawCode.includes("[EXAMPLE]") || rawName.includes("[EXAMPLE]");
+                    // Requirement: Both cannot be zero
+                    if (lec === 0 && lab === 0) {
+                        console.warn(`[IMPORT_VALIDATION]: Skipping row ${rowNumber} - both lec and lab are zero.`);
+                        return;
+                    }
 
-                    if (rawCode && rawName && rawProg && !isExample) {
-                        rows.push({
-                            code: rawCode.toUpperCase(),
-                            name: rawName,
-                            prog: rawProg.toUpperCase(),
-                            requirements: {
-                                aq: aqRaw.split(',').map(s => s.trim()).filter(s => s),
-                                other: otherRaw.split(';').map(s => s.trim().replace(/\s+/g, ' ')).filter(s => s)
-                            }
-                        });
+                    if (lab > 0 && (!labType || labType === "--- none ---")) {
+                        console.warn(`[IMPORT_VALIDATION]: Skipping row ${rowNumber} due to missing Lab Type for Lab Units > 0.`);
+                        return;
+                    }
+
+                    if (curVersion && code && name) {
+                        rows.push({ curVersion, code, name, spec, lec, lab, labType: labType === "--- none ---" ? "" : labType, yearTerm });
                     }
                 }
             });
@@ -181,7 +202,7 @@ export default function SubjectsManager() {
 
             let successCount = 0;
             for (const sub of rows) {
-                const res = await insertSubject(sub.code, sub.name, sub.requirements, sub.prog);
+                const res = await insertSubject(sub.curVersion, sub.code, sub.name, sub.spec, sub.lec, sub.lab, sub.labType, sub.yearTerm);
                 if (res === "201") successCount++;
             }
 
@@ -208,42 +229,43 @@ export default function SubjectsManager() {
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Subject Import Template');
 
+            // 1. Define Columns
             worksheet.columns = [
-                { header: 'Program Code', key: 'prog', width: 20 },
-                { header: 'Subject Code', key: 'code', width: 20 },
-                { header: 'Subject Name', key: 'name', width: 40 },
-                { header: 'AQ Requirements', key: 'aq', width: 30 },
-                { header: 'Other Requirements', key: 'other', width: 100 }
+                { header: 'Curriculum Version', key: 'curVersion', width: 20 },
+                { header: 'Course Code', key: 'code', width: 20 },
+                { header: 'Course Name', key: 'name', width: 40 },
+                { header: 'Field of Specialization', key: 'spec', width: 30 },
+                { header: 'Lecture', key: 'lec', width: 10 },
+                { header: 'Lab', key: 'lab', width: 10 },
+                { header: 'Lab Type', key: 'labType', width: 20 },
+                { header: 'Year-Term', key: 'yearTerm', width: 15 }
             ];
 
             const headerRow = worksheet.getRow(1);
             headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
             headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '16A34A' } };
-            headerRow.height = 25;
 
-            const exampleRow = worksheet.addRow({
-                prog: 'BSIT',
-                code: '[EXAMPLE] INTE1025',
-                name: '[EXAMPLE] Science & Technology',
-                aq: 'IT, CS',
-                other: 'Research Coordinator: Baccalaureate degree relevant to the program; with experience in doing research; full-time faculty classification. Research Adviser: PhD holder or an MA/MS graduate (thesis track or has a research output in the last five (5) years that was presented or published in a journal); full-time faculty classification; with any of the ff: a) at least two (2) years of industry experience aligned to the discipline; b) with industry/faculty certification/s relevant to the discipline'
+            worksheet.addRow({
+                curVersion: 'BSIT-22-01',
+                code: 'INTE1049',
+                name: 'Professional Issues in Information Systems and Technology',
+                spec: 'Information Technology',
+                lec: 2,
+                lab: 1.5,
+                labType: 'Computer Lab',
+                yearTerm: '4-1'
             });
 
-            exampleRow.font = { italic: true, color: { argb: '94A3B8' } };
-            exampleRow.alignment = { wrapText: true, vertical: 'top' };
-
-            worksheet.addRow({}); // Spacer row
-
-            // Validation for Program Code (Column A)
-            const programOptions = programs.map(p => p.program_code);
-            if (programOptions.length > 0) {
-                for (let i = 4; i <= 200; i++) {
-                    worksheet.getCell(`A${i}`).dataValidation = {
-                        type: 'list',
-                        allowBlank: true,
-                        formulae: [`"${programOptions.join(',')}"`],
-                    };
-                }
+            const typeOptions = ['Computer Lab', 'Culinary Lab', 'Mock Bar', 'Mock Hotel', 'Gym', 'AVR'];
+            for (let i = 2; i <= 100; i++) {
+                worksheet.getCell(`G${i}`).dataValidation = {
+                    type: 'list',
+                    allowBlank: true,
+                    formulae: [`"${typeOptions.join(',')}"`],
+                    showErrorMessage: true,
+                    errorTitle: 'Invalid Lab Type',
+                    error: 'Please select a type from the dropdown list.'
+                };
             }
 
             const buffer = await workbook.xlsx.writeBuffer();
@@ -263,11 +285,14 @@ export default function SubjectsManager() {
             const worksheet = workbook.addWorksheet('Subjects Inventory');
 
             worksheet.columns = [
-                { header: 'Program Code', key: 'prog', width: 20 },
-                { header: 'Subject Code', key: 'code', width: 20 },
-                { header: 'Subject Name', key: 'name', width: 40 },
-                { header: 'AQ Requirements', key: 'aq', width: 30 },
-                { header: 'Other Requirements', key: 'other', width: 100 }
+                { header: 'Curriculum Version', key: 'curVersion', width: 20 },
+                { header: 'Course Code', key: 'code', width: 20 },
+                { header: 'Course Name', key: 'name', width: 40 },
+                { header: 'Field of Specialization', key: 'spec', width: 30 },
+                { header: 'Lecture', key: 'lec', width: 10 },
+                { header: 'Lab', key: 'lab', width: 10 },
+                { header: 'Lab Type', key: 'labType', width: 15 },
+                { header: 'Year-Term', key: 'yearTerm', width: 15 }
             ];
 
             const headerRow = worksheet.getRow(1);
@@ -275,15 +300,17 @@ export default function SubjectsManager() {
             headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2C3E50' } };
 
             const exportData = subjects.map(s => ({
-                prog: s.program_code,
-                code: s.subject_code,
-                name: s.subject_name,
-                aq: s.requirements?.aq?.join(', ') || '',
-                other: s.requirements?.other?.join('; ') || ''
+                curVersion: s.curriculumn_version,
+                code: s.course_code,
+                name: s.course_name,
+                spec: s.field_of_specialization || '',
+                lec: s.lecture || 0,
+                lab: s.lab || 0,
+                labType: s.lab_type || '',
+                yearTerm: s["year-term"]
             }));
 
             worksheet.addRows(exportData);
-            worksheet.autoFilter = 'A1:E1';
 
             const buffer = await workbook.xlsx.writeBuffer();
             saveAs(new Blob([buffer]), `Subjects_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -297,16 +324,40 @@ export default function SubjectsManager() {
 
     /** Queries **/
     async function submitSubject() {
-        if (!selectedSubjectCode || !subjectNameVal || !selectedProgramCode) return;
+        if (!curriculumnVersionVal || !courseCodeVal || !courseNameVal) {
+            setStatusCode("400");
+            setShowToast(true);
+            return;
+        }
+
+        const lec = parseFloat(lectureVal);
+        const lab = parseFloat(labVal);
+        const yearTerm = `${yearVal}-${termVal}`;
+
+        // Validation: Both cannot be zero
+        if (lec === 0 && lab === 0) {
+            setStatusCode("412");
+            setShowToast(true);
+            return;
+        }
+
+        if (lab > 0 && (!labTypeVal || labTypeVal === "")) {
+            setStatusCode("422");
+            setShowToast(true);
+            return;
+        }
 
         setLoading(true);
-        const requirements = { aq: aqTags, other: otherTags };
 
         const stat = await insertSubject(
-            selectedSubjectCode,
-            subjectNameVal,
-            requirements,
-            selectedProgramCode
+            curriculumnVersionVal,
+            courseCodeVal,
+            courseNameVal,
+            specializationVal,
+            lec,
+            lab,
+            labTypeVal,
+            yearTerm
         );
 
         setStatusCode(stat);
@@ -321,14 +372,40 @@ export default function SubjectsManager() {
     }
 
     async function updateEntry() {
+        if (!curriculumnVersionVal || !courseCodeVal || !courseNameVal) {
+            setStatusCode("400");
+            setShowToast(true);
+            return;
+        }
+
+        const lec = parseFloat(lectureVal);
+        const lab = parseFloat(labVal);
+        const yearTerm = `${yearVal}-${termVal}`;
+
+        // Validation: Both cannot be zero
+        if (lec === 0 && lab === 0) {
+            setStatusCode("412");
+            setShowToast(true);
+            return;
+        }
+
+        if (lab > 0 && (!labTypeVal || labTypeVal === "")) {
+            setStatusCode("422");
+            setShowToast(true);
+            return;
+        }
+
         setLoading(true);
-        const requirements = { aq: aqTags, other: otherTags };
 
         const stat = await updateSubject(
-            selectedSubjectCode,
-            subjectNameVal,
-            requirements,
-            selectedProgramCode
+            curriculumnVersionVal,
+            courseCodeVal,
+            courseNameVal,
+            specializationVal,
+            lec,
+            lab,
+            labTypeVal,
+            yearTerm
         );
 
         setStatusCode(stat);
@@ -342,10 +419,9 @@ export default function SubjectsManager() {
     }
 
     async function deleteRow() {
-        const id = selectedSubjectCode;
         setLoading(true);
 
-        const stat = await deleteSubject(id);
+        const stat = await deleteSubject(curriculumnVersionVal, courseCodeVal);
 
         setStatusCode(stat);
         setLoading(false);
@@ -360,14 +436,12 @@ export default function SubjectsManager() {
 
     const loadData = async () => {
         try {
-            const [subData, subCount, progList] = await Promise.all([
+            const [subData, subCount] = await Promise.all([
                 fetchSubjects(debouncedSearch, currentPage),
-                fetchSubjectCount(debouncedSearch),
-                getProgramList()
+                fetchSubjectCount(debouncedSearch)
             ]);
             setSubjects(subData);
             setRowCount(subCount);
-            setPrograms(progList);
         } catch (error) {
             console.error("[DATA_ERROR]:", error);
         } finally {
@@ -383,6 +457,7 @@ export default function SubjectsManager() {
     useEffect(() => {
         let isCancelled = false;
         const fetchData = async () => {
+            setLoading(true);
             await loadData();
             if (!isCancelled) setLoading(false);
         };
@@ -410,62 +485,19 @@ export default function SubjectsManager() {
         return () => clearTimeout(handler);
     }, [search]);
 
-    /** UI Components **/
-    const RequirementsDisplay = ({ reqs }: { reqs: any }) => {
-        return (
-            <div className="space-y-6">
-                <div>
-                    <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2 uppercase tracking-wider">
-                        AQ Requirements
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                        {reqs?.aq?.length > 0 ? (
-                            reqs.aq.map((tag: string, i: number) => (
-                                <Badge key={i} color="info" className="px-3 py-1">
-                                    {tag}
-                                </Badge>
-                            ))
-                        ) : (
-                            <p className="text-sm text-gray-500 italic">No AQ requirements specified.</p>
-                        )}
-                    </div>
-                </div>
-
-                <div>
-                    <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2 uppercase tracking-wider">
-                        Other Requirements
-                    </h3>
-                    <ul className="list-disc pl-5 space-y-3">
-                        {reqs?.other?.length > 0 ? (
-                            reqs.other.map((item: string, i: number) => (
-                                <li key={i} className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                                    {item}
-                                </li>
-                            ))
-                        ) : (
-                            <li className="text-sm text-gray-500 italic list-none">No other requirements specified.</li>
-                        )}
-                    </ul>
-                </div>
-            </div>
-        );
-    };
-
     const SubjectTableRow = ({ subject }) => {
         return (
             <TableRow className="bg-white border-gray-300 dark:border-gray-700 dark:bg-gray-800">
                 <TableCell className="font-medium text-gray-900 dark:text-white">
-                    {subject.subject_code}
+                    {subject.curriculumn_version}
                 </TableCell>
-                <TableCell>{subject.subject_name}</TableCell>
-                <TableCell>{subject.program_code}</TableCell>
-                <TableCell>
-                    <div onClick={() => viewRequirements(subject)} className="cursor-help text-blue-600 dark:text-blue-400 underline decoration-dotted">
-                        View { (subject.requirements?.aq?.length || 0) + (subject.requirements?.other?.length || 0) } Reqs
-                    </div>
-                </TableCell>
+                <TableCell>{subject.course_code}</TableCell>
+                <TableCell>{subject.course_name}</TableCell>
+                <TableCell>{subject["year-term"] || "1-1"}</TableCell>
+                <TableCell>{subject.lecture}</TableCell>
+                <TableCell>{subject.lab} | {subject.lab_type || "None"}</TableCell>
                 <TableCell className="flex justify-end">
-                    <Button color="alternative" onClick={() => editModalValue(subject.subject_code)}>
+                    <Button color="alternative" onClick={() => editModalValue(subject.curriculumn_version, subject.course_code)}>
                         Edit
                     </Button>
                 </TableCell>
@@ -478,7 +510,7 @@ export default function SubjectsManager() {
             {/** Loading Overlay **/}
             <div className={`${loading ? "" : "hidden"} fixed inset-0 z-9999 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm`}>
                 <div className="flex flex-col items-center gap-4">
-                    <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600"></div>
+                    <Spinner aria-label="Syncing spinner" size="xl" />
                     <p className="text-white font-semibold text-lg">Syncing Subjects...</p>
                 </div>
             </div>
@@ -497,7 +529,7 @@ export default function SubjectsManager() {
 
             <TextInput
                 className="mb-4 w-64"
-                placeholder="Search subject code or name..."
+                placeholder="Search code, name or version..."
                 value={search || ""}
                 onChange={(e) => setSearch(e.target.value)}
             />
@@ -507,18 +539,20 @@ export default function SubjectsManager() {
                 <Table hoverable>
                     <TableHead>
                         <TableRow>
-                            <TableHeadCell>Subject Code</TableHeadCell>
-                            <TableHeadCell>Subject Name</TableHeadCell>
-                            <TableHeadCell>Program</TableHeadCell>
-                            <TableHeadCell>Requirements</TableHeadCell>
+                            <TableHeadCell>Curriculum</TableHeadCell>
+                            <TableHeadCell>Code</TableHeadCell>
+                            <TableHeadCell>Name</TableHeadCell>
+                            <TableHeadCell>Yr-Term</TableHeadCell>
+                            <TableHeadCell>Lec</TableHeadCell>
+                            <TableHeadCell>Lab</TableHeadCell>
                             <TableHeadCell><span className="sr-only">Edit</span></TableHeadCell>
                         </TableRow>
                     </TableHead>
                     <TableBody className="divide-y">
                         {subjects.length > 0 ? (
-                            subjects.map((s) => <SubjectTableRow key={s.subject_code} subject={s} />)
+                            subjects.map((s) => <SubjectTableRow key={`${s.curriculumn_version}-${s.course_code}`} subject={s} />)
                         ) : (
-                            <TableRow><TableCell colSpan={5} className="text-center">No subjects found.</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={7} className="text-center bg-white border-gray-300 dark:border-gray-700 dark:bg-gray-800">No subjects found.</TableCell></TableRow>
                         )}
                     </TableBody>
                 </Table>
@@ -546,82 +580,73 @@ export default function SubjectsManager() {
                 <Progress size="sm" className="mt-2" progress={progress} />
             </Toast>
 
-            {/** Subject Requirements Modal **/}
-            <Modal show={showReq} onClose={() => setShowReq(false)} size="lg">
-                <ModalHeader className="border-b">
-                    <div className="flex flex-col">
-                        <span className="text-xl font-bold">{activeSubject?.subject_name}</span>
-                        <span className="text-sm font-mono text-gray-500">{activeSubject?.subject_code}</span>
-                    </div>
-                </ModalHeader>
-                <ModalBody>
-                    {activeSubject && (
-                        <RequirementsDisplay reqs={activeSubject.requirements} />
-                    )}
-                </ModalBody>
-                <ModalFooter className="flex justify-end border-t">
-                    <Button color="gray" onClick={() => setShowReq(false)}>
-                        Close
-                    </Button>
-                </ModalFooter>
-            </Modal>
-
             {/** Add Modal **/}
-            <Modal show={addModal} initialFocus={AddModalSubjectNameInput} onClose={() => setAddModal(false)}>
+            <Modal show={addModal} initialFocus={AddModalCourseNameInput} onClose={() => setAddModal(false)}>
                 <ModalHeader>Create New Subject</ModalHeader>
                 <ModalBody className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <Label htmlFor="subCode">Subject Code</Label>
-                            <TextInput id="subCode" placeholder="e.g. INTE1025" value={selectedSubjectCode} onChange={(e) => { setSelectedSubjectCode(e.target.value); setActiveChanges(true); }} required />
+                            <Label htmlFor="curVersion">Curriculum Version</Label>
+                            <TextInput id="curVersion" placeholder="e.g. BSIT-24-01" value={curriculumnVersionVal} onChange={(e) => { setCurriculumnVersionVal(e.target.value); setActiveChanges(true); }} required />
                         </div>
                         <div>
-                            <Label htmlFor="subName">Subject Name</Label>
-                            <TextInput id="subName" ref={AddModalSubjectNameInput} placeholder="e.g. Data Structures" value={subjectNameVal} onChange={(e) => { setSubjectNameVal(e.target.value); setActiveChanges(true); }} required />
+                            <Label htmlFor="courseCode">Course Code</Label>
+                            <TextInput id="courseCode" placeholder="e.g. INTE1025" value={courseCodeVal} onChange={(e) => { setCourseCodeVal(e.target.value); setActiveChanges(true); }} required />
                         </div>
                     </div>
                     <div>
-                        <Label htmlFor="progSelect">Belongs to Program</Label>
-                        <Select id="progSelect" value={selectedProgramCode} onChange={(e) => { setSelectedProgramCode(e.target.value); setActiveChanges(true); }}>
-                            <option value="">Select a Program</option>
-                            {programs.map(p => <option key={p.program_code} value={p.program_code}>{p.program_code} - {p.program_name}</option>)}
-                        </Select>
+                        <Label htmlFor="courseName">Course Name</Label>
+                        <TextInput id="courseName" ref={AddModalCourseNameInput} placeholder="e.g. Data Structures" value={courseNameVal} onChange={(e) => { limitCourseNameVal(e.target.value); setActiveChanges(true); }} required />
                     </div>
-
-                    {/** AQ Tags **/}
-                    <div>
-                        <Label>Academic Qualifications (AQ - e.g. IT)</Label>
-                        <div className="flex flex-wrap gap-2 mb-2">
-                            {aqTags.map(tag => (
-                                <Badge key={tag} color="info" className="flex items-center gap-1">
-                                    {tag} <span className="cursor-pointer font-bold" onClick={() => removeAqTag(tag)}>×</span>
-                                </Badge>
-                            ))}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <Label htmlFor="year">Year Level</Label>
+                            <Select id="year" value={yearVal} onChange={(e) => { setYearVal(e.target.value); setActiveChanges(true); }}>
+                                <option value="1">1st Year</option>
+                                <option value="2">2nd Year</option>
+                                <option value="3">3rd Year</option>
+                                <option value="4">4th Year</option>
+                            </Select>
                         </div>
-                        <TextInput placeholder="Type AQ code and press Enter. Press [ENTER] to add." onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                const val = e.currentTarget.value.trim().toUpperCase();
-                                if (val && !aqTags.includes(val)) { setAqTags([...aqTags, val]); e.currentTarget.value = ""; setActiveChanges(true); }
-                            }
-                        }} />
+                        <div>
+                            <Label htmlFor="term">Term/Semester</Label>
+                            <Select id="term" value={termVal} onChange={(e) => { setTermVal(e.target.value); setActiveChanges(true); }}>
+                                <option value="1">1st Semester</option>
+                                <option value="2">2nd Semester</option>
+                            </Select>
+                        </div>
                     </div>
-
-                    {/** Other Tags **/}
                     <div>
-                        <Label>Other Requirements (Skills/Experience)</Label>
-                        <div className="flex flex-wrap gap-2 mb-2">
-                            {otherTags.map(tag => (
-                                <Badge key={tag} color="success" className="flex items-center gap-1">
-                                    {tag} <span className="cursor-pointer font-bold" onClick={() => removeOtherTag(tag)}>×</span>
-                                </Badge>
-                            ))}
+                        <Label htmlFor="spec">Field of Specialization</Label>
+                        <TextInput id="spec" placeholder="e.g. Software Engineering" value={specializationVal} onChange={(e) => { setSpecializationVal(e.target.value); setActiveChanges(true); }} />
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                        <div>
+                            <Label htmlFor="lec">Lecture Units</Label>
+                            <TextInput id="lec" step={"0.1"} value={lectureVal} onChange={(e) => { limitLectureUnits(e.target.value); setActiveChanges(true); }} />
                         </div>
-                        <Textarea placeholder={`[Example]: with experience in doing research\nPress [ENTER] to add.`} onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                const val = e.currentTarget.value.trim();
-                                if (val && !otherTags.includes(val)) { setOtherTags([...otherTags, val]); e.currentTarget.value = ""; setActiveChanges(true); }
-                            }
-                        }} />
+                        <div>
+                            <Label htmlFor="lab">Lab Units</Label>
+                            <TextInput id="lab" step={"0.1"} value={labVal} onChange={(e) => { limitLabUnits(e.target.value); setActiveChanges(true); }} />
+                        </div>
+                        <div>
+                            <Label htmlFor="labType">Lab Type {parseFloat(labVal) > 0 && <span className="text-red-500">*</span>}</Label>
+                            <Select id="labType"
+                                    value={labTypeVal}
+                                    onChange={(e) => {
+                                        setLabTypeVal(e.target.value === "--- none ---" ? "" : e.target.value);
+                                        setActiveChanges(true);
+                                    }}
+                            >
+                                <option value="">--- none ---</option>
+                                <option value="Computer Lab">Computer Lab</option>
+                                <option value="Culinary Lab">Culinary Lab</option>
+                                <option value="Mock Bar">Mock Bar</option>
+                                <option value="Mock Hotel">Mock Hotel</option>
+                                <option value="Gym">Gym</option>
+                                <option value="AVR">AVR</option>
+                            </Select>
+                        </div>
                     </div>
                 </ModalBody>
                 <ModalFooter className="flex justify-end space-x-2">
@@ -631,45 +656,62 @@ export default function SubjectsManager() {
             </Modal>
 
             {/** Edit Modal **/}
-            <Modal show={editModal} initialFocus={EditModalSubjectNameInput} onClose={() => setEditModal(false)}>
-                <ModalHeader>Editing Subject: {selectedSubjectCode}</ModalHeader>
+            <Modal show={editModal} initialFocus={EditModalCourseNameInput} onClose={() => setEditModal(false)}>
+                <ModalHeader>Editing Subject: {courseCodeVal}</ModalHeader>
                 <ModalBody className="space-y-4">
+                    <p className="text-sm text-gray-500 italic">Curriculum: {curriculumnVersionVal}</p>
                     <div>
-                        <Label>Subject Name</Label>
-                        <TextInput ref={EditModalSubjectNameInput} value={subjectNameVal} onChange={(e) => { setSubjectNameVal(e.target.value); setActiveChanges(true); }} />
+                        <Label>Course Name</Label>
+                        <TextInput ref={EditModalCourseNameInput} value={courseNameVal} onChange={(e) => { limitCourseNameVal(e.target.value); setActiveChanges(true); }} />
                     </div>
-                    <div>
-                        <Label>Program</Label>
-                        <Select value={selectedProgramCode} onChange={(e) => { setSelectedProgramCode(e.target.value); setActiveChanges(true); }}>
-                            {programs.map(p => <option key={p.program_code} value={p.program_code}>{p.program_code}</option>)}
-                        </Select>
-                    </div>
-                    {/* Reuse tag logic from Add Modal here for AQ/Other */}
-                    <div>
-                        <Label>AQ Reqs</Label>
-                        <TextInput placeholder={"Enter AQ. [Example]: IT. Press [ENTER] to add."} onKeyDown={(e) => { if (e.key === 'Enter') { const val = e.currentTarget.value.trim().toUpperCase(); if (val && !aqTags.includes(val)) { setAqTags([...aqTags, val]); e.currentTarget.value = ""; setActiveChanges(true); } } }} />
-                        <div className="flex flex-wrap gap-2 mt-2">
-                            {aqTags.map(tag => (
-                                <Badge key={tag} color="info">{tag} <span className="cursor-pointer ml-1" onClick={() => removeAqTag(tag)}>×</span></Badge>
-                            ))}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <Label>Year Level</Label>
+                            <Select value={yearVal} onChange={(e) => { setYearVal(e.target.value); setActiveChanges(true); }}>
+                                <option value="1">1st Year</option>
+                                <option value="2">2nd Year</option>
+                                <option value="3">3rd Year</option>
+                                <option value="4">4th Year</option>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label>Term/Semester</Label>
+                            <Select value={termVal} onChange={(e) => { setTermVal(e.target.value); setActiveChanges(true); }}>
+                                <option value="1">1st Semester</option>
+                                <option value="2">2nd Semester</option>
+                            </Select>
                         </div>
                     </div>
-
                     <div>
-                        <Label>Other Requirements (Skills/Experience)</Label>
-                        <Textarea placeholder={`[Example]: with experience in doing research\nPress [ENTER] to add.`} onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                const val = e.currentTarget.value.trim();
-                                if (val && !otherTags.includes(val)) { setOtherTags([...otherTags, val]); e.currentTarget.value = ""; setActiveChanges(true); }
-                            }
-                        }} />
-
-                        <div className="flex flex-wrap h-28 overflow-y-auto gap-2 mt-2">
-                            {otherTags.map(tag => (
-                                <Badge key={tag} color="success" className="flex items-center gap-1">
-                                    {tag} <span className="cursor-pointer font-bold" onClick={() => removeOtherTag(tag)}>×</span>
-                                </Badge>
-                            ))}
+                        <Label>Field of Specialization</Label>
+                        <TextInput value={specializationVal} onChange={(e) => { setSpecializationVal(e.target.value); setActiveChanges(true); }} />
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                        <div>
+                            <Label>Lecture Units</Label>
+                            <TextInput value={lectureVal} step={"0.1"} onChange={(e) => { limitLectureUnits(e.target.value); setActiveChanges(true); }} />
+                        </div>
+                        <div>
+                            <Label>Lab Units</Label>
+                            <TextInput value={labVal} step={"0.1"} onChange={(e) => { limitLabUnits(e.target.value); setActiveChanges(true); }} />
+                        </div>
+                        <div>
+                            <Label htmlFor="labType">Lab Type {parseFloat(labVal) > 0 && <span className="text-red-500">*</span>}</Label>
+                            <Select id="labType"
+                                    value={labTypeVal}
+                                    onChange={(e) => {
+                                        setLabTypeVal(e.target.value === "--- none ---" ? "" : e.target.value);
+                                        setActiveChanges(true);
+                                    }}
+                            >
+                                <option value="">--- none ---</option>
+                                <option value="Computer Lab">Computer Lab</option>
+                                <option value="Culinary Lab">Culinary Lab</option>
+                                <option value="Mock Bar">Mock Bar</option>
+                                <option value="Mock Hotel">Mock Hotel</option>
+                                <option value="Gym">Gym</option>
+                                <option value="AVR">AVR</option>
+                            </Select>
                         </div>
                     </div>
                 </ModalBody>
@@ -701,16 +743,16 @@ export default function SubjectsManager() {
                             <h3 className="mb-5 text-lg font-normal text-gray-500">Discard all unsaved changes?</h3>
                             <div className="flex justify-center gap-4">
                                 <Button color="alternative" onClick={() => setOpenWarningModal(false)}>No</Button>
-                                <Button color="warning" onClick={discardEntry}>Yes, Discard</Button>
+                                <Button color="red" onClick={discardEntry}>Yes, Discard</Button>
                             </div>
                         </>
                     ) : (
                         <>
-                            <HiOutlineExclamationCircle className="mx-auto mb-4 h-14 w-14 text-blue-500" />
+                            <VscSave className="mx-auto mb-4 h-14 w-14 text-gray-400 dark:text-gray-200" />
                             <h3 className="mb-5 text-lg font-normal text-gray-500">Save changes to this subject?</h3>
                             <div className="flex justify-center gap-4">
                                 <Button color="alternative" onClick={() => setOpenWarningModal(false)}>No</Button>
-                                <Button color="info" onClick={updateEntry}>Yes, Save</Button>
+                                <Button color="default" onClick={updateEntry}>Yes, Save</Button>
                             </div>
                         </>
                     )}

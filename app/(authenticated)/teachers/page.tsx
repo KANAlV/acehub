@@ -6,5 +6,3 @@
  * 5. Teacher ID should be uses as same as the one used in FCCE
  * 6. Has Time Availability Based on Teacher Type (FT, PTFT, PT).
  * **/
-
-
