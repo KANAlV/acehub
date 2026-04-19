@@ -1,6 +1,9 @@
-/** TODO: Create FCCE Page
- * 1. Contains Initials of Teachers (e.g RMR).
- * 2. Column for subject name
- * 3. FCCE result/status
- * 4. Import Using Same format From Provided Excel file
- * **/
+"use client";
+
+export default function FCCEPage() {
+    return (
+        <div className="p-8">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Under Construction (TODO)</h1>
+        </div>
+    );
+}

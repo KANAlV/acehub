@@ -6,3 +6,10 @@
  * 5. Teacher ID should be uses as same as the one used in FCCE
  * 6. Has Time Availability Based on Teacher Type (FT, PTFT, PT).
  * **/
+export default function Teachers() {
+    return (
+        <div className="p-8">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Under Construction (TODO)</h1>
+        </div>
+    );
+}
