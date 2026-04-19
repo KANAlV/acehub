@@ -332,7 +332,7 @@ export default function SubjectsManager() {
 
         const lec = parseFloat(lectureVal);
         const lab = parseFloat(labVal);
-        const yearTerm = `${yearVal}-${termVal}`;
+        const yearTerm = yearVal == "11" || yearVal == "12" ? `${yearVal}` : `${yearVal}-${termVal}`;
 
         // Validation: Both cannot be zero
         if (lec === 0 && lab === 0) {
@@ -380,7 +380,7 @@ export default function SubjectsManager() {
 
         const lec = parseFloat(lectureVal);
         const lab = parseFloat(labVal);
-        const yearTerm = `${yearVal}-${termVal}`;
+        const yearTerm = yearVal == "11" || yearVal == "12" ? `${yearVal}` : `${yearVal}-${termVal}`;
 
         // Validation: Both cannot be zero
         if (lec === 0 && lab === 0) {
@@ -602,6 +602,8 @@ export default function SubjectsManager() {
                         <div>
                             <Label htmlFor="year">Year Level</Label>
                             <Select id="year" value={yearVal} onChange={(e) => { setYearVal(e.target.value); setActiveChanges(true); }}>
+                                <option value="11">Grade 11</option>
+                                <option value="12">Grade 12</option>
                                 <option value="1">1st Year</option>
                                 <option value="2">2nd Year</option>
                                 <option value="3">3rd Year</option>
@@ -610,7 +612,10 @@ export default function SubjectsManager() {
                         </div>
                         <div>
                             <Label htmlFor="term">Term/Semester</Label>
-                            <Select id="term" value={termVal} onChange={(e) => { setTermVal(e.target.value); setActiveChanges(true); }}>
+                            <Select id="term"
+                                    value={termVal}
+                                    disabled={yearVal == "11" || yearVal == "12"}
+                                    onChange={(e) => { setTermVal(e.target.value); setActiveChanges(true); }}>
                                 <option value="1">1st Semester</option>
                                 <option value="2">2nd Semester</option>
                             </Select>
@@ -623,11 +628,21 @@ export default function SubjectsManager() {
                     <div className="grid grid-cols-3 gap-4">
                         <div>
                             <Label htmlFor="lec">Lecture Units</Label>
-                            <TextInput id="lec" step={"0.1"} value={lectureVal} onChange={(e) => { limitLectureUnits(e.target.value); setActiveChanges(true); }} />
+                            <TextInput id="lec"
+                                       step={"0.1"}
+                                       value={lectureVal}
+                                       onFocus={(e) => e.target.value === "0" ? setLectureVal("") : e.target.value}
+                                       onBlur={(e) => e.target.value === "" ? setLectureVal("0") : e.target.value}
+                                       onChange={(e) => { limitLectureUnits(e.target.value); setActiveChanges(true); }} />
                         </div>
                         <div>
                             <Label htmlFor="lab">Lab Units</Label>
-                            <TextInput id="lab" step={"0.1"} value={labVal} onChange={(e) => { limitLabUnits(e.target.value); setActiveChanges(true); }} />
+                            <TextInput id="lab"
+                                       step={"0.1"}
+                                       value={labVal}
+                                       onFocus={(e) => e.target.value === "0" ? setLabVal("") : e.target.value}
+                                       onBlur={(e) => e.target.value === "" ? setLabVal("0") : e.target.value}
+                                       onChange={(e) => { limitLabUnits(e.target.value); setActiveChanges(true); }} />
                         </div>
                         <div>
                             <Label htmlFor="labType">Lab Type {parseFloat(labVal) > 0 && <span className="text-red-500">*</span>}</Label>
@@ -668,6 +683,8 @@ export default function SubjectsManager() {
                         <div>
                             <Label>Year Level</Label>
                             <Select value={yearVal} onChange={(e) => { setYearVal(e.target.value); setActiveChanges(true); }}>
+                                <option value="11">Grade 11</option>
+                                <option value="12">Grade 12</option>
                                 <option value="1">1st Year</option>
                                 <option value="2">2nd Year</option>
                                 <option value="3">3rd Year</option>
@@ -676,7 +693,9 @@ export default function SubjectsManager() {
                         </div>
                         <div>
                             <Label>Term/Semester</Label>
-                            <Select value={termVal} onChange={(e) => { setTermVal(e.target.value); setActiveChanges(true); }}>
+                            <Select value={termVal}
+                                    disabled={yearVal == "11" || yearVal == "12"}
+                                    onChange={(e) => { setTermVal(e.target.value); setActiveChanges(true); }}>
                                 <option value="1">1st Semester</option>
                                 <option value="2">2nd Semester</option>
                             </Select>
@@ -689,11 +708,19 @@ export default function SubjectsManager() {
                     <div className="grid grid-cols-3 gap-4">
                         <div>
                             <Label>Lecture Units</Label>
-                            <TextInput value={lectureVal} step={"0.1"} onChange={(e) => { limitLectureUnits(e.target.value); setActiveChanges(true); }} />
+                            <TextInput value={lectureVal}
+                                       step={"0.1"}
+                                       onFocus={(e) => e.target.value === "0" ? setLectureVal("") : e.target.value}
+                                       onBlur={(e) => e.target.value === "" ? setLectureVal("0") : e.target.value}
+                                       onChange={(e) => { limitLectureUnits(e.target.value); setActiveChanges(true); }} />
                         </div>
                         <div>
                             <Label>Lab Units</Label>
-                            <TextInput value={labVal} step={"0.1"} onChange={(e) => { limitLabUnits(e.target.value); setActiveChanges(true); }} />
+                            <TextInput value={labVal}
+                                       step={"0.1"}
+                                       onFocus={(e) => e.target.value === "0" ? setLabVal("") : e.target.value}
+                                       onBlur={(e) => e.target.value === "" ? setLabVal("0") : e.target.value}
+                                       onChange={(e) => { limitLabUnits(e.target.value); setActiveChanges(true); }} />
                         </div>
                         <div>
                             <Label htmlFor="labType">Lab Type {parseFloat(labVal) > 0 && <span className="text-red-500">*</span>}</Label>
