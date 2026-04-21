@@ -121,24 +121,24 @@ export default function SubjectsManager() {
     }
 
     /** Filtering **/
-    function limitCourseNameVal(inputText: string){
-        setCourseNameVal(sanitizeLongName(inputText));
+    function limitCourseNameVal(e: string){
+        setCourseNameVal(sanitizeLongName(e));
     }
 
-    function limitLabUnits(inputNum: string){
-        if (inputNum === "") {
+    function limitLabUnits(e: string){
+        if (e === "") {
             setLabVal("0");
             return;
         }
-        setLabVal(limitNumericValueShort(inputNum));
+        setLabVal(limitNumericValueShort(e));
     }
 
-    function limitLectureUnits(inputNum: string){
-        if (inputNum === "") {
+    function limitLectureUnits(e: string){
+        if (e === "") {
             setLectureVal("0");
             return;
         }
-        setLectureVal(limitNumericValueShort(inputNum));
+        setLectureVal(limitNumericValueShort(e));
     }
 
     /** Import/Export **/

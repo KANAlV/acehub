@@ -25,6 +25,7 @@ import React, {useEffect, useRef, useState} from "react";
 import {HiCheck, HiExclamation, HiOutlineExclamationCircle, HiOutlineTrash} from "react-icons/hi";
 import {deleteRoom, fetchRooms, fetchRoomsCount, getAllRoomsData, insertRoom, updateRoom} from "@/services/userService.ts";
 import {VscSave} from "react-icons/vsc";
+import {sanitizeName} from "@/lib/validation.ts";
 
 export default function RoomManager() {
     const [loading, setLoading] = useState(true); // spinner state
@@ -98,8 +99,9 @@ export default function RoomManager() {
 
     function discardEntry() {
         console.log("[UI_ACTION]: Discarding entry and closing all modals. Resetting form state.");
-        setSelectedRoom(null);
-        setRoomNameVal(null);
+        setSelectedRoom(0);
+        setRoomNameVal("");
+        setRoomTypeVal("Lecture");
         setOpenWarningModal(false);
         setEditModal(false);
         setActiveChanges(false);
@@ -208,6 +210,12 @@ export default function RoomManager() {
         } else {
             console.warn(`[UI_WARN]: Delete failed. No UI refresh triggered.`);
         }
+    }
+
+    /** Filtering **/
+
+    function filterRoomName(e:string) {
+        setRoomNameVal(sanitizeName(e));
     }
 
     /** Import/Export **/
@@ -583,8 +591,9 @@ export default function RoomManager() {
                             </div>
                             <TextInput id="roomName" type="text" ref={AddModalRoomNameInput}
                                        placeholder="e.g. 101"
+                                       value={roomNameVal}
                                        onChange={(e) => {
-                                           setRoomNameVal(e.target.value)
+                                           filterRoomName(e.target.value)
                                            setActiveChanges(true)
                                        }}
                                        required />
@@ -633,7 +642,7 @@ export default function RoomManager() {
 
             {/*  Edit Modal  */}
             <Modal size={"sm"} show={editModal} initialFocus={EditModalRoomNameInput} onClose={() => setEditModal(false)}>
-                <ModalHeader>Editing Room: {rooms[selectedRoom]?.room_name}</ModalHeader>
+                <ModalHeader>Editing Room: {rooms.find(r => r.room_id === selectedRoom)?.room_name}</ModalHeader>
                 <ModalBody>
                     <div className="flex gap-4 space-y-6">
                         <div className={"col-span-2"}>
@@ -644,7 +653,7 @@ export default function RoomManager() {
                                        placeholder="e.g. 101"
                                        value={roomNameVal}
                                        onChange={(e) => {
-                                           setRoomNameVal(e.target.value)
+                                           filterRoomName(e.target.value)
                                            setActiveChanges(true)
                                        }}
                                        required />

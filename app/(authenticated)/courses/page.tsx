@@ -22,6 +22,7 @@ import {
 } from "@/services/userService.ts";
 import {HiCheck, HiExclamation, HiOutlineExclamationCircle, HiOutlineTrash} from "react-icons/hi";
 import { VscSave } from "react-icons/vsc";
+import {sanitizeLongName, sanitizeVeryShortName} from "@/lib/validation.ts";
 
 export default function CoursesManager() {
     const [loading, setLoading] = useState(true); // spinner state
@@ -103,6 +104,15 @@ export default function CoursesManager() {
         setEditModal(false);
         setActiveChanges(false);
         setAddModal(false);
+    }
+
+    /** Filtering **/
+    function filterProgramCode(e:string) {
+        setSelectedProgram(sanitizeVeryShortName(e))
+    }
+
+    function filterProgramName(e:string) {
+        setProgramNameVal(sanitizeLongName(e))
     }
 
     /** Import/Export **/
@@ -589,7 +599,7 @@ export default function CoursesManager() {
                                        placeholder="e.g. BSIT"
                                        value={selectedProgram}
                                        onChange={(e) => {
-                                           setSelectedProgram(e.target.value)
+                                           filterProgramCode(e.target.value)
                                            setActiveChanges(true)
                                        }}
                                        required />
@@ -602,7 +612,7 @@ export default function CoursesManager() {
                                        placeholder="e.g. BS Tourism Management"
                                        value={programNameVal}
                                        onChange={(e) => {
-                                           setProgramNameVal(e.target.value)
+                                           filterProgramName(e.target.value)
                                            setActiveChanges(true)
                                        }}
                                        required />
@@ -658,7 +668,7 @@ export default function CoursesManager() {
                                        placeholder="e.g. BS Tourism Management"
                                        value={programNameVal}
                                        onChange={(e) => {
-                                           setProgramNameVal(e.target.value)
+                                           filterProgramName(e.target.value)
                                            setActiveChanges(true)
                                        }}
                                        required />

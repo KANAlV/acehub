@@ -5,6 +5,8 @@ export const ALLOWED_CHARS_REGEX = /[^a-zA-Z0-9_\-:\/\\\.()\[\] ]/g; // Added sp
 
 export const NON_NUMERIC_REGEX = /[^0-9.]/g;
 
+export const MAX_LENGTH_VERY_SHORT = 8;
+
 export const MAX_LENGTH_SHORT = 10; // Updated to match your requirement
 
 export const MAX_LENGTH = 30;
@@ -12,6 +14,18 @@ export const MAX_LENGTH = 30;
 export const MAX_LENGTH_LONG = 50;
 
 export const LONG_NAME_LIMIT = 150;
+
+export function sanitizeVeryShortName(input: string): string {
+    return input
+        .replace(ALLOWED_CHARS_REGEX, '') // 1. Remove bad characters
+        .slice(0, MAX_LENGTH_VERY_SHORT); // 2. Enforce length
+}
+
+export function sanitizeName(input: string): string {
+    return input
+        .replace(ALLOWED_CHARS_REGEX, '') // 1. Remove bad characters
+        .slice(0, MAX_LENGTH); // 2. Enforce length
+}
 
 export function sanitizeLongName(input: string): string {
     return input
@@ -39,8 +53,8 @@ export function limitNumericValueShort(input: string): string {
     // Check the numerical value
     const numValue = parseFloat(clean);
     if (!isNaN(numValue)) {
-        if (numValue > MAX_LENGTH_SHORT) {
-            return MAX_LENGTH_SHORT.toString(); 
+        if (numValue > MAX_LENGTH_VERY_SHORT) {
+            return MAX_LENGTH_VERY_SHORT.toString();
         }
         if (numValue < 0) {
             return "0";
