@@ -63,3 +63,21 @@ export function limitNumericValueShort(input: string): string {
 
     return clean;
 }
+
+
+export function numericValueOnly(input: string): string {
+    // 1. Remove anything that isn't a digit (0-9)
+    // This replaces your previous decimal/non-numeric logic
+    let clean = input.replace(/\D/g, '');
+
+    // 2. Remove leading zeros
+    // This regex looks for '0' at the start followed by other digits
+    // If the string is just "0", it stays "0"
+    if (clean.length > 1) {
+        clean = clean.replace(/^0+/, '');
+    }
+
+    // 3. Return '0' if the string is empty (optional, depending on UX)
+    // Otherwise, return the clean string
+    return clean === '' ? '' : clean;
+}

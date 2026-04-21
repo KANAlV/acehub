@@ -73,11 +73,8 @@ export function SidebarComponent() {
                         <SidebarItem as={Link} href="/rooms" icon={HiLibrary} onClick={() => setIsOpen(false)}>
                             Rooms
                         </SidebarItem>
-                        <SidebarItem as={Link} href="/courses" icon={HiBriefcase} onClick={() => setIsOpen(false)}>
+                        <SidebarItem as={Link} href="/courses" icon={HiUserGroup} onClick={() => setIsOpen(false)}>
                             Courses
-                        </SidebarItem>
-                        <SidebarItem as={Link} href="/maintenance" icon={HiUserGroup} onClick={() => setIsOpen(false)}>
-                            Sections (WIP)
                         </SidebarItem>
                         <SidebarItem as={Link} href="/maintenance" icon={HiAcademicCap} onClick={() => setIsOpen(false)}>
                             Teachers (*)

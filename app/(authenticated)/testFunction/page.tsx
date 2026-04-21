@@ -549,7 +549,7 @@ function generateScheduleWithAssignments(semester: number): FullSchedule {
 async function exportExcel(schedule: FullSchedule) {
     const wb = new ExcelJS.Workbook();
 
-    /* ---------- Group sections by program ---------- */
+    /* ---------- Group courses by program ---------- */
     const programs: Record<string, string[]> = {};
 
     for (const section in schedule) {

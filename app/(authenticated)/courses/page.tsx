@@ -22,7 +22,59 @@ import {
 } from "@/services/userService.ts";
 import {HiCheck, HiExclamation, HiOutlineExclamationCircle, HiOutlineTrash} from "react-icons/hi";
 import { VscSave } from "react-icons/vsc";
-import {sanitizeLongName, sanitizeVeryShortName} from "@/lib/validation.ts";
+import {numericValueOnly, sanitizeLongName, sanitizeVeryShortName} from "@/lib/validation.ts";
+
+/** --- Helper Components --- **/
+const ProgramTableRow = ({ program, editModalValue }: { program: any, editModalValue: (id: string) => void }) => {
+    // Ensure students is an object
+    const students = typeof program.students === 'string' ? JSON.parse(program.students) : (program.students || {});
+    const totalStudents = Object.values(students).reduce((a: any, b: any) => (a as number) + (b as number), 0);
+    
+    return (
+        <TableRow className="bg-white border-gray-300 dark:border-gray-700 dark:bg-gray-800">
+            <TableCell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
+                {program.program_code}
+            </TableCell>
+            <TableCell>{program.program_name}</TableCell>
+            <TableCell>{program.level}</TableCell>
+            <TableCell>
+                <div className="text-xs">
+                    {Object.entries(students).map(([year, count]) => (
+                        <span key={year} className={`${year=="11"||year=="12"? "bg-yellow-300 text-blue-700":"bg-blue-700 text-white"} font-extrabold mr-2 px-1 rounded`}>Y{year}: {count as number}</span>
+                    ))}
+                </div>
+            </TableCell>
+            <TableCell className={"flex justify-end"}>
+                <Button color="alternative" onClick={() => editModalValue(program.program_code)}>
+                    Edit
+                </Button>
+            </TableCell>
+        </TableRow>
+    );
+}
+
+const StudentInputs = ({ academicLevelVal, studentsVal, handleStudentChange }: { 
+    academicLevelVal: string, 
+    studentsVal: Record<string, string>, 
+    handleStudentChange: (year: string, val: string) => void 
+}) => {
+    const years = academicLevelVal === "SHS" ? ["11", "12"] : ["1", "2", "3", "4"];
+    return (
+        <div className="grid grid-cols-2 gap-3 mt-4">
+            {years.map(year => (
+                <div key={year}>
+                    <Label htmlFor={`year-${year}`}>Year {year} Students</Label>
+                    <TextInput
+                        id={`year-${year}`}
+                        value={studentsVal[year] || ""}
+                        placeholder="0"
+                        onChange={(e) => handleStudentChange(year, e.target.value)}
+                    />
+                </div>
+            ))}
+        </div>
+    );
+};
 
 export default function CoursesManager() {
     const [loading, setLoading] = useState(true); // spinner state
@@ -43,6 +95,11 @@ export default function CoursesManager() {
     const [selectedProgram, setSelectedProgram] = useState(""); // Track the program being edited
     const [programNameVal, setProgramNameVal] = useState("");
     const [academicLevelVal, setAcademicLevelVal] = useState("College");
+    
+    // Student counts per year level
+    const [studentsVal, setStudentsVal] = useState<Record<string, string>>({
+        "1": "", "2": "", "3": "", "4": ""
+    });
 
     const [activeChanges, setActiveChanges] = useState(false); // Track if there are changes in edit to toggle between cancel and discard
     const AddModalProgramNameInput = useRef<HTMLInputElement>(null); // for initialFocus of AddModal
@@ -69,6 +126,7 @@ export default function CoursesManager() {
         "204": "Program deleted successfully.",
         "400": "Invalid data provided.",
         "404": "Program not found.",
+        "409": "Conflict: Program Code already exists.",
         "500": "Server error. Please try again later."
     };
 
@@ -86,20 +144,35 @@ export default function CoursesManager() {
         setSelectedProgram(program.program_code);
         setProgramNameVal(program.program_name);
         setAcademicLevelVal(program.level);
+        
+        // Ensure students is handled as an object
+        const dbStudents = typeof program.students === 'string' ? JSON.parse(program.students) : (program.students || {});
+        const newStudents: Record<string, string> = {};
+        
+        if (program.level === "SHS") {
+            newStudents["11"] = dbStudents["11"]?.toString() || "";
+            newStudents["12"] = dbStudents["12"]?.toString() || "";
+        } else {
+            newStudents["1"] = dbStudents["1"]?.toString() || "";
+            newStudents["2"] = dbStudents["2"]?.toString() || "";
+            newStudents["3"] = dbStudents["3"]?.toString() || "";
+            newStudents["4"] = dbStudents["4"]?.toString() || "";
+        }
+        
+        setStudentsVal(newStudents);
         setEditModal(true);
     }
 
     function showWarning(color: string) {
-        console.log(`[UI_INTERRUPT]: Showing warning modal. Level: ${color}`);
         setWarningType(color);
         setOpenWarningModal(true);
     }
 
     function discardEntry() {
-        console.log("[UI_ACTION]: Discarding entry and closing all modals. Resetting form state.");
         setSelectedProgram("");
         setProgramNameVal("");
         setAcademicLevelVal("College");
+        setStudentsVal({ "1": "", "2": "", "3": "", "4": "" });
         setOpenWarningModal(false);
         setEditModal(false);
         setActiveChanges(false);
@@ -115,14 +188,29 @@ export default function CoursesManager() {
         setProgramNameVal(sanitizeLongName(e))
     }
 
+    function handleStudentChange(year: string, val: string) {
+        setStudentsVal(prev => ({
+            ...prev,
+            [year]: numericValueOnly(val)
+        }));
+        setActiveChanges(true);
+    }
+
+    function handleLevelChange(level: string) {
+        setAcademicLevelVal(level);
+        if (level === "SHS") {
+            setStudentsVal({ "11": "", "12": "" });
+        } else {
+            setStudentsVal({ "1": "", "2": "", "3": "", "4": "" });
+        }
+        setActiveChanges(true);
+    }
+
     /** Import/Export **/
     async function handleProgramExport() {
         try {
             const programs = await getAllProgramsData();
-
-            if (!programs || programs.length === 0) {
-                return "404";
-            }
+            if (!programs || programs.length === 0) return "404";
 
             const ExcelJS = (await import('exceljs')).default;
             const { saveAs } = await import('file-saver');
@@ -130,36 +218,28 @@ export default function CoursesManager() {
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Programs Export');
 
-            // 1. Define Columns (A to C) - Removed sections
             worksheet.columns = [
                 { header: 'Program Code', key: 'code', width: 15 },
                 { header: 'Program Name', key: 'name', width: 45 },
                 { header: 'Level', key: 'level', width: 15 },
+                { header: 'Students JSON', key: 'students', width: 30 },
             ];
 
-            // 2. Header Styling
             const headerRow = worksheet.getRow(1);
             headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
-            headerRow.height = 25;
+            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '16A34A' } };
 
-            const fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '16A34A' } } as const;
-            ['A1', 'B1', 'C1'].forEach(c => worksheet.getCell(c).fill = fill);
-
-            // 3. Data Transformation
             const flattenedData = programs.map(p => ({
                 code: p.program_code,
                 name: p.program_name,
-                level: p.level
+                level: p.level,
+                students: JSON.stringify(p.students)
             }));
 
             worksheet.addRows(flattenedData);
 
-            // 4. Finalize and Download
             const buffer = await workbook.xlsx.writeBuffer();
-            const blob = new Blob([buffer], {
-                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            });
-
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             saveAs(blob, `Programs_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
 
             return "200";
@@ -177,54 +257,19 @@ export default function CoursesManager() {
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Programs Template');
 
-            // 1. Define Columns (A to C)
             worksheet.columns = [
                 { header: 'Program Code', key: 'code', width: 15 },
                 { header: 'Program Name', key: 'name', width: 45 },
                 { header: 'Level', key: 'level', width: 15 },
+                { header: 'Students JSON', key: 'students', width: 30 },
             ];
 
-            // 2. Apply Header Styles
             const headerRow = worksheet.getRow(1);
             headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
-            headerRow.height = 25;
+            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '16A34A' } };
 
-            const fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '16A34A' } } as const;
-            ['A1', 'B1', 'C1'].forEach(c => worksheet.getCell(c).fill = fill);
-
-            // 3. Add Example Rows
-            const examples = [
-                {
-                    code: 'EXAMPLE-SHS',
-                    name: '[EXAMPLE] Science & Technology',
-                    level: 'SHS'
-                },
-                {
-                    code: 'EXAMPLE-COL',
-                    name: '[EXAMPLE] BS Information Technology',
-                    level: 'College'
-                }
-            ];
-
-            examples.forEach((ex) => {
-                const row = worksheet.addRow(ex);
-                row.font = { italic: true, color: { argb: '94A3B8' } };
-            });
-
-            worksheet.addRow({}); // Visual Gap
-
-            // 4. Dropdown Validation for Level (Starting Row 2)
-            const levelOptions = ['SHS', 'College'];
-            for (let i = 2; i <= 200; i++) {
-                worksheet.getCell(`C${i}`).dataValidation = {
-                    type: 'list',
-                    allowBlank: false,
-                    formulae: [`"${levelOptions.join(',')}"`],
-                    showErrorMessage: true,
-                    errorTitle: 'Invalid Selection',
-                    error: 'Please select SHS or College.'
-                };
-            }
+            worksheet.addRow({ code: 'BSIT', name: 'BS Information Technology', level: 'College', students: '{"1":40,"2":35,"3":30,"4":25}' });
+            worksheet.addRow({ code: 'STEM', name: 'Science & Technology', level: 'SHS', students: '{"11":100,"12":95}' });
 
             const buffer = await workbook.xlsx.writeBuffer();
             const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -249,16 +294,6 @@ export default function CoursesManager() {
             await workbook.xlsx.load(await file.arrayBuffer());
 
             const worksheet = workbook.getWorksheet(1);
-
-            // FORMAT VALIDATION: Ensure headers match
-            const firstHeader = worksheet?.getRow(1).getCell(1).value?.toString();
-            if (firstHeader !== 'Program Code') {
-                setStatusCode("400");
-                setLoading(false);
-                setShowToast(true);
-                return;
-            }
-
             const programsToImport: any[] = [];
 
             worksheet?.eachRow((row, rowNumber) => {
@@ -267,42 +302,28 @@ export default function CoursesManager() {
                 const code = row.getCell(1).value?.toString().trim();
                 const name = row.getCell(2).value?.toString().trim();
                 const level = row.getCell(3).value?.toString().trim();
+                const studentsStr = row.getCell(4).value?.toString().trim();
 
-                // GUARD: Skip Examples and Empty Rows
-                if (!code || code.includes("EXAMPLE") || !level) return;
+                if (!code || !level) return;
 
-                programsToImport.push({ code, name, level });
+                try {
+                    const studentsObj = studentsStr ? JSON.parse(studentsStr) : {};
+                    programsToImport.push({ code, name, level, students: studentsObj });
+                } catch (e) {
+                    console.error("Invalid JSON in import row", rowNumber);
+                }
             });
 
-            if (programsToImport.length === 0) {
-                setStatusCode("400");
-                setLoading(false);
-                setShowToast(true);
-                return;
-            }
-
             let successCount = 0;
-            let hasConflict = false;
-
             for (const program of programsToImport) {
-                const res = await insertProgram(program.code, program.name, program.level);
-
-                if (res === "500") {
-                    setStatusCode("500");
-                    setLoading(false);
-                    setShowToast(true);
-                    return;
-                }
-                if (res === "409") hasConflict = true;
-                else successCount++;
+                const res = await insertProgram(program.code, program.name, program.level, program.students);
+                if (res !== "500" && res !== "409") successCount++;
             }
 
-            setStatusCode(successCount > 0 ? "201" : "409");
+            setStatusCode(successCount > 0 ? "201" : "400");
             setLoading(false);
             setShowToast(true);
-
-            await loadProgramCount();
-            await loadProgramData();
+            await Promise.all([loadProgramCount(), loadProgramData()]);
 
         } catch (error) {
             console.error("[IMPORT_ERROR]:", error);
@@ -317,25 +338,27 @@ export default function CoursesManager() {
     /** Queries **/
     async function submitProgram() {
         if (!selectedProgram || !programNameVal || !academicLevelVal) {
-            console.warn("[UI_VALIDATION]: Submission blocked. Missing Program Code, Name, or Level.");
+            console.warn("[UI_VALIDATION]: Missing fields.");
             return;
         }
 
         setLoading(true);
-
-        console.log(`[UI_ACTION]: Submitting new program: "${programNameVal}" [${selectedProgram}]`);
+        
+        // Convert string values to numbers for JSONB storage
+        const studentsToSave: Record<string, number> = {};
+        Object.entries(studentsVal).forEach(([k, v]) => {
+            studentsToSave[k] = parseInt(v || "0");
+        });
 
         try {
-            const stat = await insertProgram(selectedProgram, programNameVal, academicLevelVal);
+            const stat = await insertProgram(selectedProgram, programNameVal, academicLevelVal, studentsToSave);
             setStatusCode(stat);
-            
             if (stat === "201") {
                 discardEntry();
                 setSearch("");
                 await Promise.all([loadProgramCount(), loadProgramData()]);
             }
         } catch (error) {
-            console.error(`[UI_ERROR]: Program creation failed:`, error);
             setStatusCode("500");
         } finally {
             setLoading(false);
@@ -344,24 +367,21 @@ export default function CoursesManager() {
     }
 
     async function updateEntry() {
-        const p_code = selectedProgram;
-        const p_name = programNameVal;
-        const p_level = academicLevelVal;
+        const studentsToSave: Record<string, number> = {};
+        Object.entries(studentsVal).forEach(([k, v]) => {
+            studentsToSave[k] = parseInt(v || "0");
+        });
 
         setLoading(true);
-        console.log(`[UI_ACTION]: Initiating update for Program Code: ${p_code}`);
-
         try {
-            const stat = await updateProgram(p_code, p_name, p_level);
+            const stat = await updateProgram(selectedProgram, programNameVal, academicLevelVal, studentsToSave);
             setStatusCode(stat);
-
             if (stat === "200") {
                 discardEntry();
                 setSearch("");
                 await Promise.all([loadProgramCount(), loadProgramData()]);
             }
         } catch (error) {
-            console.error(`[UI_ERROR]: Update failed:`, error);
             setStatusCode("500");
         } finally {
             setLoading(false);
@@ -370,22 +390,15 @@ export default function CoursesManager() {
     }
 
     async function deleteRow() {
-        const id = selectedProgram;
         setLoading(true);
-
-        console.log(`[UI_ACTION]: Initiating delete for Program Code: ${id}`);
-
         try {
-            const stat = await deleteProgram(id);
+            const stat = await deleteProgram(selectedProgram);
             setStatusCode(stat);
-
             if (stat === "204") {
                 discardEntry();
-                setSearch("");
                 await Promise.all([loadProgramCount(), loadProgramData()]);
             }
         } catch (error) {
-            console.error(`[UI_ERROR]: Delete failed:`, error);
             setStatusCode("500");
         } finally {
             setLoading(false);
@@ -407,78 +420,35 @@ export default function CoursesManager() {
         setCurrentPage(page);
     };
 
-    /** Updates **/
     useEffect(() => {
         let isCancelled = false;
-
         const fetchData = async () => {
-            setLoading(true); // START LOADING
+            setLoading(true);
             try {
-                await Promise.all([
-                    loadProgramCount(),
-                    loadProgramData()
-                ]);
-
-                if (isCancelled) return;
-                console.log("[LIFECYCLE]: Page data refreshed.");
+                await Promise.all([loadProgramCount(), loadProgramData()]);
+                if (!isCancelled) setLoading(false);
             } catch (error) {
-                console.error("[LIFECYCLE_ERROR]: Failed to sync courses:", error);
-            } finally {
-                if (!isCancelled) setLoading(false); // STOP LOADING
+                if (!isCancelled) setLoading(false);
             }
         };
-
         fetchData();
-
-        return () => {
-            isCancelled = true;
-        };
+        return () => { isCancelled = true; };
     }, [currentPage, debouncedSearch]);
 
-    useEffect(() => { // Toast
+    useEffect(() => {
         if (showToast) {
             setProgress(100);
-            const interval = setInterval(() => {
-                setProgress((prev) => Math.max(0, prev - (100 / (5000 / 50))));
-            }, 50);
-
+            const interval = setInterval(() => setProgress((prev) => Math.max(0, prev - (100 / (5000 / 50)))), 50);
             const timeout = setTimeout(() => setShowToast(false), 5000);
-
-            return () => {
-                clearInterval(interval);
-                clearTimeout(timeout);
-            };
+            return () => { clearInterval(interval); clearTimeout(timeout); };
         }
     }, [showToast]);
 
-    useEffect(() => { 
-        setCurrentPage(1);
-    }, [debouncedSearch]);
-
-    useEffect(() => { 
-        const handler = setTimeout(() => {
-            setDebouncedSearch(search);
-        }, 1000);
-
+    useEffect(() => { setCurrentPage(1); }, [debouncedSearch]);
+    useEffect(() => {
+        const handler = setTimeout(() => setDebouncedSearch(search), 1000);
         return () => clearTimeout(handler);
     }, [search]);
-
-    const ProgramTableRow = ({ program }) => {
-        return (
-            <TableRow className="bg-white border-gray-300 dark:border-gray-700 dark:bg-gray-800">
-                <TableCell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
-                    {program.program_code}
-                </TableCell>
-                <TableCell>{program.program_name}</TableCell>
-                <TableCell>{program.level}</TableCell>
-                <TableCell className={"flex justify-end"}>
-                    <Button color="alternative" onClick={() => editModalValue(program.program_code)}>
-                        Edit
-                    </Button>
-                </TableCell>
-            </TableRow>
-        );
-    }
 
     return (
         <div className="p-8 h-full w-full overflow-x-auto font-sans">
@@ -486,27 +456,22 @@ export default function CoursesManager() {
             <div className={`${loading? "":"hidden"} fixed inset-0 z-9999 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm cursor-wait`}>
                 <div className="flex flex-col items-center gap-4">
                     <Spinner aria-label="Extra large spinner example" size="xl" />
-                    <p className="text-white font-semibold text-lg drop-shadow-md">
-                        Syncing Courses...
-                    </p>
+                    <p className="text-white font-semibold text-lg drop-shadow-md">Syncing Sections...</p>
                 </div>
             </div>
 
             <div className={"flex items-center justify-between"}>
-                <h1 className={"mb-4 font-bold text-2xl"}>Manage Courses:</h1>
+                <h1 className={"mb-4 font-bold text-2xl"}>Manage Sections:</h1>
                 <div className={"flex space-x-3"}>
                     <Dropdown color={"alternative"} label={"Actions"} dismissOnClick={false}>
                         <DropdownItem onClick={() => downloadProgramTemplate()}>Get Import Template</DropdownItem>
-                        <DropdownItem onClick={() => fileInputRef.current?.click()}>
-                            Import
-                        </DropdownItem>
+                        <DropdownItem onClick={() => fileInputRef.current?.click()}>Import</DropdownItem>
                         <DropdownItem onClick={() => handleProgramExport()}>Export</DropdownItem>
                     </Dropdown>
                     <Button onClick={() => setAddModal(true)}>Add Course</Button>
                 </div>
             </div>
 
-            {/* SearchBox*/}
             <TextInput
                 className="mb-4 w-62"
                 placeholder="Search..."
@@ -514,7 +479,6 @@ export default function CoursesManager() {
                 onChange={(e) => setSearch(e.target.value)}
             />
 
-            {/** Table **/}
             <div className={"w-full md:w-auto h-auto overflow-x-scroll md:overflow-clip"}>
                 <Table hoverable>
                     <TableHead>
@@ -522,15 +486,14 @@ export default function CoursesManager() {
                             <TableHeadCell>Code</TableHeadCell>
                             <TableHeadCell>Program Name</TableHeadCell>
                             <TableHeadCell>Academic Lvl.</TableHeadCell>
-                            <TableHeadCell>
-                                <span className="sr-only">Edit</span>
-                            </TableHeadCell>
+                            <TableHeadCell>Students Breakdown</TableHeadCell>
+                            <TableHeadCell><span className="sr-only">Edit</span></TableHeadCell>
                         </TableRow>
                     </TableHead>
                     <TableBody className="divide-y">
                         {programs.length > 0 ? (
                             programs.map((program) => (
-                                <ProgramTableRow key={program.program_code} program={program}/>
+                                <ProgramTableRow key={program.program_code} program={program} editModalValue={editModalValue}/>
                             ))
                         ) : (
                             <TableRow className="bg-white border-gray-300 dark:border-gray-700 dark:bg-gray-800">
@@ -543,13 +506,9 @@ export default function CoursesManager() {
                 </Table>
             </div>
 
-            {/** Pagination **/}
             <div className={"mt-6 justify-self-center"}>
                 <h1 className="text-center">
-                    {rowCount > 0
-                        ? `Showing ${startItem} to ${endItem} of ${rowCount} Entries`
-                        : ""
-                    }
+                    {rowCount > 0 ? `Showing ${startItem} to ${endItem} of ${rowCount} Entries` : ""}
                 </h1>
                 <div className={`${totalPageCount > 1? "flex":"hidden"} overflow-x-auto sm:justify-center`}>
                     <Pagination currentPage={currentPage} totalPages={totalPageCount == 0? 1:totalPageCount} onPageChange={onPageChange} showIcons />
@@ -557,223 +516,118 @@ export default function CoursesManager() {
             </div>
 
             {/** Toast **/}
-            <Toast className={`fixed block z-60 bottom-10 right-10 transition-opacity duration-500
-                ${showToast ? 'opacity-100' : 'opacity-0 pointer-events-none'}
-            `}>
+            <Toast className={`fixed block z-60 bottom-10 right-10 transition-opacity duration-500 ${showToast ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                 <div className={"flex items-center"}>
                     <div className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg
                        ${["200", "201", "204"].includes(statusCode) && ("bg-green-100 text-green-500 dark:bg-green-800 dark:text-green-200")}
                        ${["400", "409"].includes(statusCode) && ("bg-yellow-100 text-yellow-500 dark:bg-yellow-800 dark:text-yellow-200")}
                        ${statusCode == "500"? "bg-red-100 text-red-500 dark:bg-red-800 dark:text-red-200":null}
                     `}>
-                        {["200", "201", "204"].includes(statusCode) && (
-                            <HiCheck className="h-5 w-5" />
-                        )}
-                        {["400", "404", "409", "500"].includes(statusCode) && (
-                            <HiExclamation className="h-5 w-5" />
-                        )}
-
+                        {["200", "201", "204"].includes(statusCode) && <HiCheck className="h-5 w-5" />}
+                        {["400", "404", "409", "500"].includes(statusCode) && <HiExclamation className="h-5 w-5" />}
                     </div>
-                    <div className="ml-3 text-sm font-normal">
-                        {STATUS_MESSAGES[statusCode] || "An unknown error occurred."}
-                    </div>
-                    <ToastToggle onDismiss={() => {
-                        setShowToast(false);
-                        setProgress(0);
-                    }} />
+                    <div className="ml-3 text-sm font-normal">{STATUS_MESSAGES[statusCode] || "An unknown error occurred."}</div>
+                    <ToastToggle onDismiss={() => { setShowToast(false); setProgress(0); }} />
                 </div>
                 <Progress size={"sm"} className={"mt-2 mb-0 pb-0"} progress={progress}/>
             </Toast>
 
             {/** Modals **/}
-            {/*  Add Modal  */}
-            <Modal size={"sm"} show={addModal} initialFocus={AddModalProgramNameInput} onClose={() => setAddModal(false)}>
+            {/** Add Modal **/}
+            <Modal size={"md"} show={addModal} initialFocus={AddModalProgramNameInput} onClose={() => setAddModal(false)}>
                 <ModalHeader>Add Program</ModalHeader>
                 <ModalBody>
-                    <div className="flex gap-4 space-y-6">
+                    <div className="flex gap-4">
                         <div className={"w-4/10"}>
-                            <div className="mb-2 block">
-                                <Label htmlFor="programCode">Program Code</Label>
-                            </div>
-                            <TextInput id="programCode" type="text"
-                                       placeholder="e.g. BSIT"
-                                       value={selectedProgram}
-                                       onChange={(e) => {
-                                           filterProgramCode(e.target.value)
-                                           setActiveChanges(true)
-                                       }}
-                                       required />
+                            <Label htmlFor="programCode">Program Code</Label>
+                            <TextInput id="programCode" value={selectedProgram} onChange={(e) => { filterProgramCode(e.target.value); setActiveChanges(true); }} required />
                         </div>
                         <div className={"w-6/10"}>
-                            <div className="mb-2 block">
-                                <Label htmlFor="programName">Program Name</Label>
-                            </div>
-                            <TextInput id="programName" type="text" ref={AddModalProgramNameInput}
-                                       placeholder="e.g. BS Tourism Management"
-                                       value={programNameVal}
-                                       onChange={(e) => {
-                                           filterProgramName(e.target.value)
-                                           setActiveChanges(true)
-                                       }}
-                                       required />
+                            <Label htmlFor="programName">Program Name</Label>
+                            <TextInput id="programName" ref={AddModalProgramNameInput} value={programNameVal} onChange={(e) => { filterProgramName(e.target.value); setActiveChanges(true); }} required />
                         </div>
                     </div>
-                    <div className={"flex space-x-2.5"}>
-                        <div>
-                            <div className="mb-2 block">
-                                <Label htmlFor="acadLvl">Program Type</Label>
-                            </div>
-                            <Select id="acadLvl"
-                                    className={"w-40"}
-                                    value={academicLevelVal}
-                                    onChange={(e) => {
-                                        setAcademicLevelVal(e.target.value)
-                                        setActiveChanges(true)
-                                    }
-                                    }>
-                                <option>{academicLevelVal}</option>
-                                {academicLevelVal != "SHS"? (<option>SHS</option>):null}
-                                {academicLevelVal != "College"? (<option>College</option>):null}
-                            </Select>
-                        </div>
+                    <div className="mt-4">
+                        <Label htmlFor="acadLvl">Program Type</Label>
+                        <Select id="acadLvl" className="w-full" value={academicLevelVal} onChange={(e) => handleLevelChange(e.target.value)}>
+                            <option value="College">College</option>
+                            <option value="SHS">SHS</option>
+                        </Select>
                     </div>
+                    <StudentInputs academicLevelVal={academicLevelVal} studentsVal={studentsVal} handleStudentChange={handleStudentChange} />
                 </ModalBody>
-                <ModalFooter>
-                    <div className={"flex w-full justify-end space-x-2"}>
-                        {activeChanges == true?(<>
-                            <Button color="alternative" onClick={() => showWarning("yellow")}>
-                                Discard
-                            </Button>
-                        </>):(<>
-                            <Button color="alternative" onClick={() => discardEntry()}>
-                                Cancel
-                            </Button>
-                        </>)}
-
-                        <Button onClick={() => submitProgram()}>Save</Button>
-                    </div>
+                <ModalFooter className="justify-end">
+                    <Button color="alternative" onClick={activeChanges ? () => showWarning("yellow") : discardEntry}>
+                        {activeChanges ? "Discard" : "Cancel"}
+                    </Button>
+                    <Button onClick={submitProgram}>Save</Button>
                 </ModalFooter>
             </Modal>
 
-            {/*  Edit Modal  */}
-            <Modal size={"sm"} show={editModal} initialFocus={EditModalProgramNameInput} onClose={() => setEditModal(false)}>
+            {/** Edit Modal **/}
+            <Modal size={"md"} show={editModal} initialFocus={EditModalProgramNameInput} onClose={() => setEditModal(false)}>
                 <ModalHeader>Editing Program: {selectedProgram}</ModalHeader>
                 <ModalBody>
-                    <div className="flex gap-4 space-y-6">
-                        <div className={"col-span-2"}>
-                            <div className="mb-2 block">
-                                <Label htmlFor="programName">Program Name</Label>
-                            </div>
-                            <TextInput id="programName" type="text" ref={EditModalProgramNameInput}
-                                       placeholder="e.g. BS Tourism Management"
-                                       value={programNameVal}
-                                       onChange={(e) => {
-                                           filterProgramName(e.target.value)
-                                           setActiveChanges(true)
-                                       }}
-                                       required />
-                        </div>
+                    <div>
+                        <Label htmlFor="programName">Program Name</Label>
+                        <TextInput id="programName" ref={EditModalProgramNameInput} value={programNameVal} onChange={(e) => { filterProgramName(e.target.value); setActiveChanges(true); }} required />
                     </div>
-                    <div className={"flex space-x-2.5"}>
-                        <div>
-                            <div className="mb-2 block">
-                                <Label htmlFor="acadLvl">Program Type</Label>
-                            </div>
-                            <Select id="acadLvl"
-                                    className={"w-40"}
-                                    value={academicLevelVal}
-                                    onChange={(e) => {
-                                        setAcademicLevelVal(e.target.value)
-                                        setActiveChanges(true)
-                                    }
-                                    }>
-                                <option>{academicLevelVal}</option>
-                                {academicLevelVal != "SHS"? (<option>SHS</option>):null}
-                                {academicLevelVal != "College"? (<option>College</option>):null}
-                            </Select>
-                        </div>
+                    <div className="mt-4">
+                        <Label htmlFor="acadLvl">Program Type</Label>
+                        <Select id="acadLvl" className="w-full" value={academicLevelVal} onChange={(e) => handleLevelChange(e.target.value)}>
+                            <option value="College">College</option>
+                            <option value="SHS">SHS</option>
+                        </Select>
                     </div>
+                    <StudentInputs academicLevelVal={academicLevelVal} studentsVal={studentsVal} handleStudentChange={handleStudentChange} />
                 </ModalBody>
                 <ModalFooter>
                     <Button outline color={"dark"} className={"p-2"} onClick={() => showWarning("red")}>
                         <HiOutlineTrash color={"red"} className={"size-6"}/>
                     </Button>
                     <div className={"flex w-full justify-end space-x-2"}>
-                        {activeChanges == true?(<>
-                            <Button color="alternative" onClick={() => showWarning("yellow")}>
-                                Discard
-                            </Button>
-                        </>):(<>
-                            <Button color="alternative" onClick={() => discardEntry()}>
-                                Cancel
-                            </Button>
-                        </>)}
-
+                        <Button color="alternative" onClick={activeChanges ? () => showWarning("yellow") : discardEntry}>
+                            {activeChanges ? "Discard" : "Cancel"}
+                        </Button>
                         <Button onClick={() => showWarning("default")}>Save</Button>
                     </div>
                 </ModalFooter>
             </Modal>
 
-            {/*  Warning Modal  */}
             <Modal show={openWarningModal} size="md" onClose={() => setOpenWarningModal(false)} popup>
                 <ModalHeader />
                 <ModalBody>
                     <div className="text-center">
                         {warningType=="red"?(
-                            <> {/* Delete Confirmation */}
-                                <HiOutlineTrash className="mx-auto mb-4 h-14 w-14 text-gray-400 dark:text-gray-200" />
-                                <h3 className="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
-                                    Are you sure you want to delete this entry?
-                                </h3>
+                            <>
+                                <HiOutlineTrash className="mx-auto mb-4 h-14 w-14 text-gray-400" />
+                                <h3 className="mb-5 text-lg font-normal text-gray-500">Delete this entry?</h3>
                                 <div className="flex justify-center gap-4">
-                                    <Button color="alternative" onClick={() => setOpenWarningModal(false)}>
-                                        No, cancel
-                                    </Button>
-                                    <Button color="red" onClick={() => deleteRow()}>
-                                        Yes, I'm sure
-                                    </Button>
+                                    <Button color="alternative" onClick={() => setOpenWarningModal(false)}>No</Button>
+                                    <Button color="red" onClick={deleteRow}>Yes</Button>
                                 </div>
                             </>):(
-                            warningType == "yellow"? (<> {/* Discard Confirmation */}
-                                <HiOutlineExclamationCircle className="mx-auto mb-4 h-14 w-14 text-gray-400 dark:text-gray-200" />
-                                <h3 className="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
-                                    Are you sure you want to discard all changes?
-                                </h3>
+                            warningType == "yellow"? (<>
+                                <HiOutlineExclamationCircle className="mx-auto mb-4 h-14 w-14 text-gray-400" />
+                                <h3 className="mb-5 text-lg font-normal text-gray-500">Discard all changes?</h3>
                                 <div className="flex justify-center gap-4">
-                                    <Button color="alternative" onClick={() => setOpenWarningModal(false)}>
-                                        No, cancel
-                                    </Button>
-                                    <Button color="red" onClick={() => discardEntry()}>
-                                        Yes, I'm sure
-                                    </Button>
+                                    <Button color="alternative" onClick={() => setOpenWarningModal(false)}>No</Button>
+                                    <Button color="red" onClick={discardEntry}>Yes</Button>
                                 </div>
-                            </>):(<> {/* Update Confirmation */}
-                                <VscSave className="mx-auto mb-4 h-14 w-14 text-gray-400 dark:text-gray-200" />
-                                <h3 className="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
-                                    Are you sure you want to save all changes?
-                                </h3>
+                            </>):(<>
+                                <VscSave className="mx-auto mb-4 h-14 w-14 text-gray-400" />
+                                <h3 className="mb-5 text-lg font-normal text-gray-500">Save all changes?</h3>
                                 <div className="flex justify-center gap-4">
-                                    <Button color="alternative" onClick={() => setOpenWarningModal(false)}>
-                                        No, cancel
-                                    </Button>
-                                    <Button color="default" onClick={() => updateEntry()}>
-                                        Yes, I'm sure
-                                    </Button>
+                                    <Button color="alternative" onClick={() => setOpenWarningModal(false)}>No</Button>
+                                    <Button color="default" onClick={updateEntry}>Yes</Button>
                                 </div>
                             </>)
-                        )
-                        }
+                        )}
                     </div>
                 </ModalBody>
             </Modal>
 
-            <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                accept=".xlsx"
-                onChange={handleProgramImport}
-            />
+            <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx" onChange={handleProgramImport} />
         </div>
     )
 }

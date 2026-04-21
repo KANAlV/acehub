@@ -186,7 +186,7 @@ export async function getAllRoomsData() {
     }
 }
 
-/** --- Courses --- **/
+/** --- Sections --- **/
 export async function fetchProgramCount(p_program_name: string) {
     const searchLabel = p_program_name.trim() === "" ? "all programs" : `filter: "${p_program_name}"`;
 
@@ -195,7 +195,6 @@ export async function fetchProgramCount(p_program_name: string) {
             SELECT get_program_count(${p_program_name})
         `;
 
-        // The column name in the result will be 'get_program_count'
         const count = result.length > 0 ? result[0].get_program_count : 0;
 
         console.log(`[DB_FETCH]: Program count requested (${searchLabel}) | Result: ${count}`);
@@ -211,6 +210,7 @@ export async function insertProgram(
     p_program_code: string,
     p_program_name: string,
     p_level: string,
+    p_students: Record<string, number>
 ) {
     const checkIfExists = await sql`
         SELECT 1 FROM programs
@@ -221,16 +221,17 @@ export async function insertProgram(
     if (checkIfExists.length > 0) return "409";
 
     try {
-        // Add the explicit cast ::program_level here
+        // Pass p_students directly as an object; the driver handles jsonb serialization
         await sql`
             SELECT create_program(
                ${p_program_code},
                ${p_program_name},
-               ${p_level}::program_level
+               ${p_level}::program_level,
+               ${p_students as any}::jsonb
            )
         `;
 
-        revalidatePath('/programs');
+        revalidatePath('/courses');
 
         console.log(`[${new Date().toISOString()}] DB_SUCCESS: Program Created`, {
             code: p_program_code
@@ -250,18 +251,16 @@ export async function fetchPrograms(search = "", page: number) {
         const val = search.trim() === "" ? null : search;
         const offset = (page - 1) * ITEMS_PER_PAGE;
 
-        const rooms = await sql`
+        const programs = await sql`
             SELECT * FROM get_programs(${val}, ${offset})
         `;
 
-        // Log search term, page number, and how many results actually came back
         console.log(
-            `[DB_FETCH]: Programs | Page: ${page} | Search: "${search || 'none'}" | Found: ${rooms.length}`
+            `[DB_FETCH]: Programs | Page: ${page} | Search: "${search || 'none'}" | Found: ${programs.length}`
         );
 
-        return rooms;
+        return programs;
     } catch (error) {
-        // Including the search and page in the error helps reproduce the crash
         console.error(`[DB_ERROR]: Failed to fetch programs (Page: ${page}, Search: "${search}"):`, error);
         return [];
     }
@@ -281,7 +280,7 @@ export async function getAllProgramsData() {
     }
 }
 
-export async function updateProgram(p_code: string, p_name: string, p_level: string) {
+export async function updateProgram(p_code: string, p_name: string, p_level: string, p_students: Record<string, number>) {
     const nameConflict = await sql`
         SELECT 1 FROM programs 
         WHERE program_name = ${p_name} AND program_code != ${p_code} 
@@ -294,26 +293,23 @@ export async function updateProgram(p_code: string, p_name: string, p_level: str
     }
 
     try {
-        console.log(`[DB_UPDATE]: Attempting to update Program ${p_code} to Name: "${p_name}", Level: "${p_level}"`);
+        console.log(`[DB_UPDATE]: Attempting to update Program ${p_code} to Name: "${p_name}", Level: "${p_level}", Students:`, p_students);
 
-        // 2. Call your custom SQL function
-        // Note: Your SQL function returns 'void', so we check for execution success
-        await sql`SELECT update_program(${p_code}, ${p_name}, ${p_level})`;
+        // Pass p_students directly as an object
+        await sql`SELECT update_program(${p_code}, ${p_name}, ${p_level}::program_level, ${p_students as any}::jsonb)`;
 
-        // 3. Revalidate the specific path for your programs table
         revalidatePath('/courses');
 
         console.log(`[${new Date().toISOString()}] DB_SUCCESS: Program Updated`, {
             code: p_code,
             newName: p_name,
-            newLevel: p_level
+            newLevel: p_level,
+            newStudents: p_students
         });
 
         return "200";
     } catch (error) {
         console.error(`[DB_ERROR]: Failed to update program ${p_code}:`, error);
-
-        // Handle specific Postgres errors (like foreign key or type mismatches)
         return "500";
     }
 }
@@ -338,7 +334,6 @@ export async function deleteProgram(id: string) {
         return "404";
 
     } catch (error) {
-        // 3. The "Something broke" log
         console.error(`[DB_ERROR]: Failed to delete program ${id}:`, error);
         return "500";
     }
