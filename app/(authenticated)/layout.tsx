@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "@/app/globals.css";
-import {SidebarComponent} from "@/components/SidebarComponent";
-import {Providers} from "@/components/Provider.tsx";
+import { SidebarComponent } from "@/components/SidebarComponent";
+import { getCurrentUser } from "@/services/userService";
 
 const geistSans = Geist({
     variable: "--font-geist-sans",
@@ -19,17 +19,21 @@ export const metadata: Metadata = {
     description: "Web-based faculty scheduling management system",
 };
 
-export default function RootLayout({
-                                       children,
-                                   }: Readonly<{
+export default async function RootLayout({
+    children,
+}: Readonly<{
     children: React.ReactNode;
 }>) {
+    // Fetch the logged-in user on the server
+    const user = await getCurrentUser();
+    const username = user?.username || "Guest";
+
     return (
-        <>
-            <SidebarComponent />
-            <div className="w-dvw h-dvh overflow-auto">
+        <div className="flex flex-col md:flex-row h-screen w-screen overflow-hidden">
+            <SidebarComponent username={username} />
+            <main className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-900">
                 {children}
-            </div>
-        </>
+            </main>
+        </div>
     );
 }

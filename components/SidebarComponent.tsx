@@ -11,17 +11,17 @@ import {
     SidebarItems
 } from "flowbite-react";
 import {
-    HiLibrary, HiChartPie, HiBookOpen, HiClipboardCheck, HiTable, HiAcademicCap, HiViewBoards, HiBriefcase, HiLogout,
+    HiLibrary, HiChartPie, HiBookOpen, HiClipboardCheck, HiTable, HiAcademicCap, HiViewBoards, HiLogout,
     HiOutlineMenu, HiUserGroup, HiChevronDown, HiQuestionMarkCircle
 } from "react-icons/hi";
 import Link from "next/link";
-import {useEffect, useState} from "react";
+import {useState} from "react";
 import { usePathname } from "next/navigation";
 import { useMsal } from "@azure/msal-react";
+import {IoMdSettings} from "react-icons/io";
 
-export function SidebarComponent() {
+export function SidebarComponent({ username }: { username: string }) {
     const [isOpen, setIsOpen] = useState(false);
-    const [username, setUsername] = useState("Loading...");
     const pathname = usePathname();
     const { instance, accounts } = useMsal();
 
@@ -31,58 +31,15 @@ export function SidebarComponent() {
         return null;
     }
 
-    useEffect(() => {
-        async function fetchUser() {
-            try {
-                console.log('Client: Fetching user data...');
-                
-                const response = await fetch('/api/user', {
-                    method: 'GET',
-                    credentials: 'include',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                });
-                
-                console.log('Client: API response status:', response.status);
-                
-                if (!response.ok) {
-                    console.error('Client: API response not ok:', response.status, response.statusText);
-                    setUsername("Guest");
-                    return;
-                }
-                
-                const result = await response.json();
-                console.log('Client: User data received:', result);
-                
-                if (result && result.username) {
-                    setUsername(result.username);
-                    console.log('Client: Username set to:', result.username);
-                } else {
-                    console.log('Client: No username in response, setting to Guest');
-                    setUsername("Guest");
-                }
-            } catch (error) {
-                console.error('Client: Error fetching user:', error);
-                setUsername("Guest");
-            }
-        }
-
-        fetchUser();
-    }, []);
-
     const handleLogout = async () => {
         setIsOpen(false);
 
         try {
-            // This clears the account from the local MSAL cache (session/cookies)
-            // without redirecting to the global Microsoft logout page.
             if (accounts.length > 0) {
                 // @ts-ignore
                 await instance.logout({
                     account: accounts[0],
                     onRedirectNavigate: () => {
-                        // Return false to prevent MSAL from redirecting to Microsoft's logout page
                         return false;
                     }
                 });
@@ -90,7 +47,6 @@ export function SidebarComponent() {
         } catch (error) {
             console.error("Local logout failed:", error);
         } finally {
-            // Manually clear any remaining storage if necessary and redirect to home
             sessionStorage.clear();
             localStorage.clear();
             window.location.href = "/";
@@ -121,8 +77,10 @@ export function SidebarComponent() {
                             <Button color={"dark"}
                                     outline={true}
                                     className={"py-6 w-full text-left"}>
-                                {username}
-                                <HiChevronDown size={"24"}/>
+                                <div className="flex items-center justify-between w-full">
+                                    <span className="truncate mr-2">{username || "Guest"}</span>
+                                    <HiChevronDown size={"20"}/>
+                                </div>
                             </Button>
                         </Popover>
                         <SidebarItem as={Link} href="/" icon={HiChartPie} onClick={() => setIsOpen(false)}>
@@ -135,7 +93,7 @@ export function SidebarComponent() {
                             Rooms
                         </SidebarItem>
                         <SidebarItem as={Link} href="/courses" icon={HiUserGroup} onClick={() => setIsOpen(false)}>
-                            Courses
+                            courses
                         </SidebarItem>
                         <SidebarItem as={Link} href="/maintenance" icon={HiAcademicCap} onClick={() => setIsOpen(false)}>
                             Teachers (*)
@@ -156,6 +114,9 @@ export function SidebarComponent() {
                     <SidebarItemGroup>
                         <SidebarItem as={Link} href="#" icon={HiQuestionMarkCircle}>
                             Help (*)
+                        </SidebarItem>
+                        <SidebarItem as={Link} href="/settings" icon={IoMdSettings}>
+                            Settings
                         </SidebarItem>
                     </SidebarItemGroup>
                 </SidebarItems>
