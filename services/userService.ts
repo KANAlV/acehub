@@ -1,6 +1,7 @@
 'use server'
 import sql from '@/lib/db';
 import {revalidatePath} from 'next/cache';
+import { cookies } from 'next/headers';
 
 /** --- Login --- **/
 export interface User {
@@ -31,6 +32,40 @@ export async function getOrCreateUser(email: string, name: string) {
     } catch (error) {
         console.error("Database Error:", error);
         throw new Error("Failed to sync user with database.");
+    }
+}
+
+/**
+ * Fetches the currently logged-in user from the database
+ * using the 'user_email' cookie.
+ */
+export async function getCurrentUser(): Promise<User | null> {
+    try {
+        const cookieStore = await cookies();
+        const userEmail = cookieStore.get('user_email')?.value;
+
+        if (!userEmail) return null;
+
+        const result = await sql`
+            SELECT id, username, email FROM users WHERE email = ${userEmail}
+        `;
+
+        return result.length > 0 ? (result[0] as User) : null;
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch current user session:", error);
+        return null;
+    }
+}
+
+export async function getLoggedInUser(email: string) {
+    try {
+        const result = await sql`
+            SELECT id, username, email FROM users WHERE email = ${email}
+        `;
+        return result.length > 0 ? result[0] : null;
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch logged-in user:", error);
+        return null;
     }
 }
 
@@ -231,7 +266,7 @@ export async function insertProgram(
            )
         `;
 
-        revalidatePath('/courses');
+        revalidatePath('/sections');
 
         console.log(`[${new Date().toISOString()}] DB_SUCCESS: Program Created`, {
             code: p_program_code
@@ -298,7 +333,7 @@ export async function updateProgram(p_code: string, p_name: string, p_level: str
         // Pass p_students directly as an object
         await sql`SELECT update_program(${p_code}, ${p_name}, ${p_level}::program_level, ${p_students as any}::jsonb)`;
 
-        revalidatePath('/courses');
+        revalidatePath('/sections');
 
         console.log(`[${new Date().toISOString()}] DB_SUCCESS: Program Updated`, {
             code: p_code,
@@ -326,7 +361,7 @@ export async function deleteProgram(id: string) {
 
         if (isDeleted) {
             console.log(`[DB_SUCCESS]: Program ${id} deleted successfully.`);
-            revalidatePath('/courses');
+            revalidatePath('/sections');
             return "204";
         }
 
@@ -334,6 +369,7 @@ export async function deleteProgram(id: string) {
         return "404";
 
     } catch (error) {
+        // 3. The "Something broke" log
         console.error(`[DB_ERROR]: Failed to delete program ${id}:`, error);
         return "500";
     }

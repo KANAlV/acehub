@@ -4,24 +4,24 @@ import {
     Button,
     Drawer,
     DrawerHeader,
-    DrawerItems,
+    DrawerItems, Popover,
     Sidebar,
     SidebarItem,
     SidebarItemGroup,
     SidebarItems
 } from "flowbite-react";
-import { BiBuoy } from "react-icons/bi";
 import {
     HiLibrary, HiChartPie, HiBookOpen, HiClipboardCheck, HiTable, HiAcademicCap, HiViewBoards, HiBriefcase, HiLogout,
-    HiOutlineMenu, HiUserGroup
+    HiOutlineMenu, HiUserGroup, HiChevronDown, HiQuestionMarkCircle
 } from "react-icons/hi";
 import Link from "next/link";
-import {useState} from "react";
+import {useEffect, useState} from "react";
 import { usePathname } from "next/navigation";
 import { useMsal } from "@azure/msal-react";
 
 export function SidebarComponent() {
     const [isOpen, setIsOpen] = useState(false);
+    const [username, setUsername] = useState("Loading...");
     const pathname = usePathname();
     const { instance, accounts } = useMsal();
 
@@ -31,9 +31,29 @@ export function SidebarComponent() {
         return null;
     }
 
+    useEffect(() => {
+        async function fetchUser() {
+            try {
+                const response = await fetch('/api/user');
+                const result = await response.json();
+                
+                if (response.ok && result) {
+                    setUsername(result.username);
+                } else {
+                    setUsername("Guest");
+                }
+            } catch (error) {
+                console.error('Error fetching user:', error);
+                setUsername("Guest");
+            }
+        }
+
+        fetchUser();
+    }, []);
+
     const handleLogout = async () => {
         setIsOpen(false);
-        
+
         try {
             // This clears the account from the local MSAL cache (session/cookies)
             // without redirecting to the global Microsoft logout page.
@@ -43,7 +63,7 @@ export function SidebarComponent() {
                     account: accounts[0],
                     onRedirectNavigate: () => {
                         // Return false to prevent MSAL from redirecting to Microsoft's logout page
-                        return false; 
+                        return false;
                     }
                 });
             }
@@ -64,6 +84,27 @@ export function SidebarComponent() {
             <Sidebar className={"h-auto"}>
                 <SidebarItems>
                     <SidebarItemGroup>
+                        <Popover content={
+                            <div className="w-64 text-sm text-gray-500 dark:text-gray-400">
+                                <div className="px-3 py-2">
+                                    <SidebarItem
+                                        as="button"
+                                        icon={HiLogout}
+                                        onClick={handleLogout}
+                                        className="w-full text-left"
+                                    >
+                                        Log Out
+                                    </SidebarItem>
+                                </div>
+                            </div>
+                        }>
+                            <Button color={"dark"}
+                                    outline={true}
+                                    className={"py-6 w-full text-left"}>
+                                {username}
+                                <HiChevronDown size={"24"}/>
+                            </Button>
+                        </Popover>
                         <SidebarItem as={Link} href="/" icon={HiChartPie} onClick={() => setIsOpen(false)}>
                             Dashboard (WIP)
                         </SidebarItem>
@@ -93,16 +134,8 @@ export function SidebarComponent() {
                         </SidebarItem>
                     </SidebarItemGroup>
                     <SidebarItemGroup>
-                        <SidebarItem as={Link} href="#" icon={BiBuoy}>
+                        <SidebarItem as={Link} href="#" icon={HiQuestionMarkCircle}>
                             Help (*)
-                        </SidebarItem>
-                        <SidebarItem
-                            as="button"
-                            icon={HiLogout}
-                            onClick={handleLogout}
-                            className="w-full text-left"
-                        >
-                            Log Out
                         </SidebarItem>
                     </SidebarItemGroup>
                 </SidebarItems>
@@ -111,7 +144,7 @@ export function SidebarComponent() {
     }
     return (
         <>
-            <div className={"flex md:hidden py-1 dark:bg-slate-800"}>
+            <div className={"flex md:hidden py-1 bg-gray-100 dark:bg-gray-800"}>
                 <Button
                     outline
                     color={"alternative"}
@@ -132,7 +165,7 @@ export function SidebarComponent() {
                 </DrawerItems>
             </Drawer>
 
-            <div className={"hidden md:block dark:bg-slate-800"}>
+            <div className={"hidden md:block bg-gray-100 dark:bg-gray-800"}>
                 <div className={"flex my-2 items-center"}>
                     <p className={"font-bold mx-5 text-xl"}>𝒜</p> ACEHUB
                 </div>
