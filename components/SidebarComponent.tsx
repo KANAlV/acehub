@@ -34,16 +34,36 @@ export function SidebarComponent() {
     useEffect(() => {
         async function fetchUser() {
             try {
-                const response = await fetch('/api/user');
-                const result = await response.json();
+                console.log('Client: Fetching user data...');
                 
-                if (response.ok && result) {
+                const response = await fetch('/api/user', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                console.log('Client: API response status:', response.status);
+                
+                if (!response.ok) {
+                    console.error('Client: API response not ok:', response.status, response.statusText);
+                    setUsername("Guest");
+                    return;
+                }
+                
+                const result = await response.json();
+                console.log('Client: User data received:', result);
+                
+                if (result && result.username) {
                     setUsername(result.username);
+                    console.log('Client: Username set to:', result.username);
                 } else {
+                    console.log('Client: No username in response, setting to Guest');
                     setUsername("Guest");
                 }
             } catch (error) {
-                console.error('Error fetching user:', error);
+                console.error('Client: Error fetching user:', error);
                 setUsername("Guest");
             }
         }
