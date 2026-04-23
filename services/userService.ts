@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 
 /** --- Login & User Session --- **/
 export interface User {
-    id?: number;
+    id?: string;
     username: string;
     email: string;
     role?: string;
@@ -165,13 +165,35 @@ export async function fetchAuthorizedAccounts() {
     }
 }
 
-export async function updateAccountRole(id: number, role: string) {
+export async function insertUser(username: string, email: string, role: string) {
     try {
-        await sql`SELECT update_user_role(${id}, ${role})`;
+        await sql`SELECT create_user(${username}, ${email}, ${role})`;
+        revalidatePath('/settings');
+        return "201";
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to create user:", error);
+        return "500";
+    }
+}
+
+export async function updateAccountRole(id: string, role: string) {
+    try {
+        await sql`SELECT update_user_role(${id}::uuid, ${role})`;
         revalidatePath('/settings');
         return "200";
     } catch (error) {
         console.error("[DB_ERROR]: Failed to update role:", error);
+        return "500";
+    }
+}
+
+export async function deleteUser(id: string) {
+    try {
+        await sql`SELECT delete_user(${id}::uuid)`;
+        revalidatePath('/settings');
+        return "204";
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to delete user:", error);
         return "500";
     }
 }

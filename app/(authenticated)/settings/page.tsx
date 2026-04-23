@@ -20,14 +20,14 @@ import {
 import { 
     deleteBreakPeriod, deletePreset, fetchAuthorizedAccounts, fetchBreakPeriods, 
     fetchPresets, fetchSystemSettings, insertBreakPeriod, savePreset, 
-    updateAccountRole, updateBreakPeriod, updateSystemSetting 
+    updateAccountRole, updateBreakPeriod, updateSystemSetting,
+    insertUser, deleteUser
 } from "@/services/userService.ts";
 
 export default function Settings() {
     const [loading, setLoading] = useState(true);
     
     // UI State
-    const [activeTab, setActiveTab] = useState(0);
     const [showToast, setShowToast] = useState(false);
     const [statusCode, setStatusCode] = useState("200");
     const [progress, setProgress] = useState(100);
@@ -46,7 +46,7 @@ export default function Settings() {
     const [newBreak, setNewBreak] = useState({ dayOfWeek: "", startTime: "", endTime: "", description: "" });
     
     const [showAddAccountModal, setShowAddAccountModal] = useState(false);
-    const [newAccount, setNewAccount] = useState({ email: "", role: "Faculty" });
+    const [newAccount, setNewAccount] = useState({ username: "", email: "", role: "Faculty" });
     
     const [showSavePresetModal, setShowSavePresetModal] = useState(false);
     const [newPresetName, setNewPresetName] = useState("");
@@ -145,9 +145,30 @@ export default function Settings() {
         triggerNotification(res);
     };
 
-    const handleUpdateRole = async (id: number, role: string) => {
+    const handleUpdateRole = async (id: string, role: string) => {
         const res = await updateAccountRole(id, role);
         if (res === "200") loadAllData();
+        triggerNotification(res);
+    };
+
+    const handleAddUser = async () => {
+        if (!newAccount.email.endsWith("@alabang.sti.edu.ph")) {
+            triggerNotification("400");
+            return;
+        }
+        const res = await insertUser(newAccount.username, newAccount.email, newAccount.role);
+        if (res === "201") {
+            setShowAddAccountModal(false);
+            setNewAccount({ username: "", email: "", role: "Faculty" });
+            loadAllData();
+        }
+        triggerNotification(res);
+    };
+
+    const handleDeleteUserAction = async (id: string) => {
+        if (!confirm("Are you sure you want to delete this user?")) return;
+        const res = await deleteUser(id);
+        if (res === "204") loadAllData();
         triggerNotification(res);
     };
 
@@ -285,19 +306,26 @@ export default function Settings() {
                 {/* Account Management */}
                 <TabItem title="Users & Roles" icon={HiCog}>
                     <Card className="mt-6 border-none shadow-sm">
-                        <h3 className="text-lg font-bold mb-4">Access Control</h3>
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-lg font-bold">Access Control</h3>
+                            <Button size="sm" onClick={() => setShowAddAccountModal(true)}>
+                                <HiPlus className="mr-2" /> Add User
+                            </Button>
+                        </div>
                         <Table hoverable>
                             <TableHead>
                                 <TableRow>
-                                    <TableHeadCell>User Email</TableHeadCell>
-                                    <TableHeadCell>Current Role</TableHeadCell>
+                                    <TableHeadCell>Username</TableHeadCell>
+                                    <TableHeadCell>Email</TableHeadCell>
+                                    <TableHeadCell>Role</TableHeadCell>
                                     <TableHeadCell><span className="sr-only">Actions</span></TableHeadCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody className="divide-y">
                                 {authorizedAccounts.map(account => (
                                     <TableRow key={account.id}>
-                                        <TableCell className="font-medium">{account.email}</TableCell>
+                                        <TableCell className="font-medium">{account.username}</TableCell>
+                                        <TableCell>{account.email}</TableCell>
                                         <TableCell>
                                             <Select value={account.role} onChange={(e) => handleUpdateRole(account.id, e.target.value)}>
                                                 <option value="Faculty">Faculty</option>
@@ -305,8 +333,12 @@ export default function Settings() {
                                                 <option value="Scheduler">Scheduler</option>
                                             </Select>
                                         </TableCell>
-                                        <TableCell className="text-right italic text-gray-400 text-xs">
-                                            Role changes apply on next login
+                                        <TableCell>
+                                            <div className="flex justify-end">
+                                                <Button color="red" size="xs" onClick={() => handleDeleteUserAction(account.id)}>
+                                                    <HiTrash />
+                                                </Button>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -342,7 +374,7 @@ export default function Settings() {
                                                 <Button size="xs" color="alternative" onClick={() => handleLoadPreset(preset)}>
                                                     <HiDownload className="mr-2" /> Load
                                                 </Button>
-                                                <Button size="xs" color="red" onClick={() => handleDeletePresetAction(preset.preset_name)}>
+                                                <Button size="xs" color="failure" onClick={() => handleDeletePresetAction(preset.preset_name)}>
                                                     <HiTrash />
                                                 </Button>
                                             </div>
@@ -400,6 +432,33 @@ export default function Settings() {
                 </ModalFooter>
             </Modal>
 
+            {/* Add User Modal */}
+            <Modal show={showAddAccountModal} onClose={() => setShowAddAccountModal(false)}>
+                <ModalHeader>Add Authorized User</ModalHeader>
+                <ModalBody className="space-y-4">
+                    <div>
+                        <Label>Full Name</Label>
+                        <TextInput value={newAccount.username} onChange={e => setNewAccount({...newAccount, username: e.target.value})} placeholder="John Doe" />
+                    </div>
+                    <div>
+                        <Label>Email (@alabang.sti.edu.ph)</Label>
+                        <TextInput type="email" value={newAccount.email} onChange={e => setNewAccount({...newAccount, email: e.target.value})} placeholder="john.doe@alabang.sti.edu.ph" />
+                    </div>
+                    <div>
+                        <Label>Initial Role</Label>
+                        <Select value={newAccount.role} onChange={e => setNewAccount({...newAccount, role: e.target.value})}>
+                            <option value="Faculty">Faculty</option>
+                            <option value="Administrator">Administrator</option>
+                            <option value="Scheduler">Scheduler</option>
+                        </Select>
+                    </div>
+                </ModalBody>
+                <ModalFooter className="justify-end">
+                    <Button color="gray" onClick={() => setShowAddAccountModal(false)}>Cancel</Button>
+                    <Button onClick={handleAddUser}>Add User</Button>
+                </ModalFooter>
+            </Modal>
+
             <Modal show={showSavePresetModal} onClose={() => setShowSavePresetModal(false)}>
                 <ModalHeader>Save Preset</ModalHeader>
                 <ModalBody>
@@ -421,7 +480,7 @@ export default function Settings() {
                     <div className="ml-3 text-sm font-normal">
                         {STATUS_MESSAGES[statusCode as keyof typeof STATUS_MESSAGES] || "Error occurred"}
                     </div>
-                    <ToastToggle onDismiss={() => setShowToast(false)} />
+                    <ToastToggle onDismiss={() => { setShowToast(false); setProgress(0); }} />
                 </div>
                 <Progress progress={progress} size="sm" className="mt-2" color={statusCode.startsWith('2') ? "green" : "red"} />
             </Toast>
