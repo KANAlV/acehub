@@ -328,7 +328,6 @@ export default function Settings() {
                                         <TableCell>{account.email}</TableCell>
                                         <TableCell>
                                             <Select value={account.role} onChange={(e) => handleUpdateRole(account.id, e.target.value)}>
-                                                <option value="Faculty">Faculty</option>
                                                 <option value="Administrator">Administrator</option>
                                                 <option value="Scheduler">Scheduler</option>
                                             </Select>
@@ -447,7 +446,6 @@ export default function Settings() {
                     <div>
                         <Label>Initial Role</Label>
                         <Select value={newAccount.role} onChange={e => setNewAccount({...newAccount, role: e.target.value})}>
-                            <option value="Faculty">Faculty</option>
                             <option value="Administrator">Administrator</option>
                             <option value="Scheduler">Scheduler</option>
                         </Select>

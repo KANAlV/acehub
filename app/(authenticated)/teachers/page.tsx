@@ -213,6 +213,163 @@ export default function TeacherManager() {
         }
     }
 
+    /** Import/Export **/
+    async function handleExportToExcel() {
+        try {
+            const data = await getAllTeachersData();
+            if (!data || data.length === 0) return "404";
+
+            const ExcelJS = (await import('exceljs')).default;
+            const { saveAs } = await import('file-saver');
+
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Teachers List');
+
+            worksheet.columns = [
+                { header: 'PSCS ID', key: 'pscs_id', width: 15 },
+                { header: 'Full Name', key: 'name', width: 35 },
+                { header: 'Code', key: 'teacher_code', width: 10 },
+                { header: 'Specialization', key: 'specialization', width: 20 },
+                { header: 'Employment Type', key: 'employment_type', width: 20 },
+                { header: 'Availability', key: 'availability_str', width: 50 }
+            ];
+
+            const headerRow = worksheet.getRow(1);
+            headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
+            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2C3E50' } };
+
+            const rows = data.map(t => ({
+                ...t,
+                availability_str: (t.availability || []).map((s: any) => `${s.day}: ${s.time}`).join(' | ')
+            }));
+
+            worksheet.addRows(rows);
+            worksheet.autoFilter = 'A1:F1';
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            saveAs(blob, `Teachers_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+            return "200";
+        } catch (error) {
+            console.error(error);
+            return "500";
+        }
+    }
+
+    async function downloadImportTemplate() {
+        try {
+            const ExcelJS = (await import('exceljs')).default;
+            const { saveAs } = await import('file-saver');
+
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Import Template');
+
+            worksheet.columns = [
+                { header: 'PSCS ID', key: 'id', width: 15 },
+                { header: 'Full Name', key: 'name', width: 35 },
+                { header: 'Code', key: 'code', width: 10 },
+                { header: 'Specialization', key: 'spec', width: 20 },
+                { header: 'Employment Type', key: 'type', width: 20 },
+                { header: 'Availability (Day: Time | Day: Time)', key: 'availability', width: 50 }
+            ];
+
+            const headerRow = worksheet.getRow(1);
+            headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
+            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '16A34A' } };
+
+            worksheet.addRow({ 
+                id: '########',
+                name: 'Ivan Winzle S. Diocampo',
+                code: 'IWD',
+                spec: 'Information Technology',
+                type: 'Regular', 
+                availability: 'Monday: 5:00 PM - 8:00 PM | Saturday: 7:30 AM - 5:00 PM' 
+            });
+
+            worksheet.addRow({
+                id: '########',
+                name: 'James Murfhy C. Reurreccion',
+                code: 'JMR',
+                spec: 'Business and Management',
+                type: 'Regular',
+                availability: 'Monday: 5:00 PM - 8:00 PM | Saturday: 7:30 AM - 5:00 PM'
+            });
+
+            const typeOptions = ['Regular', 'PTFL', 'PT', 'Proby'];
+            for (let i = 2; i <= 100; i++) {
+                worksheet.getCell(`E${i}`).dataValidation = {
+                    type: 'list',
+                    allowBlank: true,
+                    formulae: [`"${typeOptions.join(',')}"`]
+                };
+            }
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            saveAs(blob, 'Teacher_Import_Template.xlsx');
+            return "200";
+        } catch (error) {
+            console.error(error);
+            return "500";
+        }
+    }
+
+    async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setLoading(true);
+        try {
+            const ExcelJS = (await import('exceljs')).default;
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.load(await file.arrayBuffer());
+            const worksheet = workbook.getWorksheet(1);
+            
+            const teachersToImport: any[] = [];
+            worksheet?.eachRow((row, rowNumber) => {
+                if (rowNumber > 1) {
+                    const id = row.getCell(1).value?.toString().trim();
+                    const name = row.getCell(2).value?.toString().trim();
+                    const code = row.getCell(3).value?.toString().trim();
+                    const spec = row.getCell(4).value?.toString().trim() || "";
+                    const type = row.getCell(5).value?.toString().trim() || "Regular";
+                    const availStr = row.getCell(6).value?.toString().trim() || "";
+
+                    if (id && name && code) {
+                        const availability = availStr.split('|').filter(s => s.includes(':')).map(s => {
+                            const [day, ...timeParts] = s.trim().split(':');
+                            return { day: day.trim(), time: timeParts.join(':').trim() };
+                        });
+                        teachersToImport.push({ id, name, code, spec, type, availability });
+                    }
+                }
+            });
+
+            if (teachersToImport.length === 0) {
+                setStatusCode("400");
+                return;
+            }
+
+            let successCount = 0;
+            for (const t of teachersToImport) {
+                const res = await insertTeacher(t.id, t.name, t.code, t.spec, t.type, t.availability);
+                if (res === "201") successCount++;
+            }
+
+            setStatusCode(successCount > 0 ? "201" : "409");
+            await loadInitialData();
+            await loadRowCount();
+        } catch (error) {
+            console.error(error);
+            setStatusCode("500");
+        } finally {
+            setLoading(false);
+            setShowToast(true);
+            if (e.target) e.target.value = "";
+        }
+    }
+
     /** Filtering **/
     const [statusCode, setStatusCode] = useState("");
 
@@ -256,6 +413,11 @@ export default function TeacherManager() {
             <div className="flex items-center justify-between">
                 <h1 className="mb-4 font-bold text-2xl">Manage Teachers:</h1>
                 <div className="flex space-x-3">
+                    <Dropdown color={"alternative"} label={"Actions"} dismissOnClick={false}>
+                        <DropdownItem onClick={() => downloadImportTemplate()}>Get Import Template</DropdownItem>
+                        <DropdownItem onClick={() => fileInputRef.current?.click()}>Import</DropdownItem>
+                        <DropdownItem onClick={() => handleExportToExcel()}>Export</DropdownItem>
+                    </Dropdown>
                     <Button onClick={() => setAddModal(true)}>Add Teacher</Button>
                 </div>
             </div>
@@ -342,9 +504,9 @@ export default function TeacherManager() {
                             <Label>Emp. Type</Label>
                             <Select value={type} onChange={e => { setType(e.target.value); setActiveChanges(true); }}>
                                 <option>Regular</option>
-                                <option>Proby</option>
                                 <option>PTFL</option>
                                 <option>PT</option>
+                                <option>Proby</option>
                             </Select>
                         </div>
                     </div>
@@ -385,9 +547,9 @@ export default function TeacherManager() {
                             <Label>Emp. Type</Label>
                             <Select value={type} onChange={e => { setType(e.target.value); setActiveChanges(true); }}>
                                 <option>Regular</option>
-                                <option>Proby</option>
                                 <option>PTFL</option>
                                 <option>PT</option>
+                                <option>Proby</option>
                             </Select>
                         </div>
                     </div>
@@ -410,8 +572,8 @@ export default function TeacherManager() {
                     <HiExclamation className="mx-auto size-12 text-yellow-400 mb-4" />
                     <p className="font-bold">Are you sure?</p>
                     <div className="flex justify-center gap-4 mt-6">
-                        <Button color="gray" onClick={() => setOpenWarningModal(false)}>No</Button>
-                        <Button color="failure" onClick={editModal ? deleteRow : discardEntry}>Yes, proceed</Button>
+                        <Button color="alternative" onClick={() => setOpenWarningModal(false)}>No</Button>
+                        <Button color="red" onClick={editModal ? deleteRow : discardEntry}>Yes, proceed</Button>
                     </div>
                 </ModalBody>
             </Modal>
@@ -423,10 +585,21 @@ export default function TeacherManager() {
                         {statusCode.startsWith('2') ? <HiCheck className="h-5 w-5" /> : <HiExclamation className="h-5 w-5" />}
                     </div>
                     <div className="ml-3 text-sm font-normal">{STATUS_MESSAGES[statusCode] || "Operation complete"}</div>
-                    <ToastToggle onDismiss={() => setShowToast(false)} />
+                    <ToastToggle onDismiss={() => {
+                        setShowToast(false);
+                        setProgress(0);
+                    }} />
                 </div>
                 <Progress progress={progress} size="sm" className="mt-2" color={statusCode.startsWith('2') ? "green" : "red"} />
             </Toast>
+
+            <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept=".xlsx"
+                onChange={handleImport}
+            />
         </div>
     );
 }
