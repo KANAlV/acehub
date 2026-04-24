@@ -427,3 +427,84 @@ export async function getProgramList() {
         return [];
     }
 }
+
+/** --- Teachers --- **/
+export async function fetchTeachers(search = "", page: number) {
+    const ITEMS_PER_PAGE = 10;
+    try {
+        const val = search.trim() === "" ? null : search;
+        const offset = (page - 1) * ITEMS_PER_PAGE;
+        return await sql`SELECT * FROM get_teachers(${val}, ${offset})`;
+    } catch (error) {
+        console.error(`[DB_ERROR]: Failed to fetch teachers:`, error);
+        return [];
+    }
+}
+
+export async function fetchTeachersCount(search = "") {
+    try {
+        const val = search.trim() === "" ? null : search;
+        const result = await sql`SELECT get_teachers_count(${val})`;
+        return result.length > 0 ? result[0].get_teachers_count : 0;
+    } catch (error) {
+        console.error(`[DB_ERROR]: Failed to fetch teachers count:`, error);
+        return 0;
+    }
+}
+
+export async function insertTeacher(id: string, name: string, code: string, spec: string, type: string, availability: any[]) {
+    try {
+        await sql`SELECT create_teacher(
+            ${id}, 
+            ${name}, 
+            ${code}, 
+            ${spec}, 
+            ${type}, 
+            ${availability as any}::jsonb
+        )`;
+        revalidatePath('/teachers');
+        return "201";
+    } catch (error) {
+        console.error(`[DB_ERROR]: Failed to create teacher:`, error);
+        return "500";
+    }
+}
+
+export async function updateTeacher(id: string, name: string, code: string, spec: string, type: string, availability: any[]) {
+    try {
+        await sql`SELECT update_teacher(
+            ${id}, 
+            ${name}, 
+            ${code}, 
+            ${spec}, 
+            ${type}, 
+            ${availability as any}::jsonb
+        )`;
+        revalidatePath('/teachers');
+        return "200";
+    } catch (error) {
+        console.error(`[DB_ERROR]: Failed to update teacher:`, error);
+        return "500";
+    }
+}
+
+export async function deleteTeacher(id: string) {
+    try {
+        await sql`SELECT delete_teacher(${id})`;
+        revalidatePath('/teachers');
+        return "204";
+    } catch (error) {
+        console.error(`[DB_ERROR]: Failed to delete teacher:`, error);
+        return "500";
+    }
+}
+
+export async function getAllTeachersData() {
+    try {
+        const result = await sql`SELECT * FROM get_all_teachers()`;
+        return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch all teachers:", error);
+        throw new Error("Failed to fetch teachers");
+    }
+}

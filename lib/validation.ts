@@ -13,6 +13,8 @@ export const MAX_LENGTH = 30;
 
 export const MAX_LENGTH_LONG = 50;
 
+export const MAX_LENGTH_MEDIUM = 80;
+
 export const LONG_NAME_LIMIT = 150;
 
 export function sanitizeVeryShortName(input: string): string {
@@ -25,6 +27,12 @@ export function sanitizeName(input: string): string {
     return input
         .replace(ALLOWED_CHARS_REGEX, '') // 1. Remove bad characters
         .slice(0, MAX_LENGTH); // 2. Enforce length
+}
+
+export function sanitizeMediumName(input: string): string {
+    return input
+        .replace(ALLOWED_CHARS_REGEX, '') // 1. Remove bad characters
+        .slice(0, MAX_LENGTH_MEDIUM); // 2. Enforce length
 }
 
 export function sanitizeLongName(input: string): string {

@@ -95,8 +95,8 @@ export function SidebarComponent({ username }: { username: string }) {
                         <SidebarItem as={Link} href="/courses" icon={HiUserGroup} onClick={() => setIsOpen(false)}>
                             courses
                         </SidebarItem>
-                        <SidebarItem as={Link} href="/maintenance" icon={HiAcademicCap} onClick={() => setIsOpen(false)}>
-                            Teachers (*)
+                        <SidebarItem as={Link} href="/teachers" icon={HiAcademicCap} onClick={() => setIsOpen(false)}>
+                            Teachers
                         </SidebarItem>
                         <SidebarItem as={Link} href="/subjects" icon={HiBookOpen} onClick={() => setIsOpen(false)}>
                             Subjects
