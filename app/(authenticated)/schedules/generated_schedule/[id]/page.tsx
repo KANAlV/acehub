@@ -266,7 +266,7 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
                     <div className="border-r border-gray-200" />
                     {DAYS.map(d => <div key={d} className="py-2 text-center font-bold text-xs">{d}</div>)}
                 </div>
-                <div className="grid grid-cols-[80px_repeat(6,1fr)] max-h-150 overflow-y-auto relative text-gray-900 dark:text-white">
+                <div className="grid grid-cols-[80px_repeat(6,1fr)] max-h-[600px] overflow-y-auto relative text-gray-900 dark:text-white">
                     <div className="bg-gray-50 dark:bg-gray-800 sticky left-0 z-20 border-r border-gray-200">
                         {TIME_SLOTS.map(t => (
                             <div key={t} style={{ height: SLOT_HEIGHT }} className="flex items-center justify-center text-[10px] text-gray-400 border-b border-gray-100">{formatTime(t)}</div>
@@ -368,7 +368,7 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
 
                     <Card className="border-none shadow-sm">
                         <Label className="text-xs font-bold uppercase text-gray-400">Generation Payload</Label>
-                        <div className="space-y-2 mt-2 max-h-100 overflow-y-auto pr-1">
+                        <div className="space-y-2 mt-2 max-h-[400px] overflow-y-auto pr-1">
                             {availablePayload.length === 0 ? (
                                 <div className="text-xs text-gray-400 italic">No configured subjects found.</div>
                             ) : (
@@ -393,7 +393,7 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
                 <ModalHeader />
                 <ModalBody className="text-center">
                     <HiExclamation className="mx-auto size-12 text-red-500 mb-4" />
-                    <h3 className="font-bold">{conflictInfo?.message}</h3>
+                    <h3 className="font-bold text-gray-900">{conflictInfo?.message}</h3>
                     <p className="text-xs text-gray-500 mt-2">{conflictInfo?.details}</p>
                     <Button color="failure" size="sm" className="mt-6 w-full" onClick={() => setConflictInfo(null)}>Dismiss</Button>
                 </ModalBody>
@@ -413,7 +413,7 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
                             }
                             setMoveConfirmInfo(null); 
                         }}>Move</Button>
-                        <Button color="gray" size="sm" className="flex-1" onClick={() => setMoveConfirmInfo(null)}>Cancel</Button>
+                        <Button color="gray" size="sm" onClick={() => setMoveConfirmInfo(null)}>Cancel</Button>
                     </div>
                 </ModalBody>
             </Modal>
@@ -421,7 +421,7 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
             <Toast className={`fixed z-60 bottom-10 right-10 transition-all ${showToast ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                 <div className="flex items-center">
                     <div className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-green-100 text-green-500`}><HiCheck className="h-5 w-5" /></div>
-                    <div className="ml-3 text-xs font-medium">{toastMessage}</div>
+                    <div className="ml-3 text-sm font-normal">{toastMessage}</div>
                     <ToastToggle onDismiss={() => setShowToast(false)} />
                 </div>
                 <Progress progress={progress} size="sm" className="mt-2" color="green" />
