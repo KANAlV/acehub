@@ -1,6 +1,6 @@
 import { 
     fetchAllSubjects, fetchAllTeachers, getAllProgramsData, 
-    getAllRoomsData, fetchBreakPeriods 
+    getAllRoomsData, fetchBreakPeriods, fetchSystemSettings 
 } from "@/services/userService";
 
 /* ================= TYPES ================= */
@@ -22,71 +22,97 @@ type GeneratedEntry = {
 
 /* ================= HELPERS ================= */
 
-// Converts "7:30 AM - 5:00 PM" string into minute ranges
+function parseTimeValue(timeStr: string): number {
+    if (!timeStr) return 0;
+    if (timeStr.includes(':') && !timeStr.includes(' ')) {
+        const [h, m] = timeStr.split(':').map(Number);
+        return h * 60 + m;
+    }
+    const [time, ampm] = timeStr.split(' ');
+    let [hours, minutes] = time.split(':').map(Number);
+    if (ampm === 'PM' && hours !== 12) hours += 12;
+    if (ampm === 'AM' && hours === 12) hours = 0;
+    return hours * 60 + (minutes || 0);
+}
+
 function parseTimeRange(timeStr: string): TimeSlot {
     const parts = timeStr.split('-').map(p => p.trim());
     if (parts.length !== 2) return { start: 0, end: 0 };
-
-    const parsePart = (p: string) => {
-        const [time, ampm] = p.split(' ');
-        let [hours, minutes] = time.split(':').map(Number);
-        if (ampm === 'PM' && hours !== 12) hours += 12;
-        if (ampm === 'AM' && hours === 12) hours = 0;
-        return hours * 60 + (minutes || 0);
-    };
-
-    return { start: parsePart(parts[0]), end: parsePart(parts[1]) };
+    return { start: parseTimeValue(parts[0]), end: parseTimeValue(parts[1]) };
 }
 
 /* ================= ENGINE ================= */
 
 export async function generateScheduleData(config: any) {
-    const { subjects: selectedIds, sections: selectedSectionIds, assignments, overrides } = config;
+    const { subjects: selectedIds, sections: selectedProgramCodes, assignments, overrides, semester, mergeLecLab = {} } = config;
+
+    const currentSemester = parseInt(semester || "1");
 
     // 1. Fetch All Data
-    const [allSubjects, allTeachers, allPrograms, allRooms, mandatoryBreaks] = await Promise.all([
+    const [allSubjects, allTeachers, allPrograms, allRooms, breakPeriods, systemSettings] = await Promise.all([
         fetchAllSubjects(),
         fetchAllTeachers(),
         getAllProgramsData(),
         getAllRoomsData(),
-        fetchBreakPeriods()
+        fetchBreakPeriods(),
+        fetchSystemSettings()
     ]);
 
     // 2. Prepare Constraints
     const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    const START_LIMIT = 7 * 60; // 7:00 AM
-    const END_LIMIT = 20 * 60;  // 8:00 PM
-    const SLOT_SIZE = 30;       // 30-minute granularity
+    const START_LIMIT = parseTimeValue(systemSettings.startTime || "7:00 AM");
+    const END_LIMIT = parseTimeValue(systemSettings.endTime || "8:00 PM");
+    const MAX_STUDENTS_PER_SECTION = Number(systemSettings.maxStudents || 40);
+    const SLOT_SIZE = 30;
 
-    // Filter active entities
     const activeSubjects = allSubjects.filter(s => selectedIds.includes(s.id));
-    const activePrograms = allPrograms.filter(p => selectedSectionIds.includes(p.program_code));
+    const activePrograms = allPrograms.filter(p => selectedProgramCodes.includes(p.program_code));
 
-    // 3. Initialize Schedule Result
+    // 3. Generate Virtual Sections
+    const virtualSections: { id: string, programCode: string, year: string }[] = [];
+    for (const program of activePrograms) {
+        const yearLevels = program.students || {};
+        for (const [year, count] of Object.entries(yearLevels)) {
+            const yearNum = parseInt(year);
+            const numSections = Math.ceil(Number(count) / MAX_STUDENTS_PER_SECTION);
+            let firstDigit = 0;
+            if (program.level === "SHS") firstDigit = (yearNum === 11) ? 1 : 2;
+            else firstDigit = (yearNum - 1) * 2 + currentSemester;
+
+            for (let i = 0; i < numSections; i++) {
+                const sectionId = `${program.program_code}${firstDigit}1${i + 1}`;
+                virtualSections.push({ id: sectionId, programCode: program.program_code, year: year });
+            }
+        }
+    }
+
     const results: GeneratedEntry[] = [];
+    const teacherLoad: Record<string, number> = {};
+    // Tracking unique days used by each section
+    const sectionDays: Record<string, Set<string>> = {};
 
-    // Helper to check if a block is free
     const isAvailable = (day: string, start: number, end: number, roomId: string, teacherId: string, sectionId: string) => {
-        // Limit Check
         if (start < START_LIMIT || end > END_LIMIT) return false;
 
-        // Mandatory Breaks Check
-        for (const b of mandatoryBreaks) {
+        // 5-Day School Week Check
+        const daysUsedBySection = sectionDays[sectionId] || new Set();
+        if (!daysUsedBySection.has(day) && daysUsedBySection.size >= 5) {
+            return false; // Section already at 5 days
+        }
+
+        // Mandatory Breaks
+        for (const b of breakPeriods) {
             if (b.day_of_week.toLowerCase() === day.toLowerCase()) {
-                const bRange = parseTimeRange(b.start_time + " - " + b.end_time);
-                if (!(end <= bRange.start || start >= bRange.end)) return false;
+                const bStart = parseTimeValue(b.start_time);
+                const bEnd = parseTimeValue(b.end_time);
+                if (!(end <= bStart || start >= bEnd)) return false;
             }
         }
 
-        // Teacher Availability & Saturday Rule
         const teacher = allTeachers.find(t => t.pscs_id === teacherId);
         if (!teacher) return false;
+        if (day === "Saturday" && teacher.employment_type !== "PT" && teacher.employment_type !== "PTFL") return false;
 
-        if (day === "Saturday") {
-            if (teacher.employment_type !== "PT" && teacher.employment_type !== "PTFL") return false;
-        }
-
-        // Use Override if exists, otherwise global
         const teacherSched = overrides[teacherId] || teacher.availability || [];
         const hasSlot = teacherSched.some((s: any) => {
             if (s.day.toLowerCase() !== day.toLowerCase()) return false;
@@ -94,89 +120,89 @@ export async function generateScheduleData(config: any) {
             return (start >= range.start && end <= range.end);
         });
         
-        // Full-time teachers (Regular/Proby) are assumed available Mon-Fri if no override
         const isFT = teacher.employment_type === "Regular" || teacher.employment_type === "Proby";
         if (!hasSlot && (!isFT || day === "Saturday")) return false;
 
-        // Conflict Check with existing results
+        // Conflicts
         for (const entry of results) {
             if (entry.day === day) {
                 const overlap = !(end <= entry.start || start >= entry.end);
                 if (overlap) {
-                    if (entry.roomId === roomId || entry.teacherId === teacherId || entry.sectionId === sectionId) {
-                        return false;
-                    }
+                    if (entry.roomId === roomId || entry.teacherId === teacherId || entry.sectionId === sectionId) return false;
                 }
             }
         }
-
         return true;
     };
 
-    // 4. Generation Algorithm (Greedy Randomized)
-    // We iterate through sections, then subjects needed for those sections
-    for (const program of activePrograms) {
-        // A program can have multiple year-level "sections"
-        const yearLevels = Object.keys(program.students || {});
+    // 4. Main Placement Loop
+    for (const vSection of virtualSections) {
+        const subjectsForThisYear = activeSubjects.filter(s => {
+            if (vSection.year.length > 1) return s.year_term === vSection.year;
+            return s.year_term?.startsWith(vSection.year);
+        });
 
-        for (const year of yearLevels) {
-            const sectionLabel = `${program.program_code}-${year}`;
-            
-            // Find subjects matching this year level
-            // We match based on the first character of year_term (e.g. '1-1' matches year '1', '11' matches '11')
-            const subjectsForThisSection = activeSubjects.filter(s => {
-                if (year.length > 1) return s.year_term === year;
-                return s.year_term?.startsWith(year);
-            });
+        for (const sub of subjectsForThisYear) {
+            let teacherId = assignments[sub.id];
+            if (!teacherId) {
+                const eligible = allTeachers.filter(t => t.specialization?.toLowerCase().includes(sub.field_of_specialization?.toLowerCase() || "none"));
+                const candidates = eligible.length > 0 ? eligible : allTeachers;
+                candidates.sort((a, b) => (teacherLoad[a.pscs_id] || 0) - (teacherLoad[b.pscs_id] || 0));
+                teacherId = candidates[0].pscs_id;
+            }
 
-            for (const sub of subjectsForThisSection) {
-                // Determine Teacher
-                let teacherId = assignments[sub.course_code];
-                if (!teacherId) {
-                    // Find any teacher matching specialization
-                    const eligible = allTeachers.filter(t => t.specialization?.includes(sub.field_of_specialization));
-                    if (eligible.length > 0) {
-                        teacherId = eligible[Math.floor(Math.random() * eligible.length)].pscs_id;
-                    } else {
-                        // Fallback to any teacher if no spec found
-                        teacherId = allTeachers[Math.floor(Math.random() * allTeachers.length)].pscs_id;
-                    }
-                }
+            const shouldMerge = !!mergeLecLab[sub.id];
+            const components: { type: string, minutes: number, roomType: string }[] = [];
 
-                // Determine Duration
-                const duration = (Number(sub.lecture_units) + Number(sub.lab_units)) * 60;
-                
-                // Attempt to place in a room/time
-                let placed = false;
-                const shuffledDays = [...DAYS].sort(() => Math.random() - 0.5);
-                const shuffledRooms = [...allRooms].sort(() => Math.random() - 0.5);
+            if (shouldMerge) {
+                const totalMinutes = (Number(sub.lecture_units) + Number(sub.lab_units)) * 60;
+                components.push({ type: 'Merged', minutes: totalMinutes, roomType: sub.lab_type || 'Lecture' });
+            } else {
+                components.push({ type: 'Lab', minutes: Number(sub.lab_units) * 60, roomType: sub.lab_type || 'Lecture' });
+                components.push({ type: 'Lecture', minutes: Number(sub.lecture_units) * 60, roomType: 'Lecture' });
+            }
 
-                for (const day of shuffledDays) {
-                    if (placed) break;
-                    for (const room of shuffledRooms) {
+            for (const comp of components) {
+                let remainingMinutes = comp.minutes;
+                while (remainingMinutes > 0) {
+                    let sessionMinutes = remainingMinutes;
+                    if (remainingMinutes >= 180) sessionMinutes = 120; 
+
+                    let placed = false;
+                    const shuffledDays = [...DAYS].sort(() => Math.random() - 0.2);
+                    const eligibleRooms = allRooms.filter(r => r.room_type === comp.roomType);
+                    const shuffledRooms = [...eligibleRooms].sort(() => Math.random() - 0.5);
+
+                    for (const day of shuffledDays) {
                         if (placed) break;
+                        for (const room of shuffledRooms) {
+                            if (placed) break;
+                            for (let time = START_LIMIT; time <= END_LIMIT - sessionMinutes; time += SLOT_SIZE) {
+                                if (isAvailable(day, time, time + sessionMinutes, room.room_id.toString(), teacherId, vSection.id)) {
+                                    results.push({
+                                        subjectId: sub.course_code,
+                                        teacherId,
+                                        roomId: room.room_id.toString(),
+                                        sectionId: vSection.id,
+                                        day, start: time, end: time + sessionMinutes
+                                    });
+                                    
+                                    // Update tracking
+                                    teacherLoad[teacherId] = (teacherLoad[teacherId] || 0) + (sessionMinutes / 60);
+                                    if (!sectionDays[vSection.id]) sectionDays[vSection.id] = new Set();
+                                    sectionDays[vSection.id].add(day);
 
-                        // Try starting at every 30 min slot
-                        for (let time = START_LIMIT; time <= END_LIMIT - duration; time += SLOT_SIZE) {
-                            if (isAvailable(day, time, time + duration, room.room_id.toString(), teacherId, sectionLabel)) {
-                                results.push({
-                                    subjectId: sub.course_code,
-                                    teacherId,
-                                    roomId: room.room_id.toString(),
-                                    sectionId: sectionLabel,
-                                    day,
-                                    start: time,
-                                    end: time + duration
-                                });
-                                placed = true;
-                                break;
+                                    placed = true;
+                                    remainingMinutes -= sessionMinutes;
+                                    break;
+                                }
                             }
                         }
                     }
+                    if (!placed) break;
                 }
             }
         }
     }
-
     return results;
 }
