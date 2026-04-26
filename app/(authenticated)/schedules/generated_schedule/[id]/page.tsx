@@ -307,7 +307,7 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
                                             <button onClick={() => setSchedules(prev => prev.filter(x => x.id !== s.id))} className={`absolute top-0.5 right-0.5 text-[14px] leading-none ${!isActive ? 'hidden' : ''}`}>×</button>
                                             <div className="font-bold truncate">{sub?.course_name || s.subjectId}</div>
                                             <div className="opacity-80 truncate">{tea?.name || 'No Teacher'}</div>
-                                            <div className="opacity-80 truncate">{scheduleSubTab === 'rooms' ? s.sectionId : rom?.room_name}</div>
+                                            <div className="opacity-80 truncate">{rom?.room_name}</div>
                                             {isActive && <div onMouseDown={e => handleResizeMouseDown(e, s)} className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize" />}
                                         </div>
                                     );
@@ -328,7 +328,7 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
                 <div className="flex items-center gap-4">
                     <Button color="gray" size="sm" onClick={() => router.push("/schedules")}><HiArrowLeft /></Button>
                     <div>
-                        <h1 className="text-xl font-black text-gray-900 dark:text-white truncate max-w-xs">{scheduleName || "Unnamed Schedule"}</h1>
+                        <h1 className="text-xl font-black truncate max-w-xs">{scheduleName || "Unnamed Schedule"}</h1>
                         <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Live Visual Editor</p>
                     </div>
                 </div>
@@ -366,9 +366,9 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
                         </div>
                     </Card>
 
-                    <Card className="border-none shadow-sm">
+                    <Card className="border-none shadow-sm text-gray-900 dark:text-white">
                         <Label className="text-xs font-bold uppercase text-gray-400">Generation Payload</Label>
-                        <div className="space-y-2 mt-2 max-h-[400px] overflow-y-auto pr-1">
+                        <div className="space-y-2 mt-2 max-h-[400px] overflow-y-auto pr-1 text-gray-900 dark:text-white">
                             {availablePayload.length === 0 ? (
                                 <div className="text-xs text-gray-400 italic">No configured subjects found.</div>
                             ) : (
@@ -391,9 +391,9 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
 
             <Modal show={!!conflictInfo} size="sm" onClose={() => setConflictInfo(null)} popup>
                 <ModalHeader />
-                <ModalBody className="text-center">
+                <ModalBody className="text-center text-gray-900 dark:text-white">
                     <HiExclamation className="mx-auto size-12 text-red-500 mb-4" />
-                    <h3 className="font-bold text-gray-900">{conflictInfo?.message}</h3>
+                    <h3 className="font-bold">{conflictInfo?.message}</h3>
                     <p className="text-xs text-gray-500 mt-2">{conflictInfo?.details}</p>
                     <Button color="failure" size="sm" className="mt-6 w-full" onClick={() => setConflictInfo(null)}>Dismiss</Button>
                 </ModalBody>
@@ -401,7 +401,7 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
 
             <Modal show={!!moveConfirmInfo} size="sm" onClose={() => setMoveConfirmInfo(null)} popup>
                 <ModalHeader />
-                <ModalBody className="text-center">
+                <ModalBody className="text-center text-gray-900 dark:text-white">
                     <HiOutlineExclamationCircle className="mx-auto size-12 text-yellow-400 mb-4" />
                     <h3 className="font-bold">Displace Section?</h3>
                     <p className="text-xs text-gray-500 mt-2">Moving this will change the room assignment for this specific block.</p>
@@ -421,7 +421,7 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
             <Toast className={`fixed z-60 bottom-10 right-10 transition-all ${showToast ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                 <div className="flex items-center">
                     <div className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-green-100 text-green-500`}><HiCheck className="h-5 w-5" /></div>
-                    <div className="ml-3 text-sm font-normal">{toastMessage}</div>
+                    <div className="ml-3 text-xs font-medium">{toastMessage}</div>
                     <ToastToggle onDismiss={() => setShowToast(false)} />
                 </div>
                 <Progress progress={progress} size="sm" className="mt-2" color="green" />

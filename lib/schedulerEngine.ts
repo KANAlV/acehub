@@ -41,6 +41,28 @@ function parseTimeRange(timeStr: string): TimeSlot {
     return { start: parseTimeValue(parts[0]), end: parseTimeValue(parts[1]) };
 }
 
+function shuffleArray<T>(array: T[]): T[] {
+    const newArr = [...array];
+    for (let i = newArr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+    }
+    return newArr;
+}
+
+function logPlacementIssue(issue: string, details: any) {
+    console.warn(`[SCHEDULER] ${issue}:`, details);
+}
+
+function getOptimalSessionDuration(remainingMinutes: number): number {
+    if (remainingMinutes <= 0) return 0;
+    if (remainingMinutes <= 60) return remainingMinutes;
+    if (remainingMinutes <= 90) return 90;
+    if (remainingMinutes <= 120) return 120;
+    if (remainingMinutes <= 180) return 120;
+    return 180;
+}
+
 /* ================= ENGINE ================= */
 
 export async function generateScheduleData(config: any) {
@@ -68,27 +90,39 @@ export async function generateScheduleData(config: any) {
     const activeSubjects = allSubjects.filter(s => selectedIds.includes(s.id));
     const activePrograms = allPrograms.filter(p => selectedProgramCodes.includes(p.program_code));
 
-    // 3. Generate Virtual Sections
-    const virtualSections: { id: string, programCode: string, year: string }[] = [];
+    // 3. Generate Virtual Sections based on STI Format
+    const virtualSections: { id: string, programCode: string, year: string, targetYearTerm: string }[] = [];
     for (const program of activePrograms) {
         const yearLevels = program.students || {};
         for (const [year, count] of Object.entries(yearLevels)) {
             const yearNum = parseInt(year);
             const numSections = Math.ceil(Number(count) / MAX_STUDENTS_PER_SECTION);
+
             let firstDigit = 0;
-            if (program.level === "SHS") firstDigit = (yearNum === 11) ? 1 : 2;
-            else firstDigit = (yearNum - 1) * 2 + currentSemester;
+            let targetYearTerm = "";
+
+            if (program.level === "SHS") {
+                firstDigit = (yearNum === 11) ? 1 : 2;
+                targetYearTerm = yearNum.toString(); // "11" or "12"
+            } else {
+                firstDigit = (yearNum - 1) * 2 + currentSemester;
+                targetYearTerm = `${yearNum}-${currentSemester}`; // e.g. "1-1", "1-2"
+            }
 
             for (let i = 0; i < numSections; i++) {
                 const sectionId = `${program.program_code}${firstDigit}1${i + 1}`;
-                virtualSections.push({ id: sectionId, programCode: program.program_code, year: year });
+                virtualSections.push({ 
+                    id: sectionId, 
+                    programCode: program.program_code, 
+                    year: year,
+                    targetYearTerm: targetYearTerm
+                });
             }
         }
     }
 
     const results: GeneratedEntry[] = [];
     const teacherLoad: Record<string, number> = {};
-    // Tracking unique days used by each section
     const sectionDays: Record<string, Set<string>> = {};
 
     const isAvailable = (day: string, start: number, end: number, roomId: string, teacherId: string, sectionId: string) => {
@@ -96,9 +130,7 @@ export async function generateScheduleData(config: any) {
 
         // 5-Day School Week Check
         const daysUsedBySection = sectionDays[sectionId] || new Set();
-        if (!daysUsedBySection.has(day) && daysUsedBySection.size >= 5) {
-            return false; // Section already at 5 days
-        }
+        if (!daysUsedBySection.has(day) && daysUsedBySection.size >= 5) return false;
 
         // Mandatory Breaks
         for (const b of breakPeriods) {
@@ -123,7 +155,6 @@ export async function generateScheduleData(config: any) {
         const isFT = teacher.employment_type === "Regular" || teacher.employment_type === "Proby";
         if (!hasSlot && (!isFT || day === "Saturday")) return false;
 
-        // Conflicts
         for (const entry of results) {
             if (entry.day === day) {
                 const overlap = !(end <= entry.start || start >= entry.end);
@@ -136,19 +167,39 @@ export async function generateScheduleData(config: any) {
     };
 
     // 4. Main Placement Loop
-    for (const vSection of virtualSections) {
-        const subjectsForThisYear = activeSubjects.filter(s => {
-            if (vSection.year.length > 1) return s.year_term === vSection.year;
-            return s.year_term?.startsWith(vSection.year);
+    const shuffledSections = shuffleArray(virtualSections);
+
+    for (const vSection of shuffledSections) {
+        // FILTER SUBJECTS BY: 
+        // 1. Year/Term (1-1, 11, etc)
+        // 2. Curriculum matches Program Code (e.g. "BSIT-24" contains "BSIT")
+        const subjectsForThisSection = activeSubjects.filter(s => {
+            const yearMatch = s.year_term === vSection.targetYearTerm;
+            const curriculumMatch = s.curriculumn_version?.includes(vSection.programCode);
+            return yearMatch && curriculumMatch;
         });
 
-        for (const sub of subjectsForThisYear) {
+        const shuffledSubjects = shuffleArray(subjectsForThisSection);
+
+        for (const sub of shuffledSubjects) {
             let teacherId = assignments[sub.id];
             if (!teacherId) {
-                const eligible = allTeachers.filter(t => t.specialization?.toLowerCase().includes(sub.field_of_specialization?.toLowerCase() || "none"));
+                const eligible = allTeachers.filter(t => {
+                    const spec = (t.specialization || "").toLowerCase();
+                    const field = (sub.field_of_specialization || "").toLowerCase();
+                    return spec.includes(field) || field === "none" || spec === "none";
+                });
                 const candidates = eligible.length > 0 ? eligible : allTeachers;
                 candidates.sort((a, b) => (teacherLoad[a.pscs_id] || 0) - (teacherLoad[b.pscs_id] || 0));
-                teacherId = candidates[0].pscs_id;
+                if (candidates.length > 0) {
+                    teacherId = candidates[0].pscs_id;
+                } else {
+                    logPlacementIssue('No teachers available for subject', { 
+                        subject: sub.course_code, 
+                        specialization: sub.field_of_specialization 
+                    });
+                    continue;
+                }
             }
 
             const shouldMerge = !!mergeLecLab[sub.id];
@@ -158,20 +209,44 @@ export async function generateScheduleData(config: any) {
                 const totalMinutes = (Number(sub.lecture_units) + Number(sub.lab_units)) * 60;
                 components.push({ type: 'Merged', minutes: totalMinutes, roomType: sub.lab_type || 'Lecture' });
             } else {
-                components.push({ type: 'Lab', minutes: Number(sub.lab_units) * 60, roomType: sub.lab_type || 'Lecture' });
-                components.push({ type: 'Lecture', minutes: Number(sub.lecture_units) * 60, roomType: 'Lecture' });
+                if (Number(sub.lab_units) > 0) {
+                    components.push({ type: 'Lab', minutes: Number(sub.lab_units) * 60, roomType: sub.lab_type || 'Laboratory' });
+                }
+                if (Number(sub.lecture_units) > 0) {
+                    components.push({ type: 'Lecture', minutes: Number(sub.lecture_units) * 60, roomType: 'Lecture' });
+                }
             }
 
             for (const comp of components) {
                 let remainingMinutes = comp.minutes;
-                while (remainingMinutes > 0) {
-                    let sessionMinutes = remainingMinutes;
-                    if (remainingMinutes >= 180) sessionMinutes = 120; 
+                if (remainingMinutes <= 0) continue;
 
+                let attempts = 0;
+                const maxAttempts = 50;
+
+                while (remainingMinutes > 0 && attempts < maxAttempts) {
+                    const sessionMinutes = getOptimalSessionDuration(remainingMinutes);
+                    
                     let placed = false;
-                    const shuffledDays = [...DAYS].sort(() => Math.random() - 0.2);
-                    const eligibleRooms = allRooms.filter(r => r.room_type === comp.roomType);
-                    const shuffledRooms = [...eligibleRooms].sort(() => Math.random() - 0.5);
+                    const shuffledDays = shuffleArray(DAYS);
+                    
+                    // Get eligible rooms with fallback
+                    let eligibleRooms = allRooms.filter(r => r.room_type === comp.roomType);
+                    if (eligibleRooms.length === 0) {
+                        eligibleRooms = allRooms.filter(r => r.room_type === 'Lecture');
+                        logPlacementIssue('No rooms of type found, using Lecture rooms', { 
+                            requestedType: comp.roomType, 
+                            fallbackCount: eligibleRooms.length 
+                        });
+                    }
+                    if (eligibleRooms.length === 0) {
+                        eligibleRooms = allRooms;
+                        logPlacementIssue('No Lecture rooms found, using all rooms', { 
+                            totalRooms: eligibleRooms.length 
+                        });
+                    }
+                    
+                    const shuffledRooms = shuffleArray(eligibleRooms);
 
                     for (const day of shuffledDays) {
                         if (placed) break;
@@ -187,7 +262,6 @@ export async function generateScheduleData(config: any) {
                                         day, start: time, end: time + sessionMinutes
                                     });
                                     
-                                    // Update tracking
                                     teacherLoad[teacherId] = (teacherLoad[teacherId] || 0) + (sessionMinutes / 60);
                                     if (!sectionDays[vSection.id]) sectionDays[vSection.id] = new Set();
                                     sectionDays[vSection.id].add(day);
@@ -199,10 +273,37 @@ export async function generateScheduleData(config: any) {
                             }
                         }
                     }
-                    if (!placed) break;
+                    
+                    if (!placed) {
+                        attempts++;
+                        logPlacementIssue('Failed to place session', {
+                            subject: sub.course_code,
+                            component: comp.type,
+                            minutes: sessionMinutes,
+                            attempt: attempts,
+                            remainingMinutes
+                        });
+                        
+                        // Try with smaller session size on retry
+                        if (attempts > 5 && sessionMinutes > 60) {
+                            remainingMinutes = Math.min(remainingMinutes, 60);
+                        }
+                        
+                        if (attempts >= maxAttempts) {
+                            logPlacementIssue('Max attempts reached, skipping component', {
+                                subject: sub.course_code,
+                                component: comp.type,
+                                remainingMinutes
+                            });
+                        }
+                    }
                 }
             }
         }
     }
+    
+    // Log final statistics
+    console.log(`[SCHEDULER] Generated ${results.length} entries for ${virtualSections.length} sections`);
+    
     return results;
 }

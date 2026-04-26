@@ -15,7 +15,7 @@ import {
 import { useRouter } from "next/navigation";
 import { 
     fetchSchedulesList, deleteGeneratedSchedule, saveGeneratedSchedule,
-    fetchCurriculumVersions, fetchAllSubjects, fetchAllTeachers, fetchPrograms
+    fetchCurriculumVersions, fetchAllSubjects, fetchAllTeachers, getAllProgramsData
 } from "@/services/userService";
 
 /** --- Helper Component: Autocomplete Select --- **/
@@ -118,10 +118,10 @@ export default function SchedulesDashboard() {
     const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
     const [mergeLecLab, setMergeLecLab] = useState<Record<string, boolean>>({}); // subject.id -> boolean
 
-    // Step 2 State: Static Assignments
+    // Step 2 State: Static Assignments (Optional)
     const [assignments, setAssignments] = useState<{id: string, subjectId: string, teacherId: string}[]>([]);
     
-    // Step 3 State: Availability Overrides
+    // Step 3 State: Availability Overrides (Optional)
     const [overrideTeacherIds, setOverrideTeacherIds] = useState<string[]>([]);
     const [teacherOverrides, setTeacherOverrides] = useState<Record<string, any[]>>({});
 
@@ -144,7 +144,7 @@ export default function SchedulesDashboard() {
                 fetchCurriculumVersions(),
                 fetchAllSubjects(),
                 fetchAllTeachers(),
-                fetchPrograms("", 1)
+                getAllProgramsData() 
             ]);
             setSchedules(list);
             setCurriculums(currs);
@@ -248,7 +248,7 @@ export default function SchedulesDashboard() {
         const finalAssignments: Record<string, string> = {};
         assignments.forEach(a => {
             const sub = allSubjects.find(s => s.id === a.subjectId);
-            if (sub && a.teacherId) finalAssignments[sub.course_code] = a.teacherId;
+            if (sub && a.teacherId) finalAssignments[sub.id] = a.teacherId;
         });
 
         const activeOverrides: Record<string, any[]> = {};
@@ -260,7 +260,7 @@ export default function SchedulesDashboard() {
             subjects: selectedSubjectIds,
             sections: selectedSectionIds,
             assignments: finalAssignments,
-            overrides: activeOverrides,
+            overrides: teacherOverrides,
             mergeLecLab: mergeLecLab
         };
         
@@ -338,12 +338,12 @@ export default function SchedulesDashboard() {
     }, {});
 
     return (
-        <div className="p-8 h-full w-full overflow-y-auto font-sans">
+        <div className="p-8 h-full w-full overflow-y-auto font-sans text-gray-900 dark:text-white">
             {loading && <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm"><Spinner size="xl" /></div>}
 
             <div className="flex justify-between items-center mb-8">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Generated Schedules</h1>
+                    <h1 className="text-3xl font-bold">Generated Schedules</h1>
                     <p className="text-gray-500 dark:text-gray-400 mt-1">Manage and view your institutional timetables</p>
                 </div>
                 <Button onClick={() => { 
@@ -374,14 +374,14 @@ export default function SchedulesDashboard() {
                     <TableBody className="divide-y">
                         {schedules.map((s) => (
                             <TableRow key={s.id}>
-                                <TableCell className="font-bold text-gray-900 dark:text-white">{s.name}</TableCell>
+                                <TableCell className="font-bold">{s.name}</TableCell>
                                 <TableCell>{new Date(s.created_at).toLocaleString()}</TableCell>
                                 <TableCell>
                                     <div className="flex justify-end gap-2">
                                         <Button size="xs" color="info" onClick={() => router.push(`/schedules/generated_schedule/${s.id}`)}>
                                             <HiExternalLink className="mr-1" /> Open Editor
                                         </Button>
-                                        <Button size="xs" color="red" onClick={() => handleDelete(s.id)}><HiTrash /></Button>
+                                        <Button size="xs" color="failure" onClick={() => handleDelete(s.id)}><HiTrash /></Button>
                                     </div>
                                 </TableCell>
                             </TableRow>
@@ -420,7 +420,10 @@ export default function SchedulesDashboard() {
                                 <div className="grid grid-cols-1 lg:grid-cols-6 gap-6">
                                     <div className="flex flex-col h-[50vh] lg:col-span-3">
                                         <div className="flex items-center justify-between mb-2">
-                                            <h4 className="font-bold text-sm text-gray-500">Available Subjects ({availableSubjects.length})</h4>
+                                            <h4 className="font-bold text-sm text-gray-500 flex items-center gap-2">
+                                                Available Subjects
+                                                <span className="bg-gray-200 px-2 rounded text-xs text-gray-700">{availableSubjects.length}</span>
+                                            </h4>
                                             <div className="w-32"><TextInput sizing="sm" placeholder="Search..." icon={HiSearch} value={subjectSearch} onChange={e => setSubjectSearch(e.target.value)} /></div>
                                         </div>
                                         <div className="flex-1 border rounded-lg overflow-hidden bg-white dark:bg-gray-800 shadow-inner">
@@ -434,7 +437,7 @@ export default function SchedulesDashboard() {
                                                             <TableHeadCell></TableHeadCell>
                                                         </TableRow>
                                                     </TableHead>
-                                                    <TableBody className="divide-y">{availableSubjects.map(s => (
+                                                    <TableBody className="divide-y text-gray-900 dark:text-white">{availableSubjects.map(s => (
                                                         <TableRow key={s.id} className="hover:bg-gray-500/30">
                                                             <TableCell className="text-xs">{s.curriculumn_version}</TableCell>
                                                             <TableCell className="font-mono text-[10px]">{s.course_code}</TableCell>
@@ -447,9 +450,9 @@ export default function SchedulesDashboard() {
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-col h-[50vh] lg:col-span-2">
+                                    <div className="flex flex-col h-[50vh] lg:col-span-2 text-gray-900 dark:text-white">
                                         <h4 className="font-bold text-sm mb-2 text-blue-600 flex items-center justify-between">Selected Subjects <span className="bg-blue-100 px-2 rounded text-xs text-blue-700">{chosenSubjects.length}</span></h4>
-                                        <div className="flex-1 border border-blue-200 rounded-lg overflow-hidden bg-white dark:bg-gray-800 shadow-inner overflow-y-auto text-gray-900 dark:text-white">
+                                        <div className="flex-1 border border-blue-200 rounded-lg overflow-hidden bg-white dark:bg-gray-800 shadow-inner overflow-y-auto">
                                             {chosenSubjects.length === 0 ? (
                                                 <div className="text-center py-12 text-gray-400 italic font-medium h-full flex items-center justify-center">No subjects selected</div>
                                             ) : (
@@ -467,7 +470,7 @@ export default function SchedulesDashboard() {
                                                                 </AccordionTitle>
                                                                 <AccordionContent className="p-0 border-none">
                                                                     <Table hoverable>
-                                                                        <TableBody className="divide-y">{subs.map((s: any) => (
+                                                                        <TableBody className="divide-y text-gray-900 dark:text-white">{subs.map((s: any) => (
                                                                             <TableRow key={s.id} className="bg-white dark:bg-gray-800">
                                                                                 <TableCell className="p-2">
                                                                                     <div className="flex flex-col">
@@ -503,7 +506,7 @@ export default function SchedulesDashboard() {
                                         <div className="flex-1 border rounded-lg overflow-hidden bg-white dark:bg-gray-800 shadow-inner">
                                             <div className="h-full overflow-y-auto p-2 space-y-2">
                                                 {allSections.map(sec => (
-                                                    <div key={sec.program_code} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded border border-gray-100 cursor-pointer text-gray-900 dark:text-white" onClick={() => toggleSectionSelection(sec.program_code)}>
+                                                    <div key={sec.program_code} className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded border border-gray-100 dark:border-gray-700 cursor-pointer text-gray-900 dark:text-white" onClick={() => toggleSectionSelection(sec.program_code)}>
                                                         <Checkbox checked={selectedSectionIds.includes(sec.program_code)} readOnly />
                                                         <div className="text-xs font-medium">{sec.program_code} <span className="text-gray-400 ml-1">({sec.level})</span></div>
                                                     </div>
@@ -518,7 +521,7 @@ export default function SchedulesDashboard() {
                         <TabItem active={activeTab === 1} title="2. Assignments (Optional)" icon={HiUserGroup}>
                             <div className="p-6 space-y-4 min-h-[60vh]">
                                 <div className="flex justify-between items-center text-gray-900 dark:text-white">
-                                    <p className="text-sm text-gray-500 italic">Link teachers to subjects. Search to quickly find items.</p>
+                                    <p className="text-sm text-gray-500 italic">Optional: Pre-assign teachers to subjects.</p>
                                     <Button size="xs" color="blue" onClick={addAssignmentRow} disabled={chosenSubjects.length === 0}>
                                         <HiPlus className="mr-1" /> Add Assignment Row
                                     </Button>
