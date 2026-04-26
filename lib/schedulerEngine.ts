@@ -10,6 +10,12 @@ type TimeSlot = {
     end: number;
 };
 
+type Room = {
+    room_id: number;
+    room_name: string;
+    room_type: string;
+};
+
 type GeneratedEntry = {
     subjectId: string;
     teacherId: string;
@@ -71,7 +77,7 @@ export async function generateScheduleData(config: any) {
     const currentSemester = parseInt(semester || "1");
 
     // 1. Fetch All Data
-    const [allSubjects, allTeachers, allPrograms, allRooms, breakPeriods, systemSettings] = await Promise.all([
+    const [allSubjects, allTeachers, allPrograms, allRoomsData, breakPeriods, systemSettings] = await Promise.all([
         fetchAllSubjects(),
         fetchAllTeachers(),
         getAllProgramsData(),
@@ -79,6 +85,8 @@ export async function generateScheduleData(config: any) {
         fetchBreakPeriods(),
         fetchSystemSettings()
     ]);
+    
+    const allRooms: Room[] = allRoomsData;
 
     // 2. Prepare Constraints
     const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
