@@ -1,885 +1,840 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import ExcelJS from "exceljs"
+import React, { useEffect, useState } from "react";
+import {
+    Tooltip, Modal, ModalHeader, ModalBody, ModalFooter, Button,
+    Toast, ToastToggle, Progress, Spinner, Label, Select, TextInput, Card
+} from "flowbite-react";
+import {HiExclamation, HiCheck, HiOutlineExclamationCircle, HiClock, HiPlus, HiOutlineTrash} from "react-icons/hi";
 
-/* ---------- Types ---------- */
-type Section = {
-    program: string
-    section_code: string
-}
+/* ================= TYPES ================= */
 
 type Subject = {
-    program: string
-    subject_code: string
-    subject: string
-    abbreviation: string
-    units: number
-    degree: string[]
-    others: string[]
-    laboratory: string | null
-    year_level: number
-    semester: number
-    isMajor: boolean
-}
+    id: string;
+    name: string;
+    units: number;
+    teacherIds: string[];
+};
 
 type Teacher = {
-    pscs_id: string
-    last_name: string
-    first_name: string
-    middle_name: string
-    abbreviation: string
-    status: string
+    id: string;
+    name: string;
+};
+
+type Room = {
+    id: string;
+    name: string;
+};
+
+type SectionSubject = {
+    subjectId: string;
+    teacherId: string;
+};
+
+type Section = {
+    id: string;
+    name: string;
+    subjects: SectionSubject[];
+};
+
+type Schedule = {
+    id: string;
+    subjectId: string;
+    teacherId: string;
+    roomId: string;
+    sectionId: string;
+    day: string;
+    start: number;
+    end: number;
+};
+
+/* ================= CONSTANTS ================= */
+
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const START_MIN = 7 * 60;
+const END_MIN = 20 * 60;
+const SLOT = 30;
+const SLOT_HEIGHT = 48;
+
+/* generate time slots */
+const TIME_SLOTS: number[] = [];
+for (let t = START_MIN; t < END_MIN; t += SLOT) TIME_SLOTS.push(t);
+
+/* ================= TIME FORMAT ================= */
+
+function formatTime(min: number) {
+    let h = Math.floor(min / 60);
+    const m = min % 60;
+    const ampm = h >= 12 ? "PM" : "AM";
+    h = h % 12;
+    if (h === 0) h = 12;
+    return `${h}:${m.toString().padStart(2, "0")} ${ampm}`;
 }
 
-type Credentials = {
-    pscs_id: string
-    subject_code: string
-    type_of_certification: string
-    fcce_score: string
-    exam_status: string
-    fcc_status: string
-    fcc_remarks: string
-}
-
-type Rooms = {
-    room_code: string
-    room_type: string
-}
-
-type Cell = {
-    subject: string
-    teacher: string
-    program: string
-    section: string
-    room: string
-}
-
-type TeacherLoad = {
-    teacher: Teacher
-    assignedPrograms: Set<string>
-    assignedUnits: number
-    subjects: Subject[]
-}
-
-type Schedule = Record<string, Record<string, Cell | null>>
-
-type FullSchedule = Record<string, Schedule>
-
-/* ---------- Test Data ---------- */
-const sections: Section[] = [
-    { program: "BSBA", section_code: "111" },
-    { program: "BSBA", section_code: "112" },
-
-    { program: "BSIT", section_code: "111" },
-    { program: "BSIT", section_code: "112" },
-
-    { program: "BSTM", section_code: "111" },
-    { program: "BSTM", section_code: "112" },
-
-    { program: "BSHM", section_code: "111" },
-    { program: "BSHM", section_code: "112" },
-]
-
-const subjects: Subject[] = [
-    // --- BSIT 1st year ---
-    {
-        program: "BSIT-22-01",
-        subject_code: "COMP101",
-        subject: "Introduction to Programming",
-        abbreviation: "ITPROG",
-        degree: ["IT"],
-        others: [],
-        laboratory: "Computer Lab",
-        year_level: 1,
-        semester: 1,
-        units: 3,
-        isMajor: true
-    },
-    {
-        program: "BSIT-22-01",
-        subject_code: "COMP102",
-        subject: "Computer Fundamentals",
-        abbreviation: "COMP",
-        degree: ["IT"],
-        others: [],
-        laboratory: null,
-        year_level: 1,
-        semester: 1,
-        units: 3,
-        isMajor: true
-    },
-
-    // --- BSBA 1st year ---
-    {
-        program: "BSBA-22-01",
-        subject_code: "BUS101",
-        subject: "Principles of Management",
-        abbreviation: "PRINMAN",
-        degree: ["BM"],
-        others: [],
-        laboratory: null,
-        year_level: 1,
-        semester: 1,
-        units: 3,
-        isMajor: true
-    },
-    {
-        program: "BSBA-22-01",
-        subject_code: "BUS102",
-        subject: "Business Communication",
-        abbreviation: "BUSCOM",
-        degree: ["BM"],
-        others: [],
-        laboratory: null,
-        year_level: 1,
-        semester: 1,
-        units: 3,
-        isMajor: true
-    },
-
-    // --- BSTM 1st year ---
-    {
-        program: "BSTM-22-01",
-        subject_code: "TOUR101",
-        subject: "Introduction to Tourism",
-        abbreviation: "INTROTOUR",
-        degree: ["TM"],
-        others: [],
-        laboratory: null,
-        year_level: 1,
-        semester: 1,
-        units: 3,
-        isMajor: true
-    },
-    {
-        program: "BSTM-22-01",
-        subject_code: "TOUR102",
-        subject: "Tourism Geography",
-        abbreviation: "TOURGEO",
-        degree: ["TM"],
-        others: [],
-        laboratory: null,
-        year_level: 1,
-        semester: 1,
-        units: 3,
-        isMajor: true
-    },
-
-    // --- BSHM 1st year ---
-    {
-        program: "BSHM-22-01",
-        subject_code: "HOT101",
-        subject: "Hospitality Management",
-        abbreviation: "HOSP",
-        degree: ["HM"],
-        others: [],
-        laboratory: null,
-        year_level: 1,
-        semester: 1,
-        units: 3,
-        isMajor: true
-    },
-    {
-        program: "BSHM-22-01",
-        subject_code: "HOT102",
-        subject: "Front Office Operations",
-        abbreviation: "FOO",
-        degree: ["HM"],
-        others: [],
-        laboratory: null,
-        year_level: 1,
-        semester: 1,
-        units: 3,
-        isMajor: true
-    },
-
-    // --- General Education (GE) ---
-    {
-        program: "GE",
-        subject_code: "GE101",
-        subject: "English Communication",
-        abbreviation: "ENGCOM",
-        degree: ["GE"],
-        others: [],
-        laboratory: null,
-        year_level: 1,
-        semester: 1,
-        units: 2,
-        isMajor: false
-    },
-    {
-        program: "GE",
-        subject_code: "GE102",
-        subject: "Physical Education",
-        abbreviation: "PE",
-        degree: ["GE"],
-        others: [],
-        laboratory: null,
-        year_level: 1,
-        semester: 1,
-        units: 2,
-        isMajor: false
-    }
-]
-
-const teachers: Teacher[] = [
-    {
-        pscs_id: "1",
-        last_name: "CRUZ",
-        first_name: "ALICE",
-        middle_name: "",
-        abbreviation: "ACS",
-        status: "FT"
-    },
-    {
-        pscs_id: "2",
-        last_name: "REYES",
-        first_name: "JUAN",
-        middle_name: "",
-        abbreviation: "JRS",
-        status: "FT"
-    },
-    {
-        pscs_id: "3",
-        last_name: "MENDOZA",
-        first_name: "CARLA",
-        middle_name: "",
-        abbreviation: "CMZ",
-        status: "PT"
-    },
-    {
-        pscs_id: "4",
-        last_name: "GOMEZ",
-        first_name: "MARK",
-        middle_name: "",
-        abbreviation: "MGZ",
-        status: "FT"
-    },
-    {
-        pscs_id: "5",
-        last_name: "SALVADOR",
-        first_name: "LIZA",
-        middle_name: "",
-        abbreviation: "LSV",
-        status: "FT"
-    },
-    {
-        pscs_id: "6",
-        last_name: "TORRES",
-        first_name: "DANIEL",
-        middle_name: "",
-        abbreviation: "DTR",
-        status: "PT"
-    }
-];
-
-const credentials: Credentials[] = [
-    // BSIT subjects
-    { pscs_id: "1", subject_code: "COMP101", type_of_certification: "Certified Teacher", fcce_score: "95", exam_status: "Passed", fcc_status: "Certified", fcc_remarks: "" },
-    { pscs_id: "1", subject_code: "COMP102", type_of_certification: "Certified Teacher", fcce_score: "92", exam_status: "Passed", fcc_status: "Certified", fcc_remarks: "" },
-
-    // BSBA subjects
-    { pscs_id: "2", subject_code: "BUS101", type_of_certification: "Certified Teacher", fcce_score: "88", exam_status: "Passed", fcc_status: "Certified", fcc_remarks: "" },
-    { pscs_id: "2", subject_code: "BUS102", type_of_certification: "Certified Teacher", fcce_score: "90", exam_status: "Passed", fcc_status: "Certified", fcc_remarks: "" },
-
-    // BSTM subjects
-    { pscs_id: "3", subject_code: "TOUR101", type_of_certification: "Provisional", fcce_score: "75", exam_status: "Passed", fcc_status: "Provisional", fcc_remarks: "Under probation" },
-    { pscs_id: "3", subject_code: "TOUR102", type_of_certification: "Certified Teacher", fcce_score: "80", exam_status: "Passed", fcc_status: "Certified", fcc_remarks: "" },
-
-    // BSHM subjects
-    { pscs_id: "4", subject_code: "HOT101", type_of_certification: "Certified Teacher", fcce_score: "92", exam_status: "Passed", fcc_status: "Certified", fcc_remarks: "" },
-    { pscs_id: "4", subject_code: "HOT102", type_of_certification: "Certified Teacher", fcce_score: "89", exam_status: "Passed", fcc_status: "Certified", fcc_remarks: "" },
-
-    // GE subjects
-    { pscs_id: "5", subject_code: "GE101", type_of_certification: "Certified Teacher", fcce_score: "85", exam_status: "Passed", fcc_status: "Certified", fcc_remarks: "" },
-    { pscs_id: "6", subject_code: "GE102", type_of_certification: "Certified Teacher", fcce_score: "80", exam_status: "Passed", fcc_status: "Certified", fcc_remarks: "" }
-];
-
-const rooms: Rooms[] = [
-    { room_code: "101", room_type: "Lecture Hall" },
-    { room_code: "102", room_type: "Lecture Hall" },
-    { room_code: "103", room_type: "Lecture Hall" },
-    { room_code: "104", room_type: "Lecture Hall" },
-
-    // Computer Labs for IT subjects
-    { room_code: "ComLab1", room_type: "Computer Lab" },
-    { room_code: "ComLab2", room_type: "Computer Lab" },
-
-    // Kitchen Labs for Hospitality subjects
-    { room_code: "KitchenLab1", room_type: "Kitchen Lab" },
-    { room_code: "KitchenLab2", room_type: "Kitchen Lab" }
-]
-
-/* ---------- Constants ---------- */
-const max_load = 24
-const preferred_length = 3
-const preferred_lab = 4
-const maxPrep = 4
-
-const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-
-/* ---------- Time Blocks ---------- */
-const timeBlocks: string[] = []
-
-let hour = 7
-let minute = 30
-
-while (true) {
-
-    const label = `${hour}:${minute.toString().padStart(2, "0")}`
-    timeBlocks.push(label)
-
-    minute += 30
-
-    if (minute === 60) {
-        minute = 0
-        hour++
-    }
-
-    if (hour === 19 && minute === 30) break
-}
-
-/* ---------- Helpers ---------- */
-function shuffleArray<T>(array: T[]): T[] {
-
-    const arr = [...array]
-
-    for (let i = arr.length - 1; i > 0; i--) {
-
-        const j = Math.floor(Math.random() * (i + 1))
-        ;[arr[i], arr[j]] = [arr[j], arr[i]]
-
-    }
-
-    return arr
-}
-
-function getProgram(program: string) {
-    return program.split("-")[0]
-}
-
-function createSchedule(): Schedule {
-
-    const sched: Schedule = {}
-
-    for (const d of days) {
-
-        sched[d] = {}
-
-        for (const t of timeBlocks)
-            sched[d][t] = null
-
-    }
-
-    return sched
-}
-
-/* ---------- Teacher Assignment ---------- */
-function getEligibleTeachers(subj: Subject, teachers: Teacher[], credentials: Credentials[]): Teacher[] {
-    return teachers.filter(teacher =>
-        credentials.some(cred =>
-            cred.pscs_id === teacher.pscs_id &&
-            cred.subject_code === subj.subject_code
-        )
-    );
-}
-
-function assignTeacherSubjects(
-    subjects: Subject[],
-    teachers: Teacher[],
-    credentials: Credentials[],
-    maxPrep: number,
-    max_load: number
-): TeacherLoad[] {
-    const teacherLoads: TeacherLoad[] = teachers.map(t => ({
-        teacher: t,
-        assignedPrograms: new Set(),
-        assignedUnits: 0,
-        subjects: []
-    }));
-
-    for (const subj of subjects) {
-        const eligibleTeachers = getEligibleTeachers(subj, teachers, credentials);
-
-        if (eligibleTeachers.length === 0) {
-            console.warn(`No eligible teacher found for subject ${subj.abbreviation}`);
-            continue;
-        }
-
-        // Shuffle to randomize selection
-        const shuffled = shuffleArray(eligibleTeachers);
-
-        for (const t of shuffled) {
-            const load = teacherLoads.find(l => l.teacher.pscs_id === t.pscs_id)!;
-
-            const programId = getProgram(subj.program);
-
-            // Check maxPrep & max_load
-            if (!load.assignedPrograms.has(programId) && load.assignedPrograms.size >= maxPrep) continue;
-            if (load.assignedUnits + subj.units > max_load) continue;
-
-            // Assign
-            load.subjects.push(subj);
-            load.assignedUnits += subj.units;
-            load.assignedPrograms.add(programId);
-            break;
-        }
-    }
-
-    return teacherLoads;
-}
-
-/* ---------- Scheduler ---------- */
-function generateScheduleWithAssignments(semester: number): FullSchedule {
-    const full: FullSchedule = {};
-
-    // Step 1: Assign subjects to teachers
-    const teacherLoads = assignTeacherSubjects(
-        subjects.filter(s => s.semester === semester),
-        teachers,
-        credentials,
-        maxPrep,
-        max_load
-    );
-
-    // Step 2: Create schedule for each section
-    for (const sec of sections) {
-        const sectionKey = `${sec.program}${sec.section_code}`;
-        full[sectionKey] = createSchedule();
-    }
-
-    // Helper: pick a random room of a given type
-    const getRandomRoom = (roomType: string) => {
-        const available = rooms.filter(r => r.room_type === roomType);
-        return available[Math.floor(Math.random() * available.length)].room_code;
-    };
-
-    // Step 3: Place subjects according to teacher assignments
-    for (const load of teacherLoads) {
-        for (const subj of load.subjects) {
-            const year = subj.year_level;
-
-            const sameYearSections = subj.degree.includes("GE")
-                ? sections.filter(s => parseInt(s.section_code[0]) === year)
-                : sections.filter(
-                    s => getProgram(s.program) === getProgram(subj.program) && parseInt(s.section_code[0]) === year
-                );
-
-            const totalBlocks = subj.laboratory ? preferred_lab : preferred_length;
-            const lecBlocks = Math.ceil(preferred_length); // simple mapping
-            const labBlocks = subj.laboratory ? totalBlocks - lecBlocks : 0;
-
-            const shuffledDays = shuffleArray(days);
-
-            // Track occupied blocks for this teacher
-            const teacherOccupied: Record<string, boolean[]> = {};
-            for (const day of days) teacherOccupied[day] = Array(timeBlocks.length).fill(false);
-
-            for (const sec of sameYearSections) {
-                const sectionKey = `${sec.program}${sec.section_code}`;
-                const sched = full[sectionKey];
-                let placed = false;
-
-                for (const day of shuffledDays) {
-                    if (placed) break;
-
-                    const indexes = shuffleArray([...Array(timeBlocks.length - totalBlocks + 1).keys()]);
-
-                    for (const i of indexes) {
-                        // Check teacher availability
-                        let free = true;
-                        for (let b = 0; b < totalBlocks; b++) {
-                            if (teacherOccupied[day][i + b]) {
-                                free = false;
-                                break;
-                            }
-                        }
-                        if (!free) continue;
-
-                        // Assign lecture first
-                        const lectureRoom = getRandomRoom("Lecture Hall");
-                        for (let b = 0; b < lecBlocks; b++) {
-                            const tIndex = i + b;
-                            const t = timeBlocks[tIndex];
-                            sched[day][t] = {
-                                subject: subj.abbreviation,
-                                teacher: load.teacher.abbreviation,
-                                section: sec.section_code,
-                                program: sec.program,
-                                room: lectureRoom
-                            };
-                            teacherOccupied[day][tIndex] = true;
-                        }
-
-                        // Assign lab blocks if any
-                        if (labBlocks > 0 && subj.laboratory) {
-                            const labRoom = getRandomRoom(subj.laboratory);
-                            for (let b = 0; b < labBlocks; b++) {
-                                const tIndex = i + lecBlocks + b;
-                                const t = timeBlocks[tIndex];
-                                sched[day][t] = {
-                                    subject: subj.abbreviation,
-                                    teacher: load.teacher.abbreviation,
-                                    section: sec.section_code,
-                                    program: sec.program,
-                                    room: labRoom
-                                };
-                                teacherOccupied[day][tIndex] = true;
-                            }
-                        }
-
-                        placed = true;
-                        break;
-                    }
-                }
-
-                if (!placed) {
-                    console.warn(`Could not place ${subj.abbreviation} for section ${sec.section_code}`);
-                }
-            }
-        }
-    }
-
-    return full;
-}
-
-/* ---------- Excel Export ---------- */
-
-async function exportExcel(schedule: FullSchedule) {
-    const wb = new ExcelJS.Workbook();
-
-    /* ---------- Group courses by program ---------- */
-    const programs: Record<string, string[]> = {};
-
-    for (const section in schedule) {
-        const program = section.slice(0, 4); // BSIT, BSBA, etc
-
-        if (!programs[program]) programs[program] = [];
-        programs[program].push(section);
-    }
-
-    /* ---------- Create one sheet per program ---------- */
-    for (const program in programs) {
-
-        const ws = wb.addWorksheet(program);
-        const sections = programs[program];
-
-        let tableOffset = 1;
-
-        for (let s = 0; s < sections.length; s++) {
-
-            const section = sections[s];
-            const sched = schedule[section];
-
-            const baseCol = tableOffset;
-
-            /* ---------- Column Setup ---------- */
-
-            ws.getColumn(baseCol).width = 2; // left spacer
-            ws.getColumn(baseCol + 1).width = 10; // time column
-
-            let colIndex = baseCol + 2;
-
-            for (let i = 0; i < days.length; i++) {
-                ws.getColumn(colIndex).width = 16;
-                colIndex++;
-
-                if (i < days.length - 1) {
-                    ws.getColumn(colIndex).width = 2;
-                    colIndex++;
-                }
-            }
-
-            ws.getColumn(colIndex).width = 2; // right spacer
-
-            /* ---------- Header ---------- */
-
-            ws.mergeCells(1, baseCol + 1, 1, colIndex);
-            ws.getCell(1, baseCol + 1).value = "CLASS SCHEDULE";
-            ws.getCell(1, baseCol + 1).alignment = { horizontal: "center", vertical: "middle" };
-
-            ws.mergeCells(2, baseCol + 1, 2, colIndex);
-            ws.getCell(2, baseCol + 1).value = "MODIFIED SCHEDULE      TERTIARY";
-            ws.getCell(2, baseCol + 1).alignment = { horizontal: "center", vertical: "middle" };
-
-            ws.mergeCells(4, baseCol + 1, 6, baseCol + 1);
-            ws.getCell(4, baseCol + 1).value = "SY\nPROGRAM\nSECTION";
-            ws.getCell(4, baseCol + 1).alignment = {
-                horizontal: "right",
-                vertical: "middle",
-                wrapText: true
-            };
-
-            ws.getCell(4, baseCol + 2).value = "2025-2026";
-            ws.getCell(5, baseCol + 2).value = section.slice(0, 4);
-            ws.getCell(6, baseCol + 2).value = section.slice(4);
-
-            for (let i = 4; i < 7; i++) {
-                ws.getCell(i, baseCol + 2).alignment = { horizontal: "right" };
-            }
-
-            /* ---------- Day Headers ---------- */
-
-            const dayRow = 7;
-            ws.getRow(dayRow).height = 25.5;
-
-            for (let i = 0; i < days.length; i++) {
-                const col = baseCol + 2 + i * 2;
-                ws.getCell(dayRow, col).value = days[i].toUpperCase();
-                ws.getCell(dayRow, col).alignment = { horizontal: "center", vertical: "middle" };
-            }
-
-            /* ---------- Schedule Blocks ---------- */
-
-            const excelRow = dayRow + 1;
-
-            for (let dayIdx = 0; dayIdx < days.length; dayIdx++) {
-
-                const day = days[dayIdx];
-                const col = baseCol + 2 + dayIdx * 2;
-
-                let rowIdx = 0;
-
-                while (rowIdx < timeBlocks.length) {
-
-                    const t = timeBlocks[rowIdx];
-                    const cell = sched[day][t];
-
-                    if (!cell) {
-                        rowIdx++;
-                        continue;
-                    }
-
-                    let span = 1;
-
-                    for (let j = rowIdx + 1; j < timeBlocks.length; j++) {
-
-                        const nextT = timeBlocks[j];
-                        const nextCell = sched[day][nextT];
-
-                        if (
-                            nextCell &&
-                            nextCell.subject === cell.subject &&
-                            nextCell.teacher === cell.teacher &&
-                            nextCell.section === cell.section
-                        ) {
-                            span++;
-                        } else break;
-                    }
-
-                    const startRow = excelRow + rowIdx;
-                    const endRow = startRow + span - 1;
-
-                    ws.mergeCells(startRow, col, endRow, col);
-
-                    ws.getCell(startRow, col).value =
-                        `${cell.subject}/${cell.teacher}\n${cell.program}${cell.section}\n${cell.room}`;
-
-                    ws.getCell(startRow, col).alignment = {
-                        horizontal: "center",
-                        vertical: "middle",
-                        wrapText: true
-                    };
-
-                    rowIdx += span;
-                }
-            }
-
-            /* ---------- Time Column ---------- */
-
-            for (let i = 0; i < timeBlocks.length; i++) {
-
-                const t = timeBlocks[i];
-                let [hour, min] = t.split(":").map(Number);
-
-                let endHour = hour;
-                let endMin = min + 30;
-
-                if (endMin === 60) {
-                    endHour += 1;
-                    endMin = 0;
-                }
-
-                const format12 = (h: number, m: number) =>
-                    `${h % 12 === 0 ? 12 : h % 12}:${m.toString().padStart(2, "0")}`;
-
-                ws.getRow(excelRow + i)
-                    .getCell(baseCol + 1)
-                    .value = `${format12(hour, min)}-${format12(endHour, endMin)}`;
-            }
-
-            /* ---------- Move next table ---------- */
-
-            tableOffset = colIndex + 2; // spacer column (width 16)
-
-            ws.getColumn(colIndex + 1).width = 16;
-        }
-    }
-
-    const buffer = await wb.xlsx.writeBuffer();
-
-    const blob = new Blob([buffer]);
-    const url = window.URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "schedule.xlsx";
-    a.click();
-
-    window.URL.revokeObjectURL(url);
-}
-
-/* ---------- Page ---------- */
+/* ================= PAGE ================= */
 
 export default function Page() {
 
-    const [semester, setSemester] = useState(1)
-    const [schedule, setSchedule] = useState<FullSchedule | null>(null)
+    /* ================= STATE ================= */
 
-    function runGeneration() {
+    const [mainTab, setMainTab] = useState<
+        "subjects" | "teachers" | "grade-sections" | "rooms" | "schedules"
+    >("subjects");
 
-        const result = generateScheduleWithAssignments(semester)
+    const [scheduleSubTab, setScheduleSubTab] = 
+        useState<"sections" | "rooms" | "teachers">("sections")
 
-        setSchedule(result)
+    const [subjects, setSubjects] = useState<Subject[]>([]);
+    const [teachers, setTeachers] = useState<Teacher[]>([]);
+    const [rooms, setRooms] = useState<Room[]>([]);
+    const [sections, setSections] = useState<Section[]>([]);
+    const [schedules, setSchedules] = useState<Schedule[]>([]);
+    const [selectedTeacher, setSelectedTeacher] = useState<string>();
+
+    const [selectedRoom, setSelectedRoom] = useState<string>();
+    const [selectedSection, setSelectedSection] = useState<string>();
+
+    const [newSubject, setNewSubject] = useState("");
+    const [newUnits, setNewUnits] = useState(3);
+    const [newTeacher, setNewTeacher] = useState("");
+    const [newSection, setNewSection] = useState("");
+
+    const [resizingId, setResizingId] = useState<string | null>(null);
+
+    const [floorCount, setFloorCount] = useState(1);
+    const [roomsPerFloor, setRoomsPerFloor] = useState(1);
+
+    // UI States for Flowbite Modals/Toasts
+    const [conflictInfo, setConflictInfo] = useState<{ message: string, details: string } | null>(null);
+    const [moveConfirmInfo, setMoveConfirmInfo] = useState<{ old: Schedule, updated: Schedule } | null>(null);
+    const [showToast, setShowToast] = useState(false);
+    const [toastMessage, setToastMessage] = useState("");
+    const [progress, setProgress] = useState(100);
+
+    /* ================= HELPERS ================= */
+
+    const getSubject = (id: string) =>
+        subjects.find((s) => s.id === id)!;
+
+    const getTeacher = (id: string) =>
+        teachers.find((t) => t.id === id)!;
+
+    const teacherUnits = (teacherId: string) =>
+        subjects
+            .filter((s) => s.teacherIds.includes(teacherId))
+            .reduce((sum, s) => sum + s.units, 0);
+
+    const triggerNotification = (msg: string) => {
+        setToastMessage(msg);
+        setShowToast(true);
+        setProgress(100);
+    };
+
+    useEffect(() => {
+        if (showToast) {
+            const interval = setInterval(() => setProgress(p => Math.max(0, p - 2)), 50);
+            const timer = setTimeout(() => setShowToast(false), 2500);
+            return () => { clearInterval(interval); clearTimeout(timer); };
+        }
+    }, [showToast]);
+
+    /* ================= CONFLICT CHECK ================= */
+
+    const checkConflict = (candidate: Schedule, showAlert = true): boolean =>
+    {
+        for (const s of schedules)
+        {
+            if (s.id === candidate.id) continue;
+
+            const overlap =
+                s.day === candidate.day &&
+                !(candidate.end <= s.start ||
+                    candidate.start >= s.end);
+
+            if (!overlap) continue;
+
+            let type: "room" | "teacher" | "section" | null = null;
+
+            if (s.roomId === candidate.roomId)
+                type = "room";
+
+            else if (s.teacherId === candidate.teacherId)
+                type = "teacher";
+
+            else if (s.sectionId === candidate.sectionId)
+                type = "section";
+
+            if (!type) continue;
+
+            if (showAlert)
+            {
+                const subject = getSubject(s.subjectId);
+                const teacher = getTeacher(s.teacherId);
+                const room = rooms.find(r => r.id === s.roomId);
+                const section = sections.find(sec => sec.id === s.sectionId);
+
+                let message = "";
+                let footerDetails = "";
+
+                if (type === "teacher")
+                {
+                    message = `Teacher ${teacher.name} already has a schedule`;
+                    footerDetails = `Room: ${room?.name} • Section: ${section?.name}`;
+                }
+                else if (type === "room")
+                {
+                    message = `Room ${room?.name} is already occupied`;
+                    footerDetails = `Section: ${section?.name} • Teacher: ${teacher.name}`;
+                }
+                else if (type === "section")
+                {
+                    message = `Section ${section?.name} already has a schedule`;
+                    footerDetails = `Teacher: ${teacher.name} • Room: ${room?.name}`;
+                }
+
+                setConflictInfo({
+                    message,
+                    details: `${subject.name} (${formatTime(s.start)} - ${formatTime(s.end)}) | ${footerDetails}`
+                });
+            }
+            return true;
+        }
+        return false;
+    };
+
+    /* ================= DRAG ================= */
+
+    const dragSubjectTeacher =
+        (subjectId: string, teacherId: string) =>
+            (e: React.DragEvent<HTMLDivElement>) => {
+                e.dataTransfer.setData(
+                    "text",
+                    JSON.stringify({
+                        type: "new",
+                        subjectId,
+                        teacherId,
+                    })
+                );
+            };
+
+    const dragSchedule =
+        (scheduleId: string) =>
+            (e: React.DragEvent<HTMLDivElement>) => {
+                e.dataTransfer.setData(
+                    "text",
+                    JSON.stringify({
+                        type: "move",
+                        scheduleId,
+                    })
+                );
+            };
+
+    /* ================= DROP ================= */
+
+    const dropSchedule =
+        (day: string, startMin: number) =>
+            (e: React.DragEvent<HTMLDivElement>) => {
+                e.preventDefault();
+                const data = JSON.parse(e.dataTransfer.getData("text"));
+
+                /* MOVE EXISTING */
+                if (data.type === "move") {
+                    const old = schedules.find(s => s.id === data.scheduleId);
+                    if (!old) return;
+
+                    const duration = old.end - old.start;
+
+                    const updated: Schedule = {
+                        ...old,
+                        day,
+                        start: startMin,
+                        end: startMin + duration,
+                        roomId: scheduleSubTab === "sections" ? selectedRoom ?? old.roomId : old.roomId,
+                        sectionId: scheduleSubTab === "sections" ? selectedSection ?? old.sectionId : old.sectionId,
+                        teacherId: old.teacherId
+                    };
+
+                    const isOtherRoomForSection =
+                        scheduleSubTab === "sections" &&
+                        old.sectionId === selectedSection &&
+                        old.roomId !== selectedRoom;
+
+                    if (isOtherRoomForSection) {
+                        setMoveConfirmInfo({ old, updated });
+                        return;
+                    }
+
+                    if (checkConflict(updated)) return;
+
+                    setSchedules(prev => prev.map(s => (s.id === old.id ? updated : s)));
+                    triggerNotification("Moved successfully");
+                }
+
+                /* CREATE NEW */
+                if (data.type === "new")
+                {
+                    if (scheduleSubTab === "teachers") {
+                        setConflictInfo({ message: "Action Restricted", details: "Please create schedules in Section or Room view mode." });
+                        return;
+                    }
+
+                    const subject = getSubject(data.subjectId);
+                    const roomId = selectedRoom;
+                    const sectionId = selectedSection;
+
+                    if (!roomId || !sectionId) {
+                        setConflictInfo({ message: "Incomplete Selection", details: "Please select both a room and a section first." });
+                        return;
+                    }
+
+                    const newSchedule: Schedule = {
+                        id: crypto.randomUUID(),
+                        subjectId: subject.id,
+                        teacherId: data.teacherId,
+                        day,
+                        start: startMin,
+                        end: startMin + SLOT * 2,
+                        roomId,
+                        sectionId,
+                    };
+
+                    if (checkConflict(newSchedule)) return;
+
+                    setSchedules(prev => [...prev, newSchedule]);
+                    triggerNotification("Added successfully");
+                }
+            };
+
+    const confirmMove = () => {
+        if (!moveConfirmInfo) return;
+        const { old, updated } = moveConfirmInfo;
+
+        if (checkConflict(updated)) {
+            setMoveConfirmInfo(null);
+            return;
+        }
+
+        setSchedules(prev => prev.map(s => (s.id === old.id ? updated : s)));
+        setMoveConfirmInfo(null);
+        triggerNotification("Moved successfully");
+    };
+
+
+    /* ================= RESIZE ================= */
+
+    const handleResizeMouseDown = (
+        e: React.MouseEvent,
+        schedule: Schedule
+    )=> {
+        e.stopPropagation();
+        setResizingId(schedule.id);
+
+        const startY = e.clientY;
+        const startEnd = schedule.end;
+
+        const onMove = (moveEvent: MouseEvent) => {
+            const delta = moveEvent.clientY - startY;
+            const slots = Math.round(delta / SLOT_HEIGHT);
+            const newEnd = startEnd + slots * SLOT;
+
+            if (newEnd <= schedule.start + SLOT) return;
+
+            const updated = { ...schedule, end: newEnd };
+
+            if (checkConflict(updated, false)) return;
+
+            setSchedules(prev =>
+                prev.map(s => s.id === schedule.id ? updated : s)
+            );
+        };
+
+        const onUp = () => {
+            setResizingId(null);
+            window.removeEventListener("mousemove", onMove);
+            window.removeEventListener("mouseup", onUp);
+        };
+
+        window.addEventListener("mousemove", onMove);
+        window.addEventListener("mouseup", onUp);
     }
 
-    return (
-        <div style={{ padding: 40 }}>
+    /* ================= TIMETABLE ================= */
 
-            <h1>Scheduler</h1>
+    const renderTimetable = () => {
 
-            <div style={{ marginBottom: 20 }}>
+        const filterValue =
+            scheduleSubTab === "rooms"
+                ? selectedRoom
+                : selectedSection;
 
-                <select
-                    value={semester}
-                    onChange={(e) => setSemester(Number(e.target.value))}
-                >
+        if (!filterValue)
+            return <div className="text-center p-12 bg-gray-50 dark:bg-gray-800 rounded-lg italic text-gray-500">Select an item to view timetable</div>;
 
-                    <option value={1}>Semester 1</option>
-                    <option value={2}>Semester 2</option>
+        const totalHeight =
+            TIME_SLOTS.length * SLOT_HEIGHT;
 
-                </select>
+        return (
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-900 shadow-sm">
+                {/* HEADER */}
+                <div className="grid grid-cols-[80px_repeat(6,1fr)] bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                    <div className="border-r border-gray-200 dark:border-gray-700" />
+                    {DAYS.map(day => (
+                        <div key={day} className="py-3 text-center font-bold text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 last:border-r-0">
+                            {day}
+                        </div>
+                    ))}
+                </div>
 
-                <button
-                    onClick={runGeneration}
-                    style={{ marginLeft: 10 }}
-                >
-                    Generate Schedule
-                </button>
+                {/* BODY */}
+                <div className="grid grid-cols-[80px_repeat(6,1fr)] max-h-[600px] overflow-y-auto relative">
+                    {/* TIME COLUMN */}
+                    <div className="bg-gray-50 dark:bg-gray-800 sticky left-0 z-20 border-r border-gray-200 dark:border-gray-700">
+                        {TIME_SLOTS.map(t => (
+                            <div key={t} style={{ height: SLOT_HEIGHT }} className="flex items-center justify-center text-[10px] font-medium text-gray-500 border-b border-gray-200 dark:border-gray-700 px-1">
+                                {formatTime(t)}
+                            </div>
+                        ))}
+                    </div>
 
-                {schedule && (
-                    <button
-                        onClick={() => exportExcel(schedule)}
-                        style={{ marginLeft: 10 }}
-                    >
-                        Export Excel
-                    </button>
-                )}
+                    {/* DAY COLUMNS */}
+                    {DAYS.map(day => {
+                        const daySchedules = schedules.filter(s => s.day === day);
+                        return (
+                            <div
+                                key={day}
+                                className="relative border-r border-gray-200 dark:border-gray-700 last:border-r-0"
+                                style={{ height: totalHeight }}
+                                onDragOver={e => e.preventDefault()}
+                                onDrop={e => {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const y = e.clientY - rect.top;
+                                    const slotIndex = Math.floor(y / SLOT_HEIGHT);
+                                    const start = START_MIN + slotIndex * SLOT;
+                                    dropSchedule(day, start)(e);
+                                }}
+                            >
+                                {/* GRID LINES */}
+                                {TIME_SLOTS.map((_, i) => (
+                                    <div key={i} className="absolute left-0 right-0 border-t border-gray-100 dark:border-gray-800" style={{ top: i * SLOT_HEIGHT }} />
+                                ))}
 
-            </div>
+                                {/* BLOCKS */}
+                                {scheduleSubTab === "sections" &&
+                                    daySchedules
+                                        .filter(schedule =>
+                                            schedule.sectionId === selectedSection ||
+                                            schedule.roomId === selectedRoom
+                                        )
+                                        .map(schedule => {
+                                            const isActive = schedule.sectionId === selectedSection;
+                                            const isOtherRoomForSection = schedule.sectionId === selectedSection && schedule.roomId !== selectedRoom;
+                                            const top = ((schedule.start - START_MIN) / SLOT) * SLOT_HEIGHT;
+                                            const height = ((schedule.end - schedule.start) / SLOT) * SLOT_HEIGHT;
+                                            const subject = getSubject(schedule.subjectId);
+                                            const teacher = getTeacher(schedule.teacherId);
+                                            const room = rooms.find(r => r.id === schedule.roomId);
 
-            {schedule && Object.entries(schedule).map(([section, sched]) => (
+                                            return (
+                                                <div
+                                                    key={schedule.id}
+                                                    draggable={isActive && resizingId !== schedule.id}
+                                                    onDragStart={isActive ? dragSchedule(schedule.id) : undefined}
+                                                    className={`absolute left-1 right-1 text-[10px] rounded p-1 shadow-md select-none transition-transform active:scale-95 ${
+                                                        !isActive ? "bg-gray-400 text-gray-100 opacity-40 cursor-not-allowed z-0" :
+                                                        isOtherRoomForSection ? "bg-violet-500 text-white cursor-move z-10" :
+                                                        "bg-blue-600 hover:bg-blue-700 text-white cursor-move z-10"
+                                                    }`}
+                                                    style={{ top, height }}
+                                                >
+                                                    <button onClick={() => setSchedules(prev => prev.filter(s => s.id !== schedule.id))} className={`absolute top-1 right-1 bg-red-600 text-white size-4 rounded-full flex items-center justify-center hover:bg-red-700 ${!isActive ? "hidden" : ""}`}>×</button>
+                                                    <div className="font-bold truncate pr-4">{subject.name}</div>
+                                                    <div className="opacity-90">{room?.name} | {teacher.name}</div>
+                                                    <div className="opacity-75">{formatTime(schedule.start)} - {formatTime(schedule.end)}</div>
+                                                    {isActive && !isOtherRoomForSection && (
+                                                        <div onMouseDown={(e) => handleResizeMouseDown(e, schedule)} className="absolute bottom-0 left-0 right-0 h-1.5 bg-blue-800/50 hover:bg-blue-400 cursor-ns-resize rounded-b" />
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
 
-                <div key={section} style={{ marginBottom: 50 }}>
+                                {/* TEACHER VIEW */}
+                                {scheduleSubTab === "teachers" &&
+                                    daySchedules
+                                        .filter(schedule => schedule.teacherId === selectedTeacher)
+                                        .map(schedule => {
+                                            const top = ((schedule.start - START_MIN) / SLOT) * SLOT_HEIGHT;
+                                            const height = ((schedule.end - schedule.start) / SLOT) * SLOT_HEIGHT;
+                                            const subject = getSubject(schedule.subjectId);
+                                            const room = rooms.find(r => r.id === schedule.roomId);
+                                            const section = sections.find(s => s.id === schedule.sectionId);
 
-                    <h2>{section}</h2>
+                                            return (
+                                                <div
+                                                    key={schedule.id}
+                                                    draggable={resizingId !== schedule.id}
+                                                    onDragStart={dragSchedule(schedule.id)}
+                                                    className="absolute left-1 right-1 bg-green-600 hover:bg-green-700 text-white text-[10px] rounded p-1 shadow-md cursor-move z-10"
+                                                    style={{ top, height }}
+                                                >
+                                                    <button onClick={() => setSchedules(prev => prev.filter(s => s.id !== schedule.id))} className="absolute top-1 right-1 bg-red-600 text-white size-4 rounded-full flex items-center justify-center hover:bg-red-700">×</button>
+                                                    <div className="font-bold truncate pr-4">{subject.name}</div>
+                                                    <div className="opacity-90">Room: {room?.name} | {section?.name}</div>
+                                                    <div className="opacity-75">{formatTime(schedule.start)} - {formatTime(schedule.end)}</div>
+                                                    <div onMouseDown={(e) => handleResizeMouseDown(e, schedule)} className="absolute bottom-0 left-0 right-0 h-1.5 bg-green-800/50 hover:bg-green-400 cursor-ns-resize rounded-b" />
+                                                </div>
+                                            );
+                                        })}
 
-                    <table border={1} cellPadding={6} style={{ borderCollapse: "collapse" }}>
-
-                        <thead>
-                        <tr>
-                            <th>Time</th>
-                            {days.map(d => <th key={d}>{d}</th>)}
-                        </tr>
-                        </thead>
-
-                        <tbody>
-
-                        {timeBlocks.map((t, rowIndex) => {
-                            // Split start time
-                            let [hour, min] = t.split(":").map(Number);
-
-                            // Calculate end time
-                            let endHour = hour;
-                            let endMin = min + 30;
-                            if (endMin === 60) {
-                                endHour += 1;
-                                endMin = 0;
-                            }
-
-                            // Convert to 12-hour format
-                            const format12 = (h: number, m: number) => {
-                                const hh = h % 12 === 0 ? 12 : h % 12;
-                                return `${hh}:${m.toString().padStart(2, "0")}`;
-                            };
-
-                            const timeLabel = `${format12(hour, min)} - ${format12(endHour, endMin)}`;
-
-                            return (
-                                <tr key={t} className="h-12">
-                                    <td className="border border-gray-400 text-xs text-center w-24">
-                                        {timeLabel}
-                                    </td>
-
-                                    {days.map(day => {
-                                        const cell = sched[day][t];
-                                        if (!cell) return <td key={day} className="border border-gray-300 w-24"></td>;
-
-                                        // Handle rowspan same as before...
-                                        if (rowIndex > 0) {
-                                            const prevTime = timeBlocks[rowIndex - 1];
-                                            const prevCell = sched[day][prevTime];
-                                            if (prevCell &&
-                                                prevCell.subject === cell.subject &&
-                                                prevCell.section === cell.section &&
-                                                prevCell.teacher === cell.teacher
-                                            ) return null;
-                                        }
-
-                                        let span = 1;
-                                        for (let i = rowIndex + 1; i < timeBlocks.length; i++) {
-                                            const nextTime = timeBlocks[i];
-                                            const nextCell = sched[day][nextTime];
-                                            if (nextCell &&
-                                                nextCell.subject === cell.subject &&
-                                                nextCell.section === cell.section &&
-                                                nextCell.teacher === cell.teacher
-                                            ) span++;
-                                            else break;
-                                        }
+                                {/* ROOM VIEW */}
+                                {scheduleSubTab === "rooms" && daySchedules
+                                    .filter(schedule => schedule.roomId === selectedRoom)
+                                    .map(schedule => {
+                                        const isSelectedSection = schedule.sectionId === selectedSection;
+                                        const top = ((schedule.start - START_MIN) / SLOT) * SLOT_HEIGHT;
+                                        const height = ((schedule.end - schedule.start) / SLOT) * SLOT_HEIGHT;
+                                        const subject = getSubject(schedule.subjectId);
+                                        const teacher = getTeacher(schedule.teacherId);
+                                        const section = sections.find(s => s.id === schedule.sectionId);
 
                                         return (
-                                            <td
-                                                key={day}
-                                                rowSpan={span}
-                                                className="
-                                                    border-2
-                                                    bg-blue-700
-                                                    align-middle
-                                                    text-center
-                                                    text-xs
-                                                    text-white
-                                                    font-medium
-                                                    p-2
-                                                    w-24
-                                                "
+                                            <div
+                                                key={schedule.id}
+                                                draggable={resizingId !== schedule.id}
+                                                onDragStart={dragSchedule(schedule.id)}
+                                                className={`absolute left-1 right-1 text-[10px] rounded p-1 shadow-md select-none transition-transform active:scale-95 ${
+                                                    isSelectedSection ? "bg-blue-600 hover:bg-blue-700 text-white cursor-move z-10" :
+                                                    "bg-violet-500 hover:bg-violet-600 text-white cursor-move z-10"
+                                                }`}
+                                                style={{ top, height }}
                                             >
-                                                <div className="leading-tight">
-                                                    <div className="font-semibold">{cell.subject}/{cell.teacher}</div>
-                                                    <div>{cell.program}{cell.section}</div>
-                                                    <div>{cell.room}</div>
-                                                </div>
-                                            </td>
+                                                <button onClick={() => setSchedules(prev => prev.filter(s => s.id !== schedule.id))} className="absolute top-1 right-1 bg-red-600 text-white size-4 rounded-full flex items-center justify-center hover:bg-red-700">×</button>
+                                                <div className="font-bold truncate pr-4">{subject.name}</div>
+                                                <div className="opacity-90">{section?.name} | {teacher.name}</div>
+                                                <div className="opacity-75">{formatTime(schedule.start)} - {formatTime(schedule.end)}</div>
+                                                <div onMouseDown={(e) => handleResizeMouseDown(e, schedule)} className={`absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize rounded-b ${isSelectedSection ? "bg-blue-800/50" : "bg-violet-700/50"}`} />
+                                            </div>
                                         );
                                     })}
-                                </tr>
-                            );
-                        })}
-                        </tbody>
-                    </table>
+                            </div>
+                        );
+                    })}
                 </div>
-            ))}
+            </div>
+        );
+    }
+
+    const generateRooms = () => {
+        const newRooms: Room[] = [];
+        for (let floor = 1; floor <= floorCount; floor++) {
+            for (let num = 1; num <= roomsPerFloor; num++) {
+                const roomNumber = `${floor}${num.toString().padStart(2, "0")}`;
+                newRooms.push({ id: crypto.randomUUID(), name: roomNumber });
+            }
+        }
+        setRooms(newRooms);
+        triggerNotification(`Generated ${newRooms.length} rooms`);
+    };
+
+    /* ================= UI ================= */
+
+    return (
+        <div className="p-8 space-y-6 max-w-7xl mx-auto font-sans">
+            <div className="flex justify-between items-center bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <h1 className="text-2xl font-black text-blue-600 dark:text-blue-400">Scheduler Engine <span className="text-xs font-medium text-gray-400 ml-2">Internal Test v2.1</span></h1>
+                <div className="flex gap-1 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                    {(["subjects", "teachers", "grade-sections", "rooms", "schedules"] as const).map(t => (
+                        <button key={t} onClick={() => setMainTab(t)} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${mainTab === t ? "bg-white dark:bg-gray-600 text-blue-600 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                            {t.replace('-', ' ').toUpperCase()}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* SUBJECT TAB */}
+            {mainTab === "subjects" && (
+                <Card className="border-none shadow-sm">
+                    <div className="flex gap-4 items-end mb-6">
+                        <div className="flex-1">
+                            <Label>Subject Name</Label>
+                            <TextInput value={newSubject} onChange={e => setNewSubject(e.target.value)} placeholder="e.g. Advanced Data Structures" />
+                        </div>
+                        <div className="w-24">
+                            <Label>Units</Label>
+                            <TextInput type="number" value={newUnits} onChange={e => setNewUnits(Number(e.target.value))} />
+                        </div>
+                        <Button color="blue" onClick={() => { if(!newSubject) return; setSubjects([...subjects, { id:crypto.randomUUID(), name:newSubject, units:newUnits, teacherIds:[], }]); setNewSubject(""); triggerNotification("Added subject"); }}>
+                            <HiPlus className="mr-2" /> Add Subject
+                        </Button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {subjects.map(s => (
+                            <div key={s.id} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 flex justify-between items-center">
+                                <div>
+                                    <div className="font-bold text-sm">{s.name}</div>
+                                    <div className="text-xs text-gray-500">{s.units} Units</div>
+                                </div>
+                                <Button color="failure" size="xs" onClick={() => setSubjects(subjects.filter(sub => sub.id !== s.id))}><HiOutlineTrash /></Button>
+                            </div>
+                        ))}
+                    </div>
+                </Card>
+            )}
+
+            {/* ROOMS TAB */}
+            {mainTab === "rooms" && (
+                <Card className="border-none shadow-sm">
+                    <div className="flex gap-4 items-end mb-6">
+                        <div>
+                            <Label>Number of Floors</Label>
+                            <TextInput type="number" min="1" value={floorCount} onChange={(e) => setFloorCount(Number(e.target.value))} />
+                        </div>
+                        <div>
+                            <Label>Rooms per Floor</Label>
+                            <TextInput type="number" min="1" value={roomsPerFloor} onChange={(e) => setRoomsPerFloor(Number(e.target.value))} />
+                        </div>
+                        <Button color="blue" onClick={generateRooms}>Generate Layout</Button>
+                    </div>
+                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
+                        {rooms.map(room => (
+                            <div key={room.id} className="p-2 text-center text-xs font-bold bg-gray-100 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600">
+                                {room.name}
+                            </div>
+                        ))}
+                    </div>
+                </Card>
+            )}
+
+            {/* TEACHERS TAB */}
+            {mainTab === "teachers" && (
+                <Card className="border-none shadow-sm">
+                    <div className="flex gap-4 items-end mb-6">
+                        <div className="flex-1">
+                            <Label>Teacher Full Name</Label>
+                            <TextInput value={newTeacher} onChange={(e) => setNewTeacher(e.target.value)} placeholder="e.g. Prof. Alan Turing" />
+                        </div>
+                        <Button color="blue" onClick={() => { if(!newTeacher) return; setTeachers([...teachers, { id: crypto.randomUUID(), name: newTeacher }]); setNewTeacher(""); triggerNotification("Added teacher"); }}>
+                            <HiPlus className="mr-2" /> Add Teacher
+                        </Button>
+                    </div>
+                    <div className="space-y-4">
+                        {teachers.map((teacher) => (
+                            <div key={teacher.id} className="p-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800">
+                                <div className="flex justify-between items-center mb-3">
+                                    <h3 className="font-bold text-lg">{teacher.name} <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${teacherUnits(teacher.id) > 24 ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"}`}>{teacherUnits(teacher.id)}/24 Max Units</span></h3>
+                                    <Button color="failure" size="xs" onClick={() => setTeachers(teachers.filter(t => t.id !== teacher.id))}><HiOutlineTrash /></Button>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {subjects.map((subject) => {
+                                        const alreadyAssigned = subject.teacherIds.includes(teacher.id);
+                                        return (
+                                            <Button 
+                                                key={subject.id} 
+                                                size="xs" 
+                                                outline={!alreadyAssigned}
+                                                color={alreadyAssigned ? "success" : "blue"}
+                                                onClick={() => {
+                                                    if (alreadyAssigned) return;
+                                                    if (teacherUnits(teacher.id) + subject.units > 24) {
+                                                        setConflictInfo({ message: "Load Limit Exceeded", details: `${teacher.name} cannot handle ${subject.name} as it exceeds the 24-unit maximum load.` });
+                                                        return;
+                                                    }
+                                                    setSubjects(subjects.map((s) => s.id === subject.id ? { ...s, teacherIds: [...s.teacherIds, teacher.id] } : s));
+                                                }}
+                                            >
+                                                {alreadyAssigned ? "✓ " : "+"}{subject.name}
+                                            </Button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </Card>
+            )}
+
+            {/* GRADE SECTIONS TAB */}
+            {mainTab === "grade-sections" && (
+                <Card className="border-none shadow-sm">
+                    <div className="flex gap-4 items-end mb-6">
+                        <div className="flex-1">
+                            <Label>Section Name</Label>
+                            <TextInput value={newSection} onChange={e => setNewSection(e.target.value)} placeholder="e.g. BSIT-3A" />
+                        </div>
+                        <Button color="blue" onClick={() => { if(!newSection) return; setSections([...sections, { id: crypto.randomUUID(), name: newSection, subjects: [] }]); setNewSection(""); triggerNotification("Added section"); }}>
+                            <HiPlus className="mr-2" /> Add Section
+                        </Button>
+                    </div>
+                    <div className="space-y-4">
+                        {sections.map(section => (
+                            <div key={section.id} className="p-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800">
+                                <h3 className="font-bold text-lg mb-3">{section.name}</h3>
+                                <div className="flex flex-wrap gap-2 mb-4 border-b border-gray-200 dark:border-gray-700 pb-4">
+                                    {subjects.map(subject => subject.teacherIds.map(teacherId => {
+                                        const teacher = getTeacher(teacherId);
+                                        const alreadyAssigned = section.subjects.some(ss => ss.subjectId === subject.id && ss.teacherId === teacherId);
+                                        return (
+                                            <Button 
+                                                key={subject.id + teacherId} 
+                                                size="xs" 
+                                                outline={!alreadyAssigned}
+                                                color={alreadyAssigned ? "success" : "blue"}
+                                                onClick={() => {
+                                                    if (alreadyAssigned) return;
+                                                    setSections(prev => prev.map(sec => sec.id === section.id ? { ...sec, subjects: [...sec.subjects, { subjectId: subject.id, teacherId: teacherId }] } : sec));
+                                                }}
+                                            >
+                                                {alreadyAssigned ? "✓ " : "+"}{subject.name} ({teacher.name})
+                                            </Button>
+                                        );
+                                    }))}
+                                </div>
+                                <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Assigned Curriculum</div>
+                                <div className="flex flex-wrap gap-2">
+                                    {section.subjects.map(ss => {
+                                        const subject = getSubject(ss.subjectId);
+                                        const teacher = getTeacher(ss.teacherId);
+                                        return (
+                                            <div key={ss.subjectId + ss.teacherId} className="px-2 py-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded flex items-center gap-2">
+                                                <span className="font-bold text-blue-600 dark:text-blue-400">{subject.name}</span>
+                                                <span className="text-gray-400">|</span>
+                                                <span>{teacher.name}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </Card>
+            )}
+
+            {/* SCHEDULE TAB */}
+            {mainTab === "schedules" && (
+                <div className="space-y-6">
+                    <div className="flex flex-wrap justify-between items-center gap-4">
+                        <div className="flex gap-1 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                            {(["sections", "rooms", "teachers"] as const).map(sub => (
+                                <button key={sub} onClick={() => setScheduleSubTab(sub)} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${scheduleSubTab === sub ? "bg-white dark:bg-gray-600 text-blue-600 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                                    {sub.toUpperCase()} VIEW
+                                </button>
+                            ))}
+                        </div>
+                        
+                        <div className="flex gap-3">
+                            {scheduleSubTab === "sections" && (
+                                <>
+                                    <Select sizing="sm" value={selectedSection || ""} onChange={(e) => setSelectedSection(e.target.value)}>
+                                        <option value="">Select Section</option>
+                                        {sections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    </Select>
+                                    <Select sizing="sm" value={selectedRoom || ""} onChange={(e) => setSelectedRoom(e.target.value)}>
+                                        <option value="">Select Base Room</option>
+                                        {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                    </Select>
+                                </>
+                            )}
+                            {scheduleSubTab === "rooms" && (
+                                <>
+                                    <Select sizing="sm" value={selectedRoom || ""} onChange={(e) => setSelectedRoom(e.target.value)}>
+                                        <option value="">Select Room</option>
+                                        {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                    </Select>
+                                    <Select sizing="sm" value={selectedSection || ""} onChange={(e) => setSelectedSection(e.target.value)}>
+                                        <option value="">Context Section</option>
+                                        {sections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    </Select>
+                                </>
+                            )}
+                            {scheduleSubTab === "teachers" && (
+                                <Select sizing="sm" value={selectedTeacher || ""} onChange={(e) => setSelectedTeacher(e.target.value)}>
+                                    <option value="">Select Teacher</option>
+                                    {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                </Select>
+                            )}
+                        </div>
+                    </div>
+
+                    <Card className="border-none shadow-sm overflow-hidden">
+                        <h4 className="text-sm font-bold text-gray-400 mb-2">Curriculum Payload (Drag & Drop)</h4>
+                        <div className="flex flex-wrap gap-2 mb-6 min-h-12 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700">
+                            {(() => {
+                                const selected = sections.find(s => s.id === selectedSection);
+                                if (!selected) return <div className="text-gray-400 text-xs flex items-center italic">Select a section to reveal assigned subjects</div>;
+                                if (!selected.subjects?.length) return <div className="text-gray-400 text-xs flex items-center italic">No subjects assigned to this section</div>;
+                                
+                                return selected.subjects.map(ss => {
+                                    const subject = getSubject(ss.subjectId);
+                                    const teacher = getTeacher(ss.teacherId);
+                                    if (!subject || !teacher) return null;
+                                    return (
+                                        <div key={ss.subjectId + "-" + ss.teacherId} draggable onDragStart={dragSubjectTeacher(ss.subjectId, ss.teacherId)} className="bg-blue-600 text-white px-3 py-2 rounded shadow hover:bg-blue-700 cursor-grab active:cursor-grabbing text-xs">
+                                            <div className="font-bold">{subject.name}</div>
+                                            <div className="opacity-80">{teacher.name}</div>
+                                        </div>
+                                    );
+                                });
+                            })()}
+                        </div>
+
+                        <div className="flex gap-4 mb-4 text-[10px] font-bold text-gray-500 uppercase tracking-tighter">
+                            <div className="flex items-center gap-1"><div className="size-3 bg-blue-600 rounded" /> Active Unit</div>
+                            <div className="flex items-center gap-1"><div className="size-3 bg-violet-500 rounded" /> Section Displacement</div>
+                            <div className="flex items-center gap-1"><div className="size-3 bg-gray-400 rounded" /> Room Occupancy</div>
+                            <div className="flex items-center gap-1"><div className="size-3 bg-green-600 rounded" /> Teacher Load</div>
+                        </div>
+
+                        {renderTimetable()}
+                    </Card>
+                </div>
+            )}
+
+            {/* MODALS */}
+            
+            {/* Conflict Alert Modal */}
+            <Modal show={!!conflictInfo} size="md" onClose={() => setConflictInfo(null)} popup>
+                <ModalHeader />
+                <ModalBody>
+                    <div className="text-center">
+                        <HiExclamation className="mx-auto mb-4 h-14 w-14 text-red-500" />
+                        <h3 className="mb-2 text-lg font-bold text-gray-900 dark:text-white">Schedule Conflict</h3>
+                        <p className="mb-5 text-sm text-gray-500 dark:text-gray-400">{conflictInfo?.message}</p>
+                        <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg text-xs text-left border border-gray-100 dark:border-gray-600 mb-6">
+                            {conflictInfo?.details}
+                        </div>
+                        <Button color="red" onClick={() => setConflictInfo(null)}>Understood</Button>
+                    </div>
+                </ModalBody>
+            </Modal>
+
+            {/* Move Confirmation Modal */}
+            <Modal show={!!moveConfirmInfo} size="md" onClose={() => setMoveConfirmInfo(null)} popup>
+                <ModalHeader />
+                <ModalBody>
+                    <div className="text-center">
+                        <HiOutlineExclamationCircle className="mx-auto mb-4 h-14 w-14 text-yellow-400" />
+                        <h3 className="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
+                            Move this schedule to the new room?
+                        </h3>
+                        <div className="flex justify-center gap-4">
+                            <Button color="success" onClick={confirmMove}>Yes, move</Button>
+                            <Button color="gray" onClick={() => setMoveConfirmInfo(null)}>Cancel</Button>
+                        </div>
+                    </div>
+                </ModalBody>
+            </Modal>
+
+            {/* TOASTS */}
+            <Toast className={`fixed z-60 bottom-10 right-10 transition-all ${showToast ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                <div className="flex items-center">
+                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-green-100 text-green-500 dark:bg-green-800 dark:text-green-200">
+                        <HiCheck className="h-5 w-5" />
+                    </div>
+                    <div className="ml-3 text-sm font-normal">{toastMessage}</div>
+                    <ToastToggle onDismiss={() => setShowToast(false)} />
+                </div>
+                <Progress progress={progress} size="sm" className="mt-2" color="green" />
+            </Toast>
         </div>
-    )
+    );
 }

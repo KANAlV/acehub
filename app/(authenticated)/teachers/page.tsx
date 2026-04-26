@@ -35,7 +35,10 @@ import {VscSave} from "react-icons/vsc";
 import {sanitizeMediumName, sanitizeVeryShortName} from "@/lib/validation.ts";
 
 /** --- Helper Components --- **/
-const AvailabilityManager = ({ availability, onUpdate }: { availability: any[], onUpdate: (val: any[]) => void }) => {
+const AvailabilityManager = ({ availability, onUpdate, employmentType }: { availability: any[], onUpdate: (val: any[]) => void, employmentType: string }) => {
+    // Hidden for Full-Time (Regular/Proby)
+    if (employmentType === "Regular" || employmentType === "Proby") return null;
+
     const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     
     const addSlot = () => {
@@ -53,14 +56,14 @@ const AvailabilityManager = ({ availability, onUpdate }: { availability: any[], 
     };
 
     return (
-        <div className="mt-4 border-t pt-4">
+        <div className="mt-4 border-t pt-4 animate-fade-in">
             <div className="flex justify-between items-center mb-2">
-                <Label className="font-bold">Availability Slots</Label>
+                <Label className="font-bold text-blue-600 dark:text-blue-400">Availability Slots (Part-Time Only)</Label>
                 <Button size="xs" color="gray" onClick={addSlot}><HiPlus className="mr-1" /> Add</Button>
             </div>
             <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
                 {availability.map((slot, idx) => (
-                    <div key={idx} className="flex gap-2 items-center bg-gray-50 dark:bg-gray-700/50 p-2 rounded">
+                    <div key={idx} className="flex gap-2 items-center bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-gray-200 dark:border-gray-600">
                         <Select 
                             value={slot.day} 
                             onChange={(e) => updateSlot(idx, 'day', e.target.value)}
@@ -176,7 +179,9 @@ export default function TeacherManager() {
     async function submitTeacher() {
         if (!pscsId || !name || !code) return;
         setLoading(true);
-        const stat = await insertTeacher(pscsId, name, code, spec, type, availability);
+        // Clear availability if Full-Time before saving
+        const finalAvailability = (type === "Regular" || type === "Proby") ? [] : availability;
+        const stat = await insertTeacher(pscsId, name, code, spec, type, finalAvailability);
         setStatusCode(stat);
         setLoading(false);
         setShowToast(true);
@@ -189,7 +194,9 @@ export default function TeacherManager() {
 
     async function updateEntry() {
         setLoading(true);
-        const stat = await updateTeacher(pscsId, name, code, spec, type, availability);
+        // Clear availability if Full-Time before saving
+        const finalAvailability = (type === "Regular" || type === "Proby") ? [] : availability;
+        const stat = await updateTeacher(pscsId, name, code, spec, type, finalAvailability);
         setStatusCode(stat);
         setLoading(false);
         setShowToast(true);
@@ -240,7 +247,9 @@ export default function TeacherManager() {
 
             const rows = data.map(t => ({
                 ...t,
-                availability_str: (t.availability || []).map((s: any) => `${s.day}: ${s.time}`).join(' | ')
+                availability_str: (t.employment_type === "PT" || t.employment_type === "PTFL") 
+                    ? (t.availability || []).map((s: any) => `${s.day}: ${s.time}`).join(' | ')
+                    : "NO SELECTION"
             }));
 
             worksheet.addRows(rows);
@@ -283,7 +292,7 @@ export default function TeacherManager() {
                 name: 'Ivan Winzle S. Diocampo',
                 code: 'IWD',
                 spec: 'Information Technology',
-                type: 'Regular', 
+                type: 'PT', 
                 availability: 'Monday: 5:00 PM - 8:00 PM | Saturday: 7:30 AM - 5:00 PM' 
             });
 
@@ -293,7 +302,7 @@ export default function TeacherManager() {
                 code: 'JMR',
                 spec: 'Business and Management',
                 type: 'Regular',
-                availability: 'Monday: 5:00 PM - 8:00 PM | Saturday: 7:30 AM - 5:00 PM'
+                availability: 'NO SELECTION'
             });
 
             const typeOptions = ['Regular', 'PTFL', 'PT', 'Proby'];
@@ -336,11 +345,17 @@ export default function TeacherManager() {
                     const type = row.getCell(5).value?.toString().trim() || "Regular";
                     const availStr = row.getCell(6).value?.toString().trim() || "";
 
+                    // Skip rows starting with # (Template format)
+                    if (id && id.startsWith('#')) return;
+
                     if (id && name && code) {
-                        const availability = availStr.split('|').filter(s => s.includes(':')).map(s => {
-                            const [day, ...timeParts] = s.trim().split(':');
-                            return { day: day.trim(), time: timeParts.join(':').trim() };
-                        });
+                        let availability = [];
+                        if (type === "PT" || type === "PTFL") {
+                            availability = availStr.split('|').filter(s => s.includes(':')).map(s => {
+                                const [day, ...timeParts] = s.trim().split(':');
+                                return { day: day.trim(), time: timeParts.join(':').trim() };
+                            });
+                        }
                         teachersToImport.push({ id, name, code, spec, type, availability });
                     }
                 }
@@ -452,9 +467,16 @@ export default function TeacherManager() {
                                 <TableCell>{t.employment_type}</TableCell>
                                 <TableCell>
                                     <div className="text-xs space-y-1">
-                                        {(t.availability || []).map((s, i) => (
-                                            <div key={i} className="whitespace-nowrap bg-blue-50 dark:bg-blue-900/20 px-1 rounded">{s.day}: {s.time}</div>
-                                        ))}
+                                        {(t.employment_type === "PT" || t.employment_type === "PTFL") ? (
+                                            (t.availability || []).map((s, i) => (
+                                                <div key={i} className="whitespace-nowrap bg-blue-50 dark:bg-blue-900/20 px-1 rounded">{s.day}: {s.time}</div>
+                                            ))
+                                        ) : (
+                                            <span className="text-gray-400 italic">NO SELECTION</span>
+                                        )}
+                                        {(t.employment_type === "PT" || t.employment_type === "PTFL") && (t.availability || []).length === 0 && (
+                                            <span className="text-yellow-500 italic font-medium">Pending Entry</span>
+                                        )}
                                     </div>
                                 </TableCell>
                                 <TableCell className="flex justify-end">
@@ -510,7 +532,7 @@ export default function TeacherManager() {
                             </Select>
                         </div>
                     </div>
-                    <AvailabilityManager availability={availability} onUpdate={setAvailability} />
+                    <AvailabilityManager availability={availability} onUpdate={setAvailability} employmentType={type} />
                 </ModalBody>
                 <ModalFooter className="justify-end">
                     <Button color="alternative" onClick={activeChanges ? () => setOpenWarningModal(true) : discardEntry}>
@@ -553,7 +575,7 @@ export default function TeacherManager() {
                             </Select>
                         </div>
                     </div>
-                    <AvailabilityManager availability={availability} onUpdate={(v) => { setAvailability(v); setActiveChanges(true); }} />
+                    <AvailabilityManager availability={availability} onUpdate={(v) => { setAvailability(v); setActiveChanges(true); }} employmentType={type} />
                 </ModalBody>
                 <ModalFooter>
                     <Button color="failure" onClick={() => setOpenWarningModal(true)}><HiOutlineTrash className="size-5" /></Button>

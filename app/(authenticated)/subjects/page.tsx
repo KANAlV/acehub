@@ -39,6 +39,7 @@ export default function SubjectsManager() {
     const [warningType, setWarningType] = useState("");
 
     // Form useStates for Subjects
+    const [idVal, setIdVal] = useState<string | undefined>(undefined);
     const [curriculumnVersionVal, setCurriculumnVersionVal] = useState("");
     const [courseCodeVal, setCourseCodeVal] = useState("");
     const [courseNameVal, setCourseNameVal] = useState("");
@@ -78,20 +79,21 @@ export default function SubjectsManager() {
     };
 
     /** UI Functions **/
-    function editModalValue(curVersion: string, courseCode: string) {
-        const subject = subjects.find(s => s.curriculumn_version === curVersion && s.course_code === courseCode);
+    function editModalValue(id: string) {
+        const subject = subjects.find(s => s.id === id);
         if (!subject) return;
 
-        setCurriculumnVersionVal(subject.curriculumn_version);
+        setIdVal(subject.id);
+        setCurriculumnVersionVal(subject.curriculumn_version || "");
         setCourseCodeVal(subject.course_code);
         setCourseNameVal(subject.course_name);
         setSpecializationVal(subject.field_of_specialization || "");
-        setLectureVal(subject.lecture.toString() || "0");
-        setLabVal(subject.lab.toString() || "0");
+        setLectureVal(subject.lecture_units?.toString() || "0");
+        setLabVal(subject.lab_units?.toString() || "0");
         setLabTypeVal(subject.lab_type || "");
 
-        if (subject["year-term"]) {
-            const [y, t] = subject["year-term"].split("-");
+        if (subject.year_term) {
+            const [y, t] = subject.year_term.split("-");
             setYearVal(y || "1");
             setTermVal(t || "1");
         }
@@ -105,6 +107,7 @@ export default function SubjectsManager() {
     }
 
     function discardEntry() {
+        setIdVal(undefined);
         setCurriculumnVersionVal("");
         setCourseCodeVal("");
         setCourseNameVal("");
@@ -167,7 +170,7 @@ export default function SubjectsManager() {
 
             worksheet?.eachRow((row, rowNumber) => {
                 if (rowNumber > 1) {
-                    const curVersion = row.getCell(1).value?.toString().trim() || "";
+                    const curVersion = row.getCell(1).value?.toString().trim() || null;
                     const code = row.getCell(2).value?.toString().trim() || "";
                     const name = row.getCell(3).value?.toString().trim() || "";
                     const spec = row.getCell(4).value?.toString().trim() || "";
@@ -176,18 +179,10 @@ export default function SubjectsManager() {
                     const labType = row.getCell(7).value?.toString().trim() || "";
                     const yearTerm = row.getCell(8).value?.toString().trim() || "1-1";
 
-                    // Requirement: Both cannot be zero
-                    if (lec === 0 && lab === 0) {
-                        console.warn(`[IMPORT_VALIDATION]: Skipping row ${rowNumber} - both lec and lab are zero.`);
-                        return;
-                    }
+                    if (lec === 0 && lab === 0) return;
+                    if (lab > 0 && (!labType || labType === "--- none ---")) return;
 
-                    if (lab > 0 && (!labType || labType === "--- none ---")) {
-                        console.warn(`[IMPORT_VALIDATION]: Skipping row ${rowNumber} due to missing Lab Type for Lab Units > 0.`);
-                        return;
-                    }
-
-                    if (curVersion && code && name) {
+                    if (code && name) {
                         rows.push({ curVersion, code, name, spec, lec, lab, labType: labType === "--- none ---" ? "" : labType, yearTerm });
                     }
                 }
@@ -229,7 +224,6 @@ export default function SubjectsManager() {
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Subject Import Template');
 
-            // 1. Define Columns
             worksheet.columns = [
                 { header: 'Curriculum Version', key: 'curVersion', width: 20 },
                 { header: 'Course Code', key: 'code', width: 20 },
@@ -246,7 +240,7 @@ export default function SubjectsManager() {
             headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '16A34A' } };
 
             worksheet.addRow({
-                curVersion: 'BSIT-22-01',
+                curVersion: 'BSIT-24-01',
                 code: 'INTE1049',
                 name: 'Professional Issues in Information Systems and Technology',
                 spec: 'Information Technology',
@@ -261,10 +255,7 @@ export default function SubjectsManager() {
                 worksheet.getCell(`G${i}`).dataValidation = {
                     type: 'list',
                     allowBlank: true,
-                    formulae: [`"${typeOptions.join(',')}"`],
-                    showErrorMessage: true,
-                    errorTitle: 'Invalid Lab Type',
-                    error: 'Please select a type from the dropdown list.'
+                    formulae: [`"${typeOptions.join(',')}"`]
                 };
             }
 
@@ -291,7 +282,7 @@ export default function SubjectsManager() {
                 { header: 'Field of Specialization', key: 'spec', width: 30 },
                 { header: 'Lecture', key: 'lec', width: 10 },
                 { header: 'Lab', key: 'lab', width: 10 },
-                { header: 'Lab Type', key: 'labType', width: 15 },
+                { header: 'Lab Type', key: 'labType', width: 20 },
                 { header: 'Year-Term', key: 'yearTerm', width: 15 }
             ];
 
@@ -300,14 +291,14 @@ export default function SubjectsManager() {
             headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2C3E50' } };
 
             const exportData = subjects.map(s => ({
-                curVersion: s.curriculumn_version,
+                curVersion: s.curriculumn_version || '',
                 code: s.course_code,
                 name: s.course_name,
                 spec: s.field_of_specialization || '',
-                lec: s.lecture || 0,
-                lab: s.lab || 0,
+                lec: s.lecture_units || 0,
+                lab: s.lab_units || 0,
                 labType: s.lab_type || '',
-                yearTerm: s["year-term"]
+                yearTerm: s.year_term
             }));
 
             worksheet.addRows(exportData);
@@ -324,7 +315,7 @@ export default function SubjectsManager() {
 
     /** Queries **/
     async function submitSubject() {
-        if (!curriculumnVersionVal || !courseCodeVal || !courseNameVal) {
+        if (!courseCodeVal || !courseNameVal) {
             setStatusCode("400");
             setShowToast(true);
             return;
@@ -334,7 +325,6 @@ export default function SubjectsManager() {
         const lab = parseFloat(labVal);
         const yearTerm = yearVal == "11" || yearVal == "12" ? `${yearVal}` : `${yearVal}-${termVal}`;
 
-        // Validation: Both cannot be zero
         if (lec === 0 && lab === 0) {
             setStatusCode("412");
             setShowToast(true);
@@ -350,7 +340,7 @@ export default function SubjectsManager() {
         setLoading(true);
 
         const stat = await insertSubject(
-            curriculumnVersionVal,
+            curriculumnVersionVal || null,
             courseCodeVal,
             courseNameVal,
             specializationVal,
@@ -372,7 +362,7 @@ export default function SubjectsManager() {
     }
 
     async function updateEntry() {
-        if (!curriculumnVersionVal || !courseCodeVal || !courseNameVal) {
+        if (!idVal || !courseCodeVal || !courseNameVal) {
             setStatusCode("400");
             setShowToast(true);
             return;
@@ -382,7 +372,6 @@ export default function SubjectsManager() {
         const lab = parseFloat(labVal);
         const yearTerm = yearVal == "11" || yearVal == "12" ? `${yearVal}` : `${yearVal}-${termVal}`;
 
-        // Validation: Both cannot be zero
         if (lec === 0 && lab === 0) {
             setStatusCode("412");
             setShowToast(true);
@@ -398,7 +387,8 @@ export default function SubjectsManager() {
         setLoading(true);
 
         const stat = await updateSubject(
-            curriculumnVersionVal,
+            idVal,
+            curriculumnVersionVal || null,
             courseCodeVal,
             courseNameVal,
             specializationVal,
@@ -420,9 +410,13 @@ export default function SubjectsManager() {
 
     async function deleteRow() {
         setLoading(true);
+        if (!idVal) {
+            setStatusCode("400");
+            setShowToast(true);
+            return;
+        }
 
-        const stat = await deleteSubject(curriculumnVersionVal, courseCodeVal);
-
+        const stat = await deleteSubject(idVal);
         setStatusCode(stat);
         setLoading(false);
         setShowToast(true);
@@ -468,18 +462,13 @@ export default function SubjectsManager() {
     useEffect(() => {
         if (showToast) {
             setProgress(100);
-            const interval = setInterval(() => {
-                setProgress((prev) => Math.max(0, prev - (100 / (5000 / 50))));
-            }, 50);
+            const interval = setInterval(() => setProgress((prev) => Math.max(0, prev - 2)), 50);
             const timeout = setTimeout(() => setShowToast(false), 5000);
             return () => { clearInterval(interval); clearTimeout(timeout); };
         }
     }, [showToast]);
 
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [debouncedSearch]);
-
+    useEffect(() => { setCurrentPage(1); }, [debouncedSearch]);
     useEffect(() => {
         const handler = setTimeout(() => setDebouncedSearch(search), 1000);
         return () => clearTimeout(handler);
@@ -489,15 +478,15 @@ export default function SubjectsManager() {
         return (
             <TableRow className="bg-white border-gray-300 dark:border-gray-700 dark:bg-gray-800">
                 <TableCell className="font-medium text-gray-900 dark:text-white">
-                    {subject.curriculumn_version}
+                    {subject.curriculumn_version || <span className="italic text-gray-400">N/A</span>}
                 </TableCell>
                 <TableCell>{subject.course_code}</TableCell>
                 <TableCell>{subject.course_name}</TableCell>
-                <TableCell>{subject["year-term"] || "1-1"}</TableCell>
-                <TableCell>{subject.lecture}</TableCell>
-                <TableCell>{subject.lab} | {subject.lab_type || "None"}</TableCell>
+                <TableCell>{subject.year_term || "1-1"}</TableCell>
+                <TableCell>{subject.lecture_units}</TableCell>
+                <TableCell>{subject.lab_units} | {subject.lab_type || "None"}</TableCell>
                 <TableCell className="flex justify-end">
-                    <Button color="alternative" onClick={() => editModalValue(subject.curriculumn_version, subject.course_code)}>
+                    <Button color="alternative" onClick={() => editModalValue(subject.id)}>
                         Edit
                     </Button>
                 </TableCell>
@@ -550,7 +539,7 @@ export default function SubjectsManager() {
                     </TableHead>
                     <TableBody className="divide-y">
                         {subjects.length > 0 ? (
-                            subjects.map((s) => <SubjectTableRow key={`${s.curriculumn_version}-${s.course_code}`} subject={s} />)
+                            subjects.map((s) => <SubjectTableRow key={s.id} subject={s} />)
                         ) : (
                             <TableRow><TableCell colSpan={7} className="text-center bg-white border-gray-300 dark:border-gray-700 dark:bg-gray-800">No subjects found.</TableCell></TableRow>
                         )}
@@ -586,8 +575,8 @@ export default function SubjectsManager() {
                 <ModalBody className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <Label htmlFor="curVersion">Curriculum Version</Label>
-                            <TextInput id="curVersion" placeholder="e.g. BSIT-24-01" value={curriculumnVersionVal} onChange={(e) => { setCurriculumnVersionVal(e.target.value); setActiveChanges(true); }} required />
+                            <Label htmlFor="curVersion">Curriculum Version (Optional)</Label>
+                            <TextInput id="curVersion" placeholder="e.g. BSIT-24-01" value={curriculumnVersionVal} onChange={(e) => { setCurriculumnVersionVal(e.target.value); setActiveChanges(true); }} />
                         </div>
                         <div>
                             <Label htmlFor="courseCode">Course Code</Label>
@@ -614,7 +603,7 @@ export default function SubjectsManager() {
                             <Label htmlFor="term">Term/Semester</Label>
                             <Select id="term"
                                     value={termVal}
-                                    disabled={yearVal == "11" || yearVal == "12"}
+                                    disabled={yearVal === "11" || yearVal === "12"}
                                     onChange={(e) => { setTermVal(e.target.value); setActiveChanges(true); }}>
                                 <option value="1">1st Semester</option>
                                 <option value="2">2nd Semester</option>
@@ -674,7 +663,7 @@ export default function SubjectsManager() {
             <Modal show={editModal} initialFocus={EditModalCourseNameInput} onClose={() => setEditModal(false)}>
                 <ModalHeader>Editing Subject: {courseCodeVal}</ModalHeader>
                 <ModalBody className="space-y-4">
-                    <p className="text-sm text-gray-500 italic">Curriculum: {curriculumnVersionVal}</p>
+                    <p className="text-sm text-gray-500 italic">Curriculum: {curriculumnVersionVal || "N/A"}</p>
                     <div>
                         <Label>Course Name</Label>
                         <TextInput ref={EditModalCourseNameInput} value={courseNameVal} onChange={(e) => { limitCourseNameVal(e.target.value); setActiveChanges(true); }} />
@@ -694,7 +683,7 @@ export default function SubjectsManager() {
                         <div>
                             <Label>Term/Semester</Label>
                             <Select value={termVal}
-                                    disabled={yearVal == "11" || yearVal == "12"}
+                                    disabled={yearVal === "11" || yearVal === "12"}
                                     onChange={(e) => { setTermVal(e.target.value); setActiveChanges(true); }}>
                                 <option value="1">1st Semester</option>
                                 <option value="2">2nd Semester</option>

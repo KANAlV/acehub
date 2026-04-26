@@ -2,6 +2,7 @@
 import sql from '@/lib/db';
 import {revalidatePath} from 'next/cache';
 import { cookies } from 'next/headers';
+import { generateScheduleData } from '@/lib/schedulerEngine';
 
 /** --- Login & User Session --- **/
 export interface User {
@@ -364,9 +365,18 @@ export async function deleteProgram(id: string) {
 }
 
 /** --- Subjects --- **/
-export async function insertSubject(curriculumn_version: string, course_code: string, course_name: string, field_of_specialization: string, lecture: number, lab: number, lab_type: string, year_term: string) {
+export async function insertSubject(curriculumn_version: string | null, course_code: string, course_name: string, field_of_specialization: string, lecture: number, lab: number, lab_type: string, year_term: string) {
     try {
-        await sql`SELECT create_subject(${curriculumn_version}, ${course_code}, ${course_name}, ${field_of_specialization}, ${lecture}, ${lab}, ${lab_type}, ${year_term})`;
+        await sql`SELECT create_subject(
+            ${curriculumn_version}::text, 
+            ${course_code}::text, 
+            ${course_name}::text, 
+            ${field_of_specialization}::text, 
+            ${lecture}::numeric, 
+            ${lab}::numeric, 
+            ${lab_type}::text, 
+            ${year_term}::text
+        )`;
         revalidatePath('/subjects');
         return "201";
     } catch (error: any) {
@@ -397,9 +407,19 @@ export async function fetchSubjectCount(search: string) {
     }
 }
 
-export async function updateSubject(curriculumn_version: string, course_code: string, course_name: string, field_of_specialization: string, lecture: number, lab: number, lab_type: string, year_term: string) {
+export async function updateSubject(id: string, curriculumn_version: string | null, course_code: string, course_name: string, field_of_specialization: string, lecture: number, lab: number, lab_type: string, year_term: string) {
     try {
-        await sql`SELECT update_subject(${curriculumn_version}, ${course_code}, ${course_name}, ${field_of_specialization}, ${lecture}, ${lab}, ${lab_type}, ${year_term})`;
+        await sql`SELECT update_subject(
+            ${id}::uuid, 
+            ${curriculumn_version}::text, 
+            ${course_code}::text, 
+            ${course_name}::text, 
+            ${field_of_specialization}::text, 
+            ${lecture}::numeric, 
+            ${lab}::numeric, 
+            ${lab_type}::text, 
+            ${year_term}::text
+        )`;
         revalidatePath('/subjects');
         return "200";
     } catch (error) {
@@ -408,9 +428,9 @@ export async function updateSubject(curriculumn_version: string, course_code: st
     }
 }
 
-export async function deleteSubject(curriculumn_version: string, course_code: string) {
+export async function deleteSubject(id: string) {
     try {
-        await sql`SELECT delete_subject(${curriculumn_version}, ${course_code})`;
+        await sql`SELECT delete_subject(${id}::uuid)`;
         revalidatePath('/subjects');
         return "204";
     } catch (error) {
@@ -424,6 +444,24 @@ export async function getProgramList() {
         return await sql`SELECT program_code, program_name FROM programs ORDER BY program_code ASC`;
     } catch (error) {
         console.error("[DB_ERROR]: Failed to fetch program list:", error);
+        return [];
+    }
+}
+
+export async function fetchAllSubjects() {
+    try {
+        return await sql`SELECT * FROM get_all_subjects()`;
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch all subjects:", error);
+        return [];
+    }
+}
+
+export async function fetchCurriculumVersions() {
+    try {
+        return await sql`SELECT * FROM get_distinct_curriculum_versions()`;
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch curriculum versions:", error);
         return [];
     }
 }
@@ -506,5 +544,99 @@ export async function getAllTeachersData() {
     } catch (error) {
         console.error("[DB_ERROR]: Failed to fetch all teachers:", error);
         throw new Error("Failed to fetch teachers");
+    }
+}
+
+export async function fetchAllTeachers() {
+    try {
+        return await sql`SELECT * FROM get_all_teachers()`;
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch all teachers:", error);
+        return [];
+    }
+}
+
+/** --- Schedules --- **/
+export async function saveGeneratedSchedule(name: string, config: any) {
+    try {
+        // 1. Create the Schedule Snapshot record
+        const schedule = await sql`
+            SELECT create_generated_schedule(${name}, ${config as any}::jsonb) as id
+        `;
+        const scheduleId = schedule[0].id;
+
+        // 2. RUN THE GENERATION ENGINE
+        const initialEntries = await generateScheduleData(config);
+
+        // 3. Batch Insert the Generated Entries
+        if (initialEntries.length > 0) {
+            for (const entry of initialEntries) {
+                await sql`
+                    INSERT INTO schedule_entries (schedule_id, subject_id, teacher_id, room_id, section_id, day, start_time, end_time)
+                    VALUES (
+                        ${scheduleId}::uuid, 
+                        ${entry.subjectId}, 
+                        ${entry.teacherId}, 
+                        ${parseInt(entry.roomId)}, 
+                        ${entry.sectionId}, 
+                        ${entry.day}, 
+                        ${entry.start}, 
+                        ${entry.end}
+                    )
+                `;
+            }
+        }
+
+        revalidatePath('/schedules');
+        return { status: "201", id: scheduleId };
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to save schedule:", error);
+        return { status: "500" };
+    }
+}
+
+export async function fetchSchedulesList() {
+    try {
+        return await sql`SELECT * FROM get_schedules_list()`;
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch schedules:", error);
+        return [];
+    }
+}
+
+export async function fetchScheduleDetails(id: string) {
+    try {
+        return await sql`SELECT * FROM get_schedule_details(${id}::uuid)`;
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch schedule details:", error);
+        return [];
+    }
+}
+
+export async function updateScheduleEntries(scheduleId: string, entries: any[]) {
+    try {
+        await sql`DELETE FROM schedule_entries WHERE schedule_id = ${scheduleId}::uuid`;
+        for (const entry of entries) {
+            await sql`
+                INSERT INTO schedule_entries (schedule_id, subject_id, teacher_id, room_id, section_id, day, start_time, end_time)
+                VALUES (${scheduleId}::uuid, ${entry.subjectId}, ${entry.teacherId}, ${parseInt(entry.roomId)}, ${entry.sectionId}, ${entry.day}, ${entry.start}, ${entry.end})
+            `;
+        }
+        revalidatePath(`/generated_schedule/${scheduleId}`);
+        return "200";
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to update schedule entries:", error);
+        return "500";
+    }
+}
+
+export async function deleteGeneratedSchedule(id: string) {
+    try {
+        await sql`DELETE FROM generated_schedules WHERE id = ${id}::uuid`;
+        revalidatePath('/schedules');
+        return "204";
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to delete schedule:", error);
+        return "500";
     }
 }

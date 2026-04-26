@@ -86,8 +86,8 @@ export function SidebarComponent({ username }: { username: string }) {
                         <SidebarItem as={Link} href="/" icon={HiChartPie} onClick={() => setIsOpen(false)}>
                             Dashboard (WIP)
                         </SidebarItem>
-                        <SidebarItem as={Link} href="/maintenance" icon={HiTable} onClick={() => setIsOpen(false)}>
-                            Schedules (*)
+                        <SidebarItem as={Link} href="/schedules" icon={HiTable} onClick={() => setIsOpen(false)}>
+                            Schedules
                         </SidebarItem>
                         <SidebarItem as={Link} href="/rooms" icon={HiLibrary} onClick={() => setIsOpen(false)}>
                             Rooms
