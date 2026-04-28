@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
-import { 
-    Button, Card, Label, Modal, ModalBody, ModalFooter, ModalHeader, 
-    Spinner, Table, TableBody, TableCell, TableHead, TableHeadCell, TableRow, 
+import {
+    Button, Card, Label, Modal, ModalBody, ModalFooter, ModalHeader,
+    Spinner, Table, TableBody, TableCell, TableHead, TableHeadCell, TableRow,
     TextInput, Toast, ToastToggle, Select, Tabs, TabItem, Checkbox, Accordion, AccordionPanel, AccordionTitle,
-    AccordionContent
+    AccordionContent, Progress, Tooltip
 } from "flowbite-react";
 import { 
     HiPlus, HiTrash, HiExternalLink, HiCheck, HiExclamation, 
@@ -66,7 +66,7 @@ const AutocompleteSelect = ({
                 autoComplete="off"
             />
             {isOpen && (
-                <div className="absolute z-[100] mt-1 w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                <div className="absolute z-100 mt-1 w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                     {filtered.length > 0 ? (
                         filtered.map(opt => (
                             <div 
@@ -113,9 +113,8 @@ export default function SchedulesDashboard() {
     const [batchCurriculum, setBatchCurriculum] = useState("");
     const [subjectSearch, setSubjectSearch] = useState("");
     
-    // Step 1 State: Subjects & Sections
+    // Step 1 State: Subjects
     const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([]);
-    const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
     const [mergeLecLab, setMergeLecLab] = useState<Record<string, boolean>>({}); // subject.id -> boolean
 
     // Step 2 State: Static Assignments (Optional)
@@ -128,6 +127,7 @@ export default function SchedulesDashboard() {
     // Toast State
     const [showToast, setShowToast] = useState(false);
     const [statusCode, setStatusCode] = useState("");
+    const [progress, setProgress] = useState(100);
 
     const STATUS_MESSAGES = {
         "201": "Schedule initialized successfully!",
@@ -135,6 +135,15 @@ export default function SchedulesDashboard() {
         "400": "Name, Subjects, and Sections are required.",
         "500": "Server error occurred."
     };
+
+    useEffect(() => {
+        if (showToast) {
+            setProgress(100);
+            const interval = setInterval(() => setProgress(p => Math.max(0, p - 2)), 100);
+            const timer = setTimeout(() => setShowToast(false), 5000);
+            return () => { clearInterval(interval); clearTimeout(timer); };
+        }
+    }, [showToast]);
 
     const loadData = async () => {
         setLoading(true);
@@ -144,7 +153,7 @@ export default function SchedulesDashboard() {
                 fetchCurriculumVersions(),
                 fetchAllSubjects(),
                 fetchAllTeachers(),
-                getAllProgramsData() 
+                getAllProgramsData()
             ]);
             setSchedules(list);
             setCurriculums(currs);
@@ -206,11 +215,6 @@ export default function SchedulesDashboard() {
         setMergeLecLab(prev => ({ ...prev, [id]: !prev[id] }));
     };
 
-    const toggleSectionSelection = (id: string) => {
-        setSelectedSectionIds(prev => 
-            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-        );
-    };
 
     const addAssignmentRow = () => {
         setAssignments(prev => [...prev, { id: crypto.randomUUID(), subjectId: "", teacherId: "" }]);
@@ -238,7 +242,7 @@ export default function SchedulesDashboard() {
     };
 
     const handleCreate = async () => {
-        if (!newScheduleName || chosenSubjects.length === 0 || selectedSectionIds.length === 0) {
+        if (!newScheduleName || chosenSubjects.length === 0) {
             setStatusCode("400");
             setShowToast(true);
             return;
@@ -258,7 +262,6 @@ export default function SchedulesDashboard() {
             name: newScheduleName,
             semester: semester,
             subjects: selectedSubjectIds,
-            sections: selectedSectionIds,
             assignments: finalAssignments,
             overrides: teacherOverrides,
             mergeLecLab: mergeLecLab
@@ -351,7 +354,6 @@ export default function SchedulesDashboard() {
                     setNewScheduleName("");
                     setSemester("1");
                     setSelectedSubjectIds([]);
-                    setSelectedSectionIds([]);
                     setAssignments([]);
                     setOverrideTeacherIds([]);
                     setTeacherOverrides({});
@@ -417,8 +419,8 @@ export default function SchedulesDashboard() {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 lg:grid-cols-6 gap-6">
-                                    <div className="flex flex-col h-[50vh] lg:col-span-3">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    <div className="flex flex-col col-span-1 h-[50vh]">
                                         <div className="flex items-center justify-between mb-2">
                                             <h4 className="font-bold text-sm text-gray-500 flex items-center gap-2">
                                                 Available Subjects
@@ -439,9 +441,36 @@ export default function SchedulesDashboard() {
                                                     </TableHead>
                                                     <TableBody className="divide-y text-gray-900 dark:text-white">{availableSubjects.map(s => (
                                                         <TableRow key={s.id} className="hover:bg-gray-500/30">
-                                                            <TableCell className="text-xs">{s.curriculumn_version}</TableCell>
-                                                            <TableCell className="font-mono text-[10px]">{s.course_code}</TableCell>
-                                                            <TableCell className="text-xs">{s.course_name}</TableCell>
+                                                            <TableCell className="text-xs">
+                                                                <Tooltip content={(
+                                                                    <>
+                                                                        <div>Lec: {s.lecture_units}</div>
+                                                                        <div>Lab: {s.lab_units}</div>
+                                                                    </>
+                                                                )}>
+                                                                    {s.curriculumn_version}
+                                                                </Tooltip>
+                                                            </TableCell>
+                                                            <TableCell className="font-mono text-[10px]">
+                                                                <Tooltip content={(
+                                                                    <>
+                                                                        <div>Lec: {s.lecture_units}</div>
+                                                                        <div>Lab: {s.lab_units}</div>
+                                                                    </>
+                                                                )}>
+                                                                    {s.course_code}
+                                                                </Tooltip>
+                                                            </TableCell>
+                                                            <TableCell className="text-xs">
+                                                                <Tooltip content={(
+                                                                    <>
+                                                                        <div>Lec: {s.lecture_units}</div>
+                                                                        <div>Lab: {s.lab_units}</div>
+                                                                    </>
+                                                                )}>
+                                                                    {s.course_name}
+                                                                </Tooltip>
+                                                            </TableCell>
                                                             <TableCell><Button size="xs" color="blue" onClick={() => addSubject(s.id)}><HiArrowRight size="18" /></Button></TableCell>
                                                         </TableRow>
                                                     ))}</TableBody>
@@ -450,67 +479,92 @@ export default function SchedulesDashboard() {
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-col h-[50vh] lg:col-span-2 text-gray-900 dark:text-white">
-                                        <h4 className="font-bold text-sm mb-2 text-blue-600 flex items-center justify-between">Selected Subjects <span className="bg-blue-100 px-2 rounded text-xs text-blue-700">{chosenSubjects.length}</span></h4>
-                                        <div className="flex-1 border border-blue-200 rounded-lg overflow-hidden bg-white dark:bg-gray-800 shadow-inner overflow-y-auto">
-                                            {chosenSubjects.length === 0 ? (
-                                                <div className="text-center py-12 text-gray-400 italic font-medium h-full flex items-center justify-center">No subjects selected</div>
-                                            ) : (
-                                                <Accordion collapseAll>
-                                                    {Object.entries(groupedSelected).map(([curr, subs]: [string, any]) => {
-                                                        const totalInCurr = allSubjects.filter(s => s.curriculumn_version === curr).length;
-                                                        const isFullCurr = subs.length === totalInCurr && curr !== "Unassigned";
-                                                        return (
-                                                            <AccordionPanel key={curr}>
-                                                                <AccordionTitle className={`p-3 ${isFullCurr ? 'text-blue-600' : 'text-blue-700'}`}>
-                                                                    <div className="flex justify-between items-center w-full pr-4 text-xs">
-                                                                        <span>{curr}</span>
-                                                                        <span className="font-bold">({subs.length}) {isFullCurr && "[All]"}</span>
-                                                                    </div>
-                                                                </AccordionTitle>
-                                                                <AccordionContent className="p-0 border-none">
-                                                                    <Table hoverable>
-                                                                        <TableBody className="divide-y text-gray-900 dark:text-white">{subs.map((s: any) => (
-                                                                            <TableRow key={s.id} className="bg-white dark:bg-gray-800">
-                                                                                <TableCell className="p-2">
-                                                                                    <div className="flex flex-col">
-                                                                                        <span className="font-mono text-xs">{s.course_code}</span>
-                                                                                        <span className="text-xs font-semibold truncate max-w-[120px]">{s.course_name}</span>
-                                                                                    </div>
-                                                                                </TableCell>
-                                                                                <TableCell className="p-1">
-                                                                                    <div className="flex items-center gap-1">
-                                                                                        <Checkbox 
-                                                                                            id={`merge-${s.id}`} 
-                                                                                            checked={!!mergeLecLab[s.id]} 
-                                                                                            onChange={() => toggleMergeLecLab(s.id)}
-                                                                                        />
-                                                                                        <Label htmlFor={`merge-${s.id}`} className="text-xs whitespace-nowrap">Merge Lec/Lab</Label>
-                                                                                    </div>
-                                                                                </TableCell>
-                                                                                <TableCell className="text-right pr-2"><Button size="xs" color="red" onClick={() => removeSubject(s.id)}><HiArrowLeft size="16" /></Button></TableCell>
-                                                                            </TableRow>
-                                                                        ))}</TableBody>
-                                                                    </Table>
-                                                                </AccordionContent>
-                                                            </AccordionPanel>
-                                                        );
-                                                    })}
-                                                </Accordion>
-                                            )}
+                                    <div className="grid grid-cols-3 gap-4 col-span-1 h-[50vh]">
+                                        <div className="flex flex-col col-span-2 h-[50vh] text-gray-900 dark:text-white">
+                                            <h4 className="font-bold text-sm mb-2 text-blue-600 flex items-center justify-between">Selected Subjects <span className="bg-blue-100 px-2 rounded text-xs text-blue-700">{chosenSubjects.length}</span></h4>
+                                            <div className="flex-1 border border-blue-200 rounded-lg overflow-hidden bg-white dark:bg-gray-800 shadow-inner overflow-y-auto">
+                                                {chosenSubjects.length === 0 ? (
+                                                    <div className="text-center py-12 text-gray-400 italic font-medium h-full flex items-center justify-center">No subjects selected</div>
+                                                ) : (
+                                                    <Accordion collapseAll>
+                                                        {Object.entries(groupedSelected).map(([curr, subs]: [string, any]) => {
+                                                            const totalInCurr = allSubjects.filter(s => s.curriculumn_version === curr).length;
+                                                            const isFullCurr = subs.length === totalInCurr && curr !== "Unassigned";
+                                                            return (
+                                                                <AccordionPanel key={curr}>
+                                                                    <AccordionTitle className={`p-3 ${isFullCurr ? 'text-blue-600' : 'text-blue-700'}`}>
+                                                                        <div className="flex justify-between items-center w-full pr-4 text-xs">
+                                                                            <span>{curr}</span>
+                                                                            <span className="pl-2 font-bold text-blue-500">({subs.length})</span>
+                                                                            {isFullCurr && (<span className={"pl-3 font-bold text-green-500"}>[FULL]</span>)}
+                                                                        </div>
+                                                                    </AccordionTitle>
+                                                                    <AccordionContent className="p-0 border-none  overflow-x-auto">
+                                                                        <Table hoverable>
+                                                                            <TableBody className="divide-y text-gray-900 dark:text-white">{subs.map((s: any) => (
+                                                                                <TableRow key={s.id} className="bg-white dark:bg-gray-800">
+                                                                                    <TableCell className="p-2">
+                                                                                        <Tooltip content={(
+                                                                                            <>
+                                                                                                <div>Lec: {s.lecture_units}</div>
+                                                                                                <div>Lab: {s.lab_units}</div>
+                                                                                            </>
+                                                                                        )}>
+                                                                                            <div className="flex flex-col">
+                                                                                                <span className="font-mono text-xs">{s.course_code}</span>
+                                                                                                <span className="text-xs font-semibold truncate max-w-30">{s.course_name}</span>
+                                                                                            </div>
+                                                                                        </Tooltip>
+                                                                                    </TableCell>
+                                                                                    <TableCell className="p-1">
+                                                                                        <Tooltip content={(
+                                                                                            <>
+                                                                                                <div>Lec: {s.lecture_units}</div>
+                                                                                                <div>Lab: {s.lab_units}</div>
+                                                                                            </>
+                                                                                        )}>
+                                                                                            <div className="flex items-center gap-1">
+                                                                                                <Checkbox
+                                                                                                    id={`merge-${s.id}`}
+                                                                                                    checked={!!mergeLecLab[s.id]}
+                                                                                                    onChange={() => toggleMergeLecLab(s.id)}
+                                                                                                />
+                                                                                                <Label htmlFor={`merge-${s.id}`} className="text-xs whitespace-nowrap">Merge Lec/Lab</Label>
+                                                                                            </div>
+                                                                                        </Tooltip>
+                                                                                    </TableCell>
+                                                                                    <TableCell className="text-right pr-2"><Button size="xs" color="red" onClick={() => removeSubject(s.id)}><HiArrowLeft size="16" /></Button></TableCell>
+                                                                                </TableRow>
+                                                                            ))}</TableBody>
+                                                                        </Table>
+                                                                    </AccordionContent>
+                                                                </AccordionPanel>
+                                                            );
+                                                        })}
+                                                    </Accordion>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
 
-                                    <div className="flex flex-col h-[50vh] lg:col-span-1">
-                                        <h4 className="font-bold text-sm mb-2 text-gray-500">Target Courses ({selectedSectionIds.length})</h4>
-                                        <div className="flex-1 border rounded-lg overflow-hidden bg-white dark:bg-gray-800 shadow-inner">
-                                            <div className="h-full overflow-y-auto p-2 space-y-2">
-                                                {allSections.map(sec => (
-                                                    <div key={sec.program_code} className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded border border-gray-100 dark:border-gray-700 cursor-pointer text-gray-900 dark:text-white" onClick={() => toggleSectionSelection(sec.program_code)}>
-                                                        <Checkbox checked={selectedSectionIds.includes(sec.program_code)} readOnly />
-                                                        <div className="text-xs font-medium">{sec.program_code} <span className="text-gray-400 ml-1">({sec.level})</span></div>
-                                                    </div>
-                                                ))}
+                                        <div className="flex flex-col min-w-32 h-[50vh]">
+                                            <h4 className="font-bold text-sm mb-2 text-gray-500">Available Courses (Reference)</h4>
+                                            <div className="flex-1 border rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-800 shadow-inner">
+                                                <div className="h-full overflow-y-auto p-2 space-y-2">
+                                                    {allSections.map(sec => (
+                                                        <div key={sec.program_code} className="flex items-center gap-2 p-2 bg-white dark:bg-gray-700 rounded border border-gray-100 dark:border-gray-600 text-gray-900 dark:text-white">
+                                                            <Tooltip placement={"bottom"}
+                                                                     animation={"duration-800"}
+                                                                     content={Object.entries(sec.students || {}).map(([year, count]) => (
+                                                                         <div key={year} className="mr-2">Y{year}: {Number(count)}</div>
+                                                                     ))}>
+                                                                <div className={"flex w-32"}>
+                                                                    <div className="text-xs font-medium">{sec.program_code}</div>
+                                                                    <div className="pl-2 text-xs text-gray-500">({sec.level})</div>
+                                                                </div>
+                                                            </Tooltip>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -581,7 +635,7 @@ export default function SchedulesDashboard() {
                         {activeTab > 0 && <Button color="alternative" onClick={() => tabsRef.current?.setActiveTab(activeTab - 1)}><HiArrowLeft className="mr-2" /> Back</Button>}
                         <Button 
                             onClick={activeTab < 2 ? () => tabsRef.current?.setActiveTab(activeTab + 1) : handleCreate} 
-                            disabled={!newScheduleName || chosenSubjects.length === 0 || selectedSectionIds.length === 0}
+                            disabled={!newScheduleName || chosenSubjects.length === 0}
                         >
                             {activeTab < 2 ? <>{activeTab === 0 ? "Customize (Optional)" : "Availability (Optional)"} <HiArrowRight className="ml-2" /></> : <><HiCheck className="mr-2" /> Initialize Schedule</>}
                         </Button>
@@ -589,12 +643,19 @@ export default function SchedulesDashboard() {
                 </ModalFooter>
             </Modal>
 
-            <Toast className={`fixed z-60 bottom-10 right-10 transition-all ${showToast ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            {/* Toast */}
+            <Toast className={`fixed z-50 bottom-10 right-10 transition-all ${showToast ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                 <div className="flex items-center">
-                    <div className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${statusCode.startsWith('2') ? 'bg-green-100 text-green-500' : 'bg-red-100 text-red-500'}`}><HiCheck className="h-5 w-5" /></div>
+                    <div className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${statusCode.startsWith('2') ? 'bg-green-100 text-green-500' : 'bg-red-100 text-red-500'}`}>
+                        {statusCode.startsWith('2') ? <HiCheck className="h-5 w-5" /> : <HiExclamation className="h-5 w-5" />}
+                    </div>
                     <div className="ml-3 text-sm font-normal">{STATUS_MESSAGES[statusCode as keyof typeof STATUS_MESSAGES] || "Error"}</div>
-                    <ToastToggle onDismiss={() => setShowToast(false)} />
+                    <ToastToggle onDismiss={() => {
+                        setShowToast(false);
+                        setProgress(0);
+                    }} />
                 </div>
+                <Progress progress={progress} size="sm" className="mt-2" color={statusCode.startsWith('2') ? "green" : "red"} />
             </Toast>
         </div>
     );
