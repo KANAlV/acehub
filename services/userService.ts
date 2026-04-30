@@ -467,22 +467,22 @@ export async function fetchCurriculumVersions() {
 }
 
 /** --- Teachers --- **/
-export async function fetchTeachers(search = "", page: number) {
+export async function fetchTeachers(search = "", page: number, type = "All") {
     const ITEMS_PER_PAGE = 10;
     try {
         const val = search.trim() === "" ? null : search;
         const offset = (page - 1) * ITEMS_PER_PAGE;
-        return await sql`SELECT * FROM get_teachers(${val}, ${offset})`;
+        return await sql`SELECT * FROM get_teachers(${val}, ${offset}, ${ITEMS_PER_PAGE}, ${type})`;
     } catch (error) {
         console.error(`[DB_ERROR]: Failed to fetch teachers:`, error);
         return [];
     }
 }
 
-export async function fetchTeachersCount(search = "") {
+export async function fetchTeachersCount(search = "", type = "All") {
     try {
         const val = search.trim() === "" ? null : search;
-        const result = await sql`SELECT get_teachers_count(${val})`;
+        const result = await sql`SELECT get_teachers_count(${val}, ${type})`;
         return result.length > 0 ? result[0].get_teachers_count : 0;
     } catch (error) {
         console.error(`[DB_ERROR]: Failed to fetch teachers count:`, error);

@@ -33,6 +33,7 @@ import {
 } from "@/services/userService.ts";
 import {VscSave} from "react-icons/vsc";
 import {sanitizeMediumName, sanitizeVeryShortName} from "@/lib/validation.ts";
+import {IoMdArrowDropdown} from "react-icons/io";
 
 /** --- Helper Components --- **/
 const AvailabilityManager = ({ availability, onUpdate, employmentType }: { availability: any[], onUpdate: (val: any[]) => void, employmentType: string }) => {
@@ -114,9 +115,10 @@ export default function TeacherManager() {
     const [type, setType] = useState("Regular");
     const [availability, setAvailability] = useState<any[]>([]);
 
-    // Search
+    // Search and Filter
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState(search);
+    const [filterType, setFilterType] = useState("All"); // New state for filter type
 
     // pagination consts
     const itemsPerPage = 10;
@@ -164,13 +166,13 @@ export default function TeacherManager() {
 
     /** Queries **/
     const loadInitialData = async () => {
-        const data = await fetchTeachers(search, currentPage);
+        const data = await fetchTeachers(search, currentPage, filterType);
         setTeachers(data);
         setLoading(false);
     }
 
     const loadRowCount = async () => {
-        const count = await fetchTeachersCount(search);
+        const count = await fetchTeachersCount(search, filterType);
         setRowCount(count);
     }
 
@@ -402,7 +404,7 @@ export default function TeacherManager() {
         };
         fetchData();
         return () => { isCancelled = true; };
-    }, [currentPage, debouncedSearch]);
+    }, [currentPage, debouncedSearch, filterType]); // Add filterType to dependencies
 
     useEffect(() => {
         if (showToast) {
@@ -413,7 +415,7 @@ export default function TeacherManager() {
         }
     }, [showToast]);
 
-    useEffect(() => { setCurrentPage(1); }, [debouncedSearch]);
+    useEffect(() => { setCurrentPage(1); }, [debouncedSearch, filterType]); // Add filterType to dependencies
     useEffect(() => {
         const handler = setTimeout(() => setDebouncedSearch(search), 1000);
         return () => clearTimeout(handler);
@@ -437,12 +439,15 @@ export default function TeacherManager() {
                 </div>
             </div>
 
-            <TextInput
-                className="mb-4 w-62"
-                placeholder="Search..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-            />
+            <div className="flex gap-4 mb-4">
+                <TextInput
+                    className="w-62"
+                    placeholder="Search..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                />
+                {/* The Select component for filterType is now removed from here */}
+            </div>
 
             <Table hoverable>
                 <TableHead>
@@ -451,7 +456,23 @@ export default function TeacherManager() {
                         <TableHeadCell>Name</TableHeadCell>
                         <TableHeadCell>Code</TableHeadCell>
                         <TableHeadCell>Spec.</TableHeadCell>
-                        <TableHeadCell>Type</TableHeadCell>
+                        <TableHeadCell>
+                            <Dropdown
+                                label="Type"
+                                inline
+                                dismissOnClick={true}
+                                renderTrigger={() => (
+                                    <span className="cursor-pointer flex items-center gap-1 hover:text-blue-500">
+                                        Type {filterType !== "All" && `(${filterType})`} <IoMdArrowDropdown />
+                                    </span>
+                                )}
+                            >
+                                <DropdownItem onClick={() => setFilterType("All")}>All Types</DropdownItem>
+                                <DropdownItem onClick={() => setFilterType("FT")}>FT</DropdownItem>
+                                <DropdownItem onClick={() => setFilterType("PTFL")}>PTFL</DropdownItem>
+                                <DropdownItem onClick={() => setFilterType("PT")}>PT</DropdownItem>
+                            </Dropdown>
+                        </TableHeadCell>
                         <TableHeadCell>Availability</TableHeadCell>
                         <TableHeadCell><span className="sr-only">Edit</span></TableHeadCell>
                     </TableRow>
@@ -525,10 +546,9 @@ export default function TeacherManager() {
                         <div>
                             <Label>Emp. Type</Label>
                             <Select value={type} onChange={e => { setType(e.target.value); setActiveChanges(true); }}>
-                                <option>Regular</option>
+                                <option>FT</option>
                                 <option>PTFL</option>
                                 <option>PT</option>
-                                <option>Proby</option>
                             </Select>
                         </div>
                     </div>
@@ -568,10 +588,9 @@ export default function TeacherManager() {
                         <div>
                             <Label>Emp. Type</Label>
                             <Select value={type} onChange={e => { setType(e.target.value); setActiveChanges(true); }}>
-                                <option>Regular</option>
+                                <option>FT</option>
                                 <option>PTFL</option>
                                 <option>PT</option>
-                                <option>Proby</option>
                             </Select>
                         </div>
                     </div>
@@ -602,17 +621,19 @@ export default function TeacherManager() {
 
             {/* Toast */}
             <Toast className={`fixed z-50 bottom-10 right-10 transition-all ${showToast ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                <div className="flex items-center">
+                <div className="flex items-start">
                     <div className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${statusCode.startsWith('2') ? 'bg-green-100 text-green-500' : 'bg-red-100 text-red-500'}`}>
                         {statusCode.startsWith('2') ? <HiCheck className="h-5 w-5" /> : <HiExclamation className="h-5 w-5" />}
                     </div>
-                    <div className="ml-3 text-sm font-normal">{STATUS_MESSAGES[statusCode] || "Operation complete"}</div>
+                    <div className="ml-3 flex-1">
+                        <div className="text-sm font-normal">{STATUS_MESSAGES[statusCode] || "Operation complete"}</div>
+                        <Progress progress={progress} size="sm" className="mt-2" color={statusCode.startsWith('2') ? "green" : "red"} />
+                    </div>
                     <ToastToggle onDismiss={() => {
                         setShowToast(false);
                         setProgress(0);
                     }} />
                 </div>
-                <Progress progress={progress} size="sm" className="mt-2" color={statusCode.startsWith('2') ? "green" : "red"} />
             </Toast>
 
             <input
