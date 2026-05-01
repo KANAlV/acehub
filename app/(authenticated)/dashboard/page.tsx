@@ -15,8 +15,10 @@ import {
     fetchScheduleDetails,
     fetchTeachers,
     getAllRoomsData,
-    fetchSchedulesList
+    fetchSchedulesList,
+    fetchSystemSettings
 } from "@/services/userService";
+import { getMaxUnitsSync, getOverloadMaxSync, getPrepLimitSync } from "@/lib/teachingLoadUtils";
 
 export default function DashboardSummary() {
     const router = useRouter();
@@ -27,6 +29,7 @@ export default function DashboardSummary() {
 
     const [teachers, setTeachers] = useState<any[]>([]);
     const [schedules, setSchedules] = useState<any[]>([]);
+    const [systemSettings, setSystemSettings] = useState<any>(null);
 
     // Logic for max units as defined in your reference
     const getMaxUnits = (employmentType: string): number => {
@@ -51,10 +54,11 @@ export default function DashboardSummary() {
 
             setActiveScheduleId(displayId);
 
-            const [details, teacherResponse, list] = await Promise.all([
+            const [details, teacherResponse, list, settings] = await Promise.all([
                 fetchScheduleDetails(displayId),
                 fetchTeachers("", 1, "All"),
-                fetchSchedulesList()
+                fetchSchedulesList(),
+                fetchSystemSettings()
             ]);
 
             const processedTeachers = Array.isArray(teacherResponse)
@@ -66,6 +70,7 @@ export default function DashboardSummary() {
 
             setSchedules(details || []);
             setTeachers(processedTeachers);
+            setSystemSettings(settings);
 
         } catch (error) {
             console.error("Dashboard Load Error:", error);
@@ -132,7 +137,7 @@ export default function DashboardSummary() {
                 {/* Blue Summary Header */}
                 <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                     <h4 className="font-semibold text-sm mb-3 text-blue-800 dark:text-blue-200">Teacher Workload Summary</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-xs">
                         <div>
                             <p className="text-gray-600 dark:text-gray-400">Total Teachers</p>
                             <p className="font-bold text-lg">{teachers.length}</p>
@@ -141,6 +146,23 @@ export default function DashboardSummary() {
                             <p className="text-gray-600 dark:text-gray-400">Active in Schedule</p>
                             <p className="font-bold text-lg text-green-600">
                                 {teachers.filter(t => schedules.some(s => String(s.teacher_id) === String(t.pscs_id))).length}
+                            </p>
+                        </div>
+                        <div>
+                            <p className="text-gray-600 dark:text-gray-400">Overloaded</p>
+                            <p className="font-bold text-lg text-red-600">
+                                {teachers.filter(t => {
+                                    const teacherUnits = schedules.reduce((total, s) => {
+                                        if (String(s.teacher_id) === String(t.pscs_id)) {
+                                            return total + (Number(s.end_time) - Number(s.start_time)) / 60;
+                                        }
+                                        return total;
+                                    }, 0);
+                                    const maxUnits = getMaxUnits(t.employment_type);
+                                    const overloadMax = getOverloadMaxSync(systemSettings);
+                                    const absoluteMax = maxUnits + overloadMax;
+                                    return teacherUnits > maxUnits;
+                                }).length}
                             </p>
                         </div>
                         <div>
@@ -170,12 +192,15 @@ export default function DashboardSummary() {
                         }, 0);
 
                         const maxUnits = getMaxUnits(teacher.employment_type);
+                        const overloadMax = getOverloadMaxSync(systemSettings);
+                        const absoluteMax = maxUnits + overloadMax;
                         const utilizationRate = maxUnits > 0 ? (teacherUnits / maxUnits) * 100 : 0;
                         const remainingUnits = maxUnits - teacherUnits;
 
                         let statusColor = "green";
                         let statusText = "Available";
-                        if (teacherUnits > maxUnits) { statusColor = "red"; statusText = "Overloaded"; }
+                        if (teacherUnits > absoluteMax) { statusColor = "red"; statusText = "Overloaded"; }
+                        else if (teacherUnits > maxUnits) { statusColor = "orange"; statusText = "Overloaded (Within Limit)"; }
                         else if (teacherUnits >= maxUnits * 0.95) { statusColor = "red"; statusText = "At Max Capacity"; }
                         else if (teacherUnits >= maxUnits * 0.85) { statusColor = "yellow"; statusText = "Near Capacity"; }
                         else if (teacherUnits >= maxUnits * 0.6) { statusColor = "blue"; statusText = "Moderate Load"; }
@@ -198,6 +223,9 @@ export default function DashboardSummary() {
                                         <span>Max Units:</span><span className="font-medium">{maxUnits}</span>
                                     </div>
                                     <div className="flex justify-between text-xs">
+                                        <span>Absolute Max:</span><span className="font-medium text-orange-600">{absoluteMax}</span>
+                                    </div>
+                                    <div className="flex justify-between text-xs">
                                         <span>Available:</span>
                                         <span className={`font-medium ${remainingUnits >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                             {remainingUnits >= 0 ? '+' : ''}{remainingUnits.toFixed(1)}
@@ -209,6 +237,18 @@ export default function DashboardSummary() {
                                         </div>
                                         <Progress progress={Math.min(100, Math.max(0, utilizationRate))} color={statusColor} size="sm" className="h-2" />
                                     </div>
+
+                                    {/* Show assigned subjects count */}
+                                    {teacherUnits > 0 && (
+                                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                                            <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                                                Assigned Subjects: {new Set(schedules.filter(s => String(s.teacher_id) === String(teacher.pscs_id)).map(s => s.subjectId)).size}
+                                            </p>
+                                            <p className="text-xs text-gray-500">
+                                                Max Allowed: {getPrepLimitSync(teacher.employment_type, systemSettings || {})}
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );

@@ -12,8 +12,10 @@ import {
 } from "react-icons/hi";
 import { useRouter } from "next/navigation";
 import {
-    fetchScheduleDetails, fetchTeachers, fetchAllSubjects, fetchSchedulesList
+    fetchScheduleDetails, fetchTeachers, fetchAllSubjects, fetchSchedulesList,
+    fetchSystemSettings
 } from "services/userService";
+import { getMaxUnitsSync, getOverloadMaxSync, getPrepLimitSync } from "@/lib/teachingLoadUtils";
 
 /* ================= CONSTANTS ================= */
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -74,6 +76,7 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
     const [scheduleEntries, setScheduleEntries] = useState<any[]>([]);
     const [allSubjects, setAllSubjects] = useState<any[]>([]);
     const [scheduleName, setScheduleName] = useState("");
+    const [systemSettings, setSystemSettings] = useState<any>(null);
 
     useEffect(() => {
         const loadTeacherData = async () => {
@@ -89,13 +92,15 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
                 setTeacher(foundTeacher);
 
                 // Fetch schedule entries and subjects
-                const [entries, subjects, scheduleList] = await Promise.all([
+                const [entries, subjects, scheduleList, settings] = await Promise.all([
                     fetchScheduleDetails(id),
                     fetchAllSubjects(),
-                    fetchSchedulesList()
+                    fetchSchedulesList(),
+                    fetchSystemSettings()
                 ]);
 
                 setAllSubjects(subjects);
+                setSystemSettings(settings);
 
                 const scheduleMeta = scheduleList.find((s: any) => s.id === id);
                 if (scheduleMeta) {
@@ -136,13 +141,17 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
         );
     }
 
-    // Calculate teacher's current units
+    // Calculate teacher's current units and unique subjects
     const currentUnits = scheduleEntries.reduce((total, entry) => {
         const durationHours = (entry.end_time - entry.start_time) / 60;
         return total + durationHours;
     }, 0);
 
-    const maxUnits = getMaxUnitsByEmploymentType(teacher.employment_type);
+    const uniqueSubjects = new Set(scheduleEntries.map(entry => entry.subject_id)).size;
+    const maxUnits = getMaxUnitsSync(teacher.employment_type, systemSettings || {});
+    const overloadMax = getOverloadMaxSync(systemSettings || {});
+    const absoluteMax = maxUnits + overloadMax;
+    const prepLimit = getPrepLimitSync(teacher.employment_type, systemSettings || {});
     const remainingUnits = maxUnits - currentUnits;
     const utilizationRate = maxUnits > 0 ? (currentUnits / maxUnits) * 100 : 0;
 
@@ -151,11 +160,15 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
     let statusText = "Available";
     let statusIcon = HiCheckCircle;
 
-    if (utilizationRate > 100) {
+    if (currentUnits > absoluteMax) {
         statusColor = "red";
         statusText = "Overloaded";
         statusIcon = HiExclamationCircle;
-    } else if (utilizationRate > 90) {
+    } else if (currentUnits > maxUnits) {
+        statusColor = "orange";
+        statusText = "Overloaded (Within Limit)";
+        statusIcon = HiExclamationCircle;
+    } else if (utilizationRate > 95) {
         statusColor = "red";
         statusText = "At Max Capacity";
         statusIcon = HiExclamationCircle;
@@ -247,7 +260,7 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
                         <HiClock className="h-5 w-5"/>
                         Units Analysis
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <div className="text-center">
                             <div className="text-3xl font-bold text-blue-600">{currentUnits.toFixed(1)}</div>
                             <p className="text-sm text-gray-500">Current Units</p>
@@ -255,6 +268,10 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
                         <div className="text-center">
                             <div className="text-3xl font-bold text-gray-600">{maxUnits}</div>
                             <p className="text-sm text-gray-500">Max Units</p>
+                        </div>
+                        <div className="text-center">
+                            <div className="text-3xl font-bold text-orange-600">{absoluteMax}</div>
+                            <p className="text-sm text-gray-500">Absolute Max</p>
                         </div>
                         <div className="text-center">
                             <Badge
@@ -266,6 +283,33 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
                             </Badge>
                             <p className="text-sm text-gray-500 mt-1">Remaining Units</p>
                         </div>
+                    </div>
+
+                    {/* Subjects Section */}
+                    <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="text-center">
+                                <div className="text-2xl font-bold text-purple-600">{uniqueSubjects}</div>
+                                <p className="text-sm text-gray-600">Unique Subjects</p>
+                            </div>
+                            <div className="text-center">
+                                <div className="text-2xl font-bold text-indigo-600">{prepLimit}</div>
+                                <p className="text-sm text-gray-600">Prep Limit</p>
+                            </div>
+                        </div>
+                        {uniqueSubjects > 0 && (
+                            <div className="mt-3">
+                                <div className="flex justify-between text-sm mb-2">
+                                    <span>Prep Utilization</span>
+                                    <span className="font-medium">{((uniqueSubjects / prepLimit) * 100).toFixed(1)}%</span>
+                                </div>
+                                <Progress
+                                    progress={Math.min(100, (uniqueSubjects / prepLimit) * 100)}
+                                    color={uniqueSubjects >= prepLimit ? "failure" : uniqueSubjects >= prepLimit * 0.8 ? "warning" : "success"}
+                                    size="sm"
+                                />
+                            </div>
+                        )}
                     </div>
 
                     <div className="mt-6">

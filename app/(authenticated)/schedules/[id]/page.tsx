@@ -11,8 +11,10 @@ import {
 } from "react-icons/hi";
 import {
     fetchScheduleDetails, getAllRoomsData, getAllProgramsData, fetchTeachers,
-    fetchAllSubjects, fetchSchedulesList, deleteGeneratedSchedule, setDisplay, getDisplay
+    fetchAllSubjects, fetchSchedulesList, deleteGeneratedSchedule, setDisplay, getDisplay,
+    fetchSystemSettings
 } from "services/userService";
+import { getMaxUnitsSync, getOverloadMaxSync, getPrepLimitSync } from "@/lib/teachingLoadUtils";
 import {redirect} from "next/navigation";
 
 export default function ScheduleSummary({ params }: { params: Promise<{ id: string }> }) {
@@ -29,6 +31,7 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
     
     // Schedule Data
     const [schedules, setSchedules] = useState<any[]>([]);
+    const [systemSettings, setSystemSettings] = useState<any>(null);
 
     // UI State
     const [showToast, setShowToast] = useState(false);
@@ -101,13 +104,14 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
     const loadData = async () => {
         setLoading(true);
         try {
-            const [list, currs, subs, teachs, rms, scheduleDetails] = await Promise.all([
+            const [list, currs, subs, teachs, rms, scheduleDetails, settings] = await Promise.all([
                 fetchSchedulesList(),
                 getAllProgramsData(),
                 fetchAllSubjects(),
                 fetchTeachers("", 1, "All"),
                 getAllRoomsData(),
-                fetchScheduleDetails(id)
+                fetchScheduleDetails(id),
+                fetchSystemSettings()
             ]);
 
             const schedule = list.find((s: any) => s.id === id);
@@ -120,6 +124,7 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
             setSections([]); // Set empty array since fetchSections doesn't exist
             setRooms(rms);
             setSchedules(scheduleDetails);
+            setSystemSettings(settings);
 
         } catch (error) {
             console.error("Error loading schedule data:", error);
@@ -357,7 +362,7 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                 {/* Summary Statistics for This Schedule */}
                 <div className=" mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                     <h4 className="font-semibold text-sm mb-3 text-blue-800 dark:text-blue-200">Teacher Workload Summary</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-xs">
                         <div>
                             <p className="text-gray-600 dark:text-gray-400">Total Teachers</p>
                             <p className="font-bold text-lg">{teachers.length}</p>
@@ -368,6 +373,24 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                                 {teachers.filter(t =>
                                     schedules.some(s => s.teacher_id === t.pscs_id)
                                 ).length}
+                            </p>
+                        </div>
+                        <div>
+                            <p className="text-gray-600 dark:text-gray-400">Overloaded</p>
+                            <p className="font-bold text-lg text-red-600">
+                                {teachers.filter(t => {
+                                    const teacherUnits = schedules.reduce((total, schedule) => {
+                                        if (schedule.teacher_id === t.pscs_id) {
+                                            const durationHours = (schedule.end_time - schedule.start_time) / 60;
+                                            return total + durationHours;
+                                        }
+                                        return total;
+                                    }, 0);
+                                    const maxUnits = getMaxUnits(t.employment_type);
+                                    const overloadMax = getOverloadMaxSync(systemSettings);
+                                    const absoluteMax = maxUnits + overloadMax;
+                                    return teacherUnits > maxUnits;
+                                }).length}
                             </p>
                         </div>
                         <div>
@@ -412,18 +435,23 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                             }, 0);
 
                             const maxUnits = getMaxUnits(teacher.employment_type);
+                            const overloadMax = getOverloadMaxSync(systemSettings);
+                            const absoluteMax = maxUnits + overloadMax;
                             const utilizationRate = maxUnits > 0 ? (teacherUnits / maxUnits) * 100 : 0;
                             const remainingUnits = maxUnits - teacherUnits;
 
                             // Debug logging (remove in production)
-                            console.log(`Teacher ${teacher.name}: units=${teacherUnits}, max=${maxUnits}, type=${teacher.employment_type}, rate=${utilizationRate}%`);
+                            console.log(`Teacher ${teacher.name}: units=${teacherUnits}, max=${maxUnits}, absolute=${absoluteMax}, type=${teacher.employment_type}, rate=${utilizationRate}%`);
 
                             // Determine status color based on actual capacity remaining
                             let statusColor = "green";
                             let statusText = "Available";
-                            if (teacherUnits > maxUnits) {
+                            if (teacherUnits > absoluteMax) {
                                 statusColor = "red";
                                 statusText = "Overloaded";
+                            } else if (teacherUnits > maxUnits) {
+                                statusColor = "orange";
+                                statusText = "Overloaded (Within Limit)";
                             } else if (teacherUnits >= maxUnits * 0.95) {
                                 statusColor = "red";
                                 statusText = "At Max Capacity";
@@ -462,6 +490,10 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                                             <span className="font-medium">{maxUnits}</span>
                                         </div>
                                         <div className="flex justify-between text-xs">
+                                            <span>Absolute Max:</span>
+                                            <span className="font-medium text-orange-600">{absoluteMax}</span>
+                                        </div>
+                                        <div className="flex justify-between text-xs">
                                             <span>Available:</span>
                                             <span className={`font-medium ${remainingUnits >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                                 {remainingUnits >= 0 ? '+' : ''}{remainingUnits.toFixed(1)}
@@ -490,7 +522,10 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                                         {teacherUnits > 0 && (
                                             <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
                                                 <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                                                    Assigned Subjects: {schedules.filter(s => s.teacher_id === teacher.pscs_id).length}
+                                                    Assigned Subjects: {new Set(schedules.filter(s => s.teacher_id === teacher.pscs_id).map(s => s.subjectId)).size}
+                                                </p>
+                                                <p className="text-xs text-gray-500">
+                                                    Max Allowed: {getPrepLimitSync(teacher.employment_type, systemSettings || {})}
                                                 </p>
                                             </div>
                                         )}

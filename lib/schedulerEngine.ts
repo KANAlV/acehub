@@ -2,6 +2,7 @@ import {
     fetchAllSubjects, fetchAllTeachers, getAllProgramsData, 
     getAllRoomsData, fetchBreakPeriods, fetchSystemSettings 
 } from "@/services/userService";
+import { getMaxUnitsSync, getOverloadMaxSync, getPrepLimitSync } from "@/lib/teachingLoadUtils";
 
 /* ================= TYPES ================= */
 
@@ -132,6 +133,7 @@ export async function generateScheduleData(config: any) {
 
     const results: GeneratedEntry[] = [];
     const teacherLoad: Record<string, number> = {};
+    const teacherSubjects: Record<string, Set<string>> = {};
     const sectionDays: Record<string, Set<string>> = {};
 
     // 4. Assign Subjects to Sections with Teachers First
@@ -181,29 +183,55 @@ export async function generateScheduleData(config: any) {
                 
                 const candidates = eligible.length > 0 ? eligible : allTeachers;
                 
-                // Sort by current load but add randomness to distribute better
+                // Sort by current load and subject count, considering new constraints
                 candidates.sort((a, b) => {
                     const loadA = teacherLoad[a.pscs_id] || 0;
                     const loadB = teacherLoad[b.pscs_id] || 0;
+                    const subjectCountA = teacherSubjects[a.pscs_id]?.size || 0;
+                    const subjectCountB = teacherSubjects[b.pscs_id]?.size || 0;
+                    
+                    // Get teacher constraints
+                    const maxUnitsA = getMaxUnitsSync(a.employment_type, systemSettings);
+                    const maxUnitsB = getMaxUnitsSync(b.employment_type, systemSettings);
+                    const overloadMax = getOverloadMaxSync(systemSettings);
+                    const absoluteMaxA = maxUnitsA + overloadMax;
+                    const absoluteMaxB = maxUnitsB + overloadMax;
+                    const prepLimitA = getPrepLimitSync(a.employment_type, systemSettings);
+                    const prepLimitB = getPrepLimitSync(b.employment_type, systemSettings);
+                    
+                    // Filter out teachers who would exceed constraints
+                    if (loadA >= absoluteMaxA && loadB < absoluteMaxB) return 1;
+                    if (loadB >= absoluteMaxB && loadA < absoluteMaxA) return -1;
+                    if (subjectCountA >= prepLimitA && subjectCountB < prepLimitB) return 1;
+                    if (subjectCountB >= prepLimitB && subjectCountA < prepLimitA) return -1;
                     
                     // If loads are very similar, add randomness
-                    if (Math.abs(loadA - loadB) < 2) {
+                    if (Math.abs(loadA - loadB) < 2 && Math.abs(subjectCountA - subjectCountB) < 1) {
                         return Math.random() - 0.5;
                     }
                     
-                    return loadA - loadB;
+                    // Prioritize teachers with lower load percentage
+                    const loadPercentA = maxUnitsA > 0 ? (loadA / maxUnitsA) * 100 : 0;
+                    const loadPercentB = maxUnitsB > 0 ? (loadB / maxUnitsB) * 100 : 0;
+                    
+                    return loadPercentA - loadPercentB;
                 });
                 
                 if (candidates.length > 0) {
                     teacherId = candidates[0].pscs_id;
-                    // Update teacher load immediately to prevent same teacher getting too many assignments
+                    // Update teacher load and add subject to their set
                     teacherLoad[teacherId] = (teacherLoad[teacherId] || 0) + 1;
+                    if (!teacherSubjects[teacherId]) {
+                        teacherSubjects[teacherId] = new Set();
+                    }
+                    teacherSubjects[teacherId].add(sub.id);
                 } else {
                     logPlacementIssue('No teachers available for subject', { 
                         subject: sub.course_code, 
                         specialization: sub.field_of_specialization,
                         sectionLevel: vSection.level,
-                        eligibleCount: eligible.length
+                        eligibleCount: eligible.length,
+                        reason: 'All teachers either at prep limit or overload capacity'
                     });
                     continue;
                 }
@@ -234,8 +262,22 @@ export async function generateScheduleData(config: any) {
     }
 
     // 5. Schedule Pre-Assigned Teacher-Subject Combinations to Timetable
-    const isAvailable = (day: string, start: number, end: number, roomId: string, teacherId: string, sectionId: string) => {
+    const isAvailable = (day: string, start: number, end: number, roomId: string, teacherId: string, sectionId: string, additionalUnits: number = 0) => {
         if (start < START_LIMIT || end > END_LIMIT) return false;
+
+        // Check teacher load constraints
+        const teacher = allTeachers.find(t => t.pscs_id === teacherId);
+        if (teacher) {
+            const currentLoad = teacherLoad[teacherId] || 0;
+            const maxUnits = getMaxUnitsSync(teacher.employment_type, systemSettings);
+            const overloadMax = getOverloadMaxSync(systemSettings);
+            const absoluteMax = maxUnits + overloadMax;
+            
+            // Check if adding this session would exceed absolute max
+            if (currentLoad + additionalUnits > absoluteMax) {
+                return false;
+            }
+        }
 
         // 5-Day School Week Check
         const daysUsedBySection = sectionDays[sectionId] || new Set();
@@ -251,7 +293,6 @@ export async function generateScheduleData(config: any) {
         }
 
         // Teacher availability check
-        const teacher = allTeachers.find(t => t.pscs_id === teacherId);
         if (!teacher) return false;
         
         const teacherSched = overrides[teacherId] || teacher.availability || [];
@@ -318,7 +359,8 @@ export async function generateScheduleData(config: any) {
                     for (const room of shuffledRooms) {
                         if (placed) break;
                         for (let time = START_LIMIT; time <= END_LIMIT - sessionMinutes; time += SLOT_SIZE) {
-                            if (isAvailable(day, time, time + sessionMinutes, room.room_id.toString(), assignment.teacherId, assignment.sectionId)) {
+                            const additionalUnits = sessionMinutes / 60;
+                            if (isAvailable(day, time, time + sessionMinutes, room.room_id.toString(), assignment.teacherId, assignment.sectionId, additionalUnits)) {
                                 results.push({
                                     subjectId: assignment.subject.course_code,
                                     teacherId: assignment.teacherId,
@@ -343,13 +385,24 @@ export async function generateScheduleData(config: any) {
                 
                 if (!placed) {
                     attempts++;
+                    const teacher = allTeachers.find(t => t.pscs_id === assignment.teacherId);
+                    const currentLoad = teacherLoad[assignment.teacherId] || 0;
+                    const maxUnits = teacher ? getMaxUnitsSync(teacher.employment_type, systemSettings) : 24;
+                    const overloadMax = getOverloadMaxSync(systemSettings);
+                    const absoluteMax = maxUnits + overloadMax;
+                    const subjectCount = teacherSubjects[assignment.teacherId]?.size || 0;
+                    const prepLimit = teacher ? getPrepLimitSync(teacher.employment_type, systemSettings) : 6;
+                    
                     logPlacementIssue('Failed to place session with pre-assigned teacher', {
                         subject: assignment.subject.course_code,
                         teacher: assignment.teacherId,
                         component: comp.type,
                         minutes: sessionMinutes,
                         attempt: attempts,
-                        remainingMinutes
+                        remainingMinutes,
+                        teacherLoad: `${currentLoad}/${absoluteMax} (${Math.round((currentLoad/absoluteMax)*100)}%)`,
+                        subjectCount: `${subjectCount}/${prepLimit}`,
+                        overloadEnabled: overloadMax > 0
                     });
                     
                     // Try with smaller session size on retry
@@ -362,7 +415,9 @@ export async function generateScheduleData(config: any) {
                             subject: assignment.subject.course_code,
                             teacher: assignment.teacherId,
                             component: comp.type,
-                            remainingMinutes
+                            remainingMinutes,
+                            finalLoad: `${currentLoad}/${absoluteMax}`,
+                            finalSubjectCount: `${subjectCount}/${prepLimit}`
                         });
                     }
                 }
@@ -370,8 +425,47 @@ export async function generateScheduleData(config: any) {
         }
     }
     
-    // Log final statistics
+    // Log final statistics with new constraints
+    const teacherStats = Object.keys(teacherLoad).map(teacherId => {
+        const teacher = allTeachers.find(t => t.pscs_id === teacherId);
+        const load = teacherLoad[teacherId] || 0;
+        const subjectCount = teacherSubjects[teacherId]?.size || 0;
+        const maxUnits = teacher ? getMaxUnitsSync(teacher.employment_type, systemSettings) : 24;
+        const overloadMax = getOverloadMaxSync(systemSettings);
+        const absoluteMax = maxUnits + overloadMax;
+        const prepLimit = teacher ? getPrepLimitSync(teacher.employment_type, systemSettings) : 6;
+        
+        return {
+            teacherId,
+            name: teacher?.name || 'Unknown',
+            employmentType: teacher?.employment_type || 'Unknown',
+            load: `${load}/${absoluteMax}`,
+            loadPercent: Math.round((load/absoluteMax)*100),
+            subjects: `${subjectCount}/${prepLimit}`,
+            isOverloaded: load > maxUnits,
+            isAtAbsoluteMax: load >= absoluteMax
+        };
+    });
+    
+    const overloadedTeachers = teacherStats.filter(t => t.isOverloaded);
+    const atAbsoluteMaxTeachers = teacherStats.filter(t => t.isAtAbsoluteMax);
+    const atPrepLimitTeachers = teacherStats.filter(t => parseInt(t.subjects.split('/')[0]) >= parseInt(t.subjects.split('/')[1]));
+    
     console.log(`[SCHEDULER] Generated ${results.length} entries for ${virtualSections.length} sections`);
+    console.log(`[SCHEDULER] Teacher Load Summary:`);
+    console.log(`  - Total teachers used: ${teacherStats.length}`);
+    console.log(`  - Overloaded teachers: ${overloadedTeachers.length}`);
+    console.log(`  - Teachers at absolute max: ${atAbsoluteMaxTeachers.length}`);
+    console.log(`  - Teachers at prep limit: ${atPrepLimitTeachers.length}`);
+    console.log(`  - Overload max setting: ${getOverloadMaxSync(systemSettings)} units`);
+    
+    if (overloadedTeachers.length > 0) {
+        console.log(`[SCHEDULER] Overloaded Teachers:`, overloadedTeachers.map(t => `${t.name} (${t.load})`));
+    }
+    
+    if (atPrepLimitTeachers.length > 0) {
+        console.log(`[SCHEDULER] Teachers at Prep Limit:`, atPrepLimitTeachers.map(t => `${t.name} (${t.subjects})`));
+    }
     
     return results;
 }

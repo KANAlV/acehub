@@ -35,6 +35,8 @@ export default function Settings() {
     // Settings State
     const [facultyLoad, setFacultyLoad] = useState({ FT: 24, PTFL: 18, PT: 12 });
     const [maxStudents, setMaxStudents] = useState(40);
+    const [prepLimits, setPrepLimits] = useState({ FT: 6, PTFL: 4, PT: 3 });
+    const [overloadMax, setOverloadMax] = useState(6);
     const [breakPeriods, setBreakPeriods] = useState<any[]>([]);
     const [authorizedAccounts, setAuthorizedAccounts] = useState<any[]>([]);
     const [presets, setPresets] = useState<any[]>([]);
@@ -80,6 +82,8 @@ export default function Settings() {
 
             if (settings.facultyLoad) setFacultyLoad(settings.facultyLoad);
             if (settings.maxStudents) setMaxStudents(settings.maxStudents);
+            if (settings.prepLimits) setPrepLimits(settings.prepLimits);
+            if (settings.overloadMax) setOverloadMax(settings.overloadMax);
             if (settings.activePresetId) setActivePresetId(settings.activePresetId);
             
             setBreakPeriods(breaks);
@@ -116,6 +120,16 @@ export default function Settings() {
 
     const handleSaveMaxStudents = async () => {
         const res = await updateSystemSetting('maxStudents', maxStudents);
+        triggerNotification(res);
+    };
+
+    const handleSavePrepLimits = async () => {
+        const res = await updateSystemSetting('prepLimits', prepLimits);
+        triggerNotification(res);
+    };
+
+    const handleSaveOverloadMax = async () => {
+        const res = await updateSystemSetting('overloadMax', overloadMax);
         triggerNotification(res);
     };
 
@@ -173,7 +187,7 @@ export default function Settings() {
     };
 
     const handleSavePreset = async () => {
-        const data = { facultyLoad, maxStudents };
+        const data = { facultyLoad, maxStudents, prepLimits, overloadMax };
         const res = await savePreset(newPresetName, data);
         if (res === "201") {
             setShowSavePresetModal(false);
@@ -186,6 +200,8 @@ export default function Settings() {
     const handleLoadPreset = async (preset: any) => {
         if (preset.data.facultyLoad) setFacultyLoad(preset.data.facultyLoad);
         if (preset.data.maxStudents) setMaxStudents(preset.data.maxStudents);
+        if (preset.data.prepLimits) setPrepLimits(preset.data.prepLimits);
+        if (preset.data.overloadMax) setOverloadMax(preset.data.overloadMax);
         setActivePresetId(preset.preset_name);
         await updateSystemSetting('activePresetId', preset.preset_name);
         triggerNotification("200");
@@ -269,24 +285,60 @@ export default function Settings() {
 
                 {/* Faculty Load */}
                 <TabItem title="Faculty Load" icon={HiAcademicCap}>
-                    <Card className="mt-6 border-none shadow-sm max-w-2xl">
-                        <h3 className="text-lg font-bold mb-4">Teaching Load Parameters</h3>
-                        <div className="grid grid-cols-1 gap-6">
-                            <div>
-                                <Label htmlFor="ft">Full-Time (FT) Max Load</Label>
-                                <TextInput id="ft" type="number" value={facultyLoad.FT} onChange={e => setFacultyLoad({...facultyLoad, FT: parseInt(e.target.value)})} />
+                    <div className="space-y-6">
+                        {/* Teaching Load Parameters */}
+                        <Card className="border-none shadow-sm max-w-2xl">
+                            <h3 className="text-lg font-bold mb-4">Teaching Load Parameters</h3>
+                            <div className="grid grid-cols-1 gap-6">
+                                <div>
+                                    <Label htmlFor="ft">Full-Time (FT) Max Load</Label>
+                                    <TextInput id="ft" type="number" value={facultyLoad.FT} onChange={e => setFacultyLoad({...facultyLoad, FT: parseInt(e.target.value)})} />
+                                </div>
+                                <div>
+                                    <Label htmlFor="ptfl">Part-Time Full Load (PTFL)</Label>
+                                    <TextInput id="ptfl" type="number" value={facultyLoad.PTFL} onChange={e => setFacultyLoad({...facultyLoad, PTFL: parseInt(e.target.value)})} />
+                                </div>
+                                <div>
+                                    <Label htmlFor="pt">Part-Time (PT)</Label>
+                                    <TextInput id="pt" type="number" value={facultyLoad.PT} onChange={e => setFacultyLoad({...facultyLoad, PT: parseInt(e.target.value)})} />
+                                </div>
+                                <Button className="mt-4" onClick={handleSaveFacultyLoad}><HiSave className="mr-2" /> Save Load Configuration</Button>
                             </div>
-                            <div>
-                                <Label htmlFor="ptfl">Part-Time Full Load (PTFL)</Label>
-                                <TextInput id="ptfl" type="number" value={facultyLoad.PTFL} onChange={e => setFacultyLoad({...facultyLoad, PTFL: parseInt(e.target.value)})} />
+                        </Card>
+
+                        {/* Prep Limits */}
+                        <Card className="border-none shadow-sm max-w-2xl">
+                            <h3 className="text-lg font-bold mb-4">Prep Limits (Number of Subjects)</h3>
+                            <div className="grid grid-cols-1 gap-6">
+                                <div>
+                                    <Label htmlFor="prep-ft">Full-Time (FT) Max Subjects</Label>
+                                    <TextInput id="prep-ft" type="number" value={prepLimits.FT} onChange={e => setPrepLimits({...prepLimits, FT: parseInt(e.target.value)})} />
+                                </div>
+                                <div>
+                                    <Label htmlFor="prep-ptfl">Part-Time Full Load (PTFL) Max Subjects</Label>
+                                    <TextInput id="prep-ptfl" type="number" value={prepLimits.PTFL} onChange={e => setPrepLimits({...prepLimits, PTFL: parseInt(e.target.value)})} />
+                                </div>
+                                <div>
+                                    <Label htmlFor="prep-pt">Part-Time (PT) Max Subjects</Label>
+                                    <TextInput id="prep-pt" type="number" value={prepLimits.PT} onChange={e => setPrepLimits({...prepLimits, PT: parseInt(e.target.value)})} />
+                                </div>
+                                <Button className="mt-4" onClick={handleSavePrepLimits}><HiSave className="mr-2" /> Save Prep Configuration</Button>
                             </div>
-                            <div>
-                                <Label htmlFor="pt">Part-Time (PT)</Label>
-                                <TextInput id="pt" type="number" value={facultyLoad.PT} onChange={e => setFacultyLoad({...facultyLoad, PT: parseInt(e.target.value)})} />
+                        </Card>
+
+                        {/* Overloading Max */}
+                        <Card className="border-none shadow-sm max-w-2xl">
+                            <h3 className="text-lg font-bold mb-4">Overloading Parameters</h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <Label htmlFor="overload-max">Maximum Units Above Load Limit</Label>
+                                    <TextInput id="overload-max" type="number" value={overloadMax} onChange={e => setOverloadMax(parseInt(e.target.value))} />
+                                    <p className="text-sm text-gray-500 mt-1">Maximum additional units a teacher can take beyond their standard load limit</p>
+                                </div>
+                                <Button onClick={handleSaveOverloadMax}><HiSave className="mr-2" /> Save Overload Configuration</Button>
                             </div>
-                            <Button className="mt-4" onClick={handleSaveFacultyLoad}><HiSave className="mr-2" /> Save Load Configuration</Button>
-                        </div>
-                    </Card>
+                        </Card>
+                    </div>
                 </TabItem>
 
                 {/* Class Settings */}
