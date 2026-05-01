@@ -14,7 +14,6 @@ import {
     fetchAllSubjects, fetchSchedulesList, deleteGeneratedSchedule, setDisplay, getDisplay
 } from "services/userService";
 import {redirect} from "next/navigation";
-import {router} from "next/client";
 
 export default function ScheduleSummary({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
@@ -178,7 +177,7 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
     return (
         <div className="p-8 space-y-6 h-full w-full overflow-y-auto font-sans">
             <div className={"flex justify-between w-full"}>
-                <Button color="alternative" size="sm" onClick={() => router.push("/schedules")}>
+                <Button color="alternative" size="sm" onClick={() => redirect("/schedules")}>
                     <HiArrowLeft />
                 </Button>
 
@@ -209,7 +208,7 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <Button color="blue" size="sm" onClick={() => router.push(`${id}/timetable`)}>
+                    <Button color="blue" size="sm" onClick={() => redirect(`${id}/timetable`)}>
                         <HiPencilAlt className="mr-2" />
                         Open Editor
                     </Button>
@@ -440,7 +439,7 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                                 <div 
                                     key={teacher.pscs_id} 
                                     className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md hover:border-blue-300 transition-all"
-                                    onClick={() => router.push(`${id}/teachers/${teacher.pscs_id}`)}
+                                    onClick={() => redirect(`${id}/teachers/${teacher.pscs_id}`)}
                                 >
                                     <div className="flex justify-between items-start mb-3">
                                         <div>
