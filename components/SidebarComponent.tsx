@@ -89,8 +89,8 @@ export function SidebarComponent({ username }: { username: string }) {
                                 </div>
                             </Button>
                         </Popover>
-                        <SidebarItem as={Link} href="/" className={"hover:bg-gray-500/14"} icon={HiChartPie} onClick={() => setIsOpen(false)}>
-                            Dashboard (WIP)
+                        <SidebarItem as={Link} href="/dashboard" className={"hover:bg-gray-500/14"} icon={HiChartPie} onClick={() => setIsOpen(false)}>
+                            Dashboard
                         </SidebarItem>
                         <SidebarItem as={Link} href="/schedules" className={"hover:bg-gray-500/14"} icon={HiTable} onClick={() => setIsOpen(false)}>
                             Schedules
@@ -112,9 +112,6 @@ export function SidebarComponent({ username }: { username: string }) {
                         </SidebarItem>
                         <SidebarItem as={Link} href="/maintenance" className={"hover:bg-gray-500/14"} icon={HiClipboardCheck} onClick={() => setIsOpen(false)}>
                             FCCE (*)
-                        </SidebarItem>
-                        <SidebarItem as={Link} href="/testFunction" className={"hover:bg-gray-500/14"} icon={HiViewBoards} onClick={() => setIsOpen(false)}>
-                            test
                         </SidebarItem>
                     </SidebarItemGroup>
                     <SidebarItemGroup>
@@ -152,7 +149,7 @@ export function SidebarComponent({ username }: { username: string }) {
                 </DrawerItems>
             </Drawer>
 
-            <div className={"hidden md:block bg-gray-500/14 dark:bg-gray-800"}>
+            <div className={"hidden md:block overflow-y-auto bg-gray-500/14 dark:bg-gray-800"}>
                 <div className={"flex my-2 items-center"}>
                     <p className={"font-bold mx-5 text-xl"}>𝒜</p> ACEHUB
                 </div>

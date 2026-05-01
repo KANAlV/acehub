@@ -380,7 +380,7 @@ export default function SchedulesDashboard() {
                                 <TableCell>{new Date(s.created_at).toLocaleString()}</TableCell>
                                 <TableCell>
                                     <div className="flex justify-end gap-2">
-                                        <Button size="xs" color="info" onClick={() => router.push(`/schedules/generated_schedule/${s.id}`)}>
+                                        <Button size="xs" color="info" onClick={() => router.push(`/schedules/${s.id}`)}>
                                             <HiExternalLink className="mr-1" /> Open Editor
                                         </Button>
                                         <Button size="xs" color="failure" onClick={() => handleDelete(s.id)}><HiTrash /></Button>

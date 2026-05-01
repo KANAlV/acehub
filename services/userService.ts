@@ -54,6 +54,29 @@ export async function getCurrentUser(): Promise<User | null> {
     }
 }
 
+/** --- Dashboard Related Functions --- **/
+export async function setDisplay(id: string) {
+    try {
+        await sql`SELECT set_dashboard_display(${id})`;
+        return { success: true };
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to set dashboard_display:", error);
+        return { error: "Failed to update settings" };
+    }
+}
+
+export async function getDisplay() {
+    try {
+        const result = await sql`SELECT get_dashboard_display() as display_id`;
+        const displayId = result[0]?.display_id;
+
+        return displayId || null;
+    } catch (error) {
+        console.error("[DB_ERROR]: Error fetching dashboard_display:", error);
+        return null;
+    }
+}
+
 /** ---  Settings & Presets --- **/
 
 export async function fetchSystemSettings() {
@@ -381,7 +404,7 @@ export async function insertSubject(curriculumn_version: string | null, course_c
         return "201";
     } catch (error: any) {
         console.error("[DB_ERROR]: Subject creation failed:", error);
-        if (error.code === '23505') return "409"; 
+        if (error.code === '23505') return "409";
         return "500";
     }
 }

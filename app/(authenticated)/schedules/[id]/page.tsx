@@ -10,10 +10,10 @@ import {
     HiArrowLeft, HiClock, HiChartBar, HiPencilAlt, HiTrash
 } from "react-icons/hi";
 import { useRouter } from "next/navigation";
-import { 
-    fetchScheduleDetails, getAllRoomsData, getAllProgramsData, fetchTeachers, 
-    fetchAllSubjects, fetchSchedulesList, deleteGeneratedSchedule
-} from "@/services/userService";
+import {
+    fetchScheduleDetails, getAllRoomsData, getAllProgramsData, fetchTeachers,
+    fetchAllSubjects, fetchSchedulesList, deleteGeneratedSchedule, setDisplay, getDisplay
+} from "services/userService";
 
 export default function ScheduleSummary({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
@@ -35,6 +35,33 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
     const [showToast, setShowToast] = useState(false);
     const [statusCode, setStatusCode] = useState("");
     const [progress, setProgress] = useState(100);
+
+    const [currentDisplayId, setCurrentDisplayId] = useState<string | null>(null);
+    const [isUpdating, setIsUpdating] = useState(false);
+
+    // 1. Fetch the current display ID from the database on mount
+    const checkCurrentDisplay = async () => {
+        const activeId = await getDisplay();
+        setCurrentDisplayId(activeId);
+    };
+
+    useEffect(() => {
+        checkCurrentDisplay();
+    }, [id]);
+
+    // 2. Handle the update
+    const handleSetDisplay = async () => {
+        setIsUpdating(true);
+        const result = await setDisplay(id);
+
+        if (result.success) {
+            setCurrentDisplayId(id); // Update local state to disable button immediately
+        }
+        setIsUpdating(false);
+    };
+
+    // 3. Determine if this button should be disabled
+    const isAlreadyDisplay = currentDisplayId === id;
 
     // Helper function to get max units based on employment type
     const getMaxUnits = (employmentType: string): number => {
@@ -150,12 +177,30 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
 
     return (
         <div className="p-8 space-y-6 h-full w-full overflow-y-auto font-sans">
+            <div className={"flex justify-between w-full"}>
+                <Button color="alternative" size="sm" onClick={() => router.push("/schedules")}>
+                    <HiArrowLeft />
+                </Button>
+
+                <Button
+                    color={isAlreadyDisplay ? "success" : "alternative"}
+                    size="sm"
+                    onClick={handleSetDisplay}
+                    disabled={isAlreadyDisplay || isUpdating}
+                >
+                    {isAlreadyDisplay ? (
+                        <>
+                            <HiCheck className="mr-2 h-4 w-4" />
+                            Currently Displayed on Dashboard
+                        </>
+                    ) : (
+                        "Set as Display on Dashboard"
+                    )}
+                </Button>
+            </div>
             {/* Header */}
             <div className="flex justify-between items-center bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-4">
-                    <Button color="gray" size="sm" onClick={() => router.push("/schedules")}>
-                        <HiArrowLeft />
-                    </Button>
                     <div>
                         <h1 className="text-2xl font-bold">{scheduleName}</h1>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -357,7 +402,7 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                             No teachers available for analysis
                         </div>
                     ) : (
-                        teachers.map(teacher => {
+                        teachers.slice(0, 5).map(teacher => { // Limited to 5 teachers
                             // Calculate current units for this specific schedule
                             const teacherUnits = schedules.reduce((total, schedule) => {
                                 if (schedule.teacher_id === teacher.pscs_id) {
@@ -455,6 +500,20 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                             );
                         })
                     )}
+
+                    {/* View All Card */}
+                    <div onClick={() => router.push(`/maintenance`)}
+                         className="flex items-center justify-center
+                        p-4 text-center text-gray-500
+                        bg-transparent hover:bg-blue-500/20
+                        border border-dashed border-gray-200 dark:border-gray-700 hover:border-blue-300
+                        rounded-lg  cursor-pointer hover:shadow-md transition-all
+                        "
+                    >
+                        <div>
+                            View All Teachers
+                        </div>
+                    </div>
                 </div>
             </Card>
 
