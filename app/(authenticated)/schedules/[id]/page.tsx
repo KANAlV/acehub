@@ -9,14 +9,14 @@ import {
     HiCalendar, HiUserGroup, HiBookOpen, HiCheck, HiExclamation,
     HiArrowLeft, HiClock, HiChartBar, HiPencilAlt, HiTrash
 } from "react-icons/hi";
-import { useRouter } from "next/navigation";
 import {
     fetchScheduleDetails, getAllRoomsData, getAllProgramsData, fetchTeachers,
     fetchAllSubjects, fetchSchedulesList, deleteGeneratedSchedule, setDisplay, getDisplay
 } from "services/userService";
+import {redirect} from "next/navigation";
+import {router} from "next/client";
 
 export default function ScheduleSummary({ params }: { params: Promise<{ id: string }> }) {
-    const router = useRouter();
     const { id } = use(params);
 
     const [loading, setLoading] = useState(true);
@@ -145,7 +145,7 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
             
             if (statusCode === "204") {
                 setTimeout(() => {
-                    router.push("/schedules");
+                    redirect("/schedules");
                 }, 2000);
             }
         } catch (error) {
@@ -502,7 +502,7 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                     )}
 
                     {/* View All Card */}
-                    <div onClick={() => router.push(`/maintenance`)}
+                    <div onClick={() => redirect(`/maintenance`)}
                          className="flex items-center justify-center
                         p-4 text-center text-gray-500
                         bg-transparent hover:bg-blue-500/20
