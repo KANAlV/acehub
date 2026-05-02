@@ -5,9 +5,9 @@ import {
     Card, Button, Spinner, Progress, 
     Badge, Toast, ToastToggle
 } from "flowbite-react";
-import { 
+import {
     HiCalendar, HiUserGroup, HiBookOpen, HiCheck, HiExclamation,
-    HiArrowLeft, HiClock, HiChartBar, HiPencilAlt, HiTrash
+    HiArrowLeft, HiClock, HiChartBar, HiPencilAlt, HiTrash, HiDownload, HiTable
 } from "react-icons/hi";
 import {
     fetchScheduleDetails, getAllRoomsData, getAllProgramsData, fetchTeachers,
@@ -15,6 +15,7 @@ import {
     fetchSystemSettings
 } from "services/userService";
 import { getMaxUnitsSync, getOverloadMaxSync, getPrepLimitSync } from "@/lib/teachingLoadUtils";
+import { exportScheduleToExcel } from "@/lib/scheduleExport";
 import {redirect} from "next/navigation";
 
 export default function ScheduleSummary({ params }: { params: Promise<{ id: string }> }) {
@@ -22,6 +23,8 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
 
     const [loading, setLoading] = useState(true);
     const [scheduleName, setScheduleName] = useState("");
+    const [semester, setSemester] = useState("1");
+    const [schoolYear, setSchoolYear] = useState("2025-2026");
     
     // Entity Data
     const [rooms, setRooms] = useState<any[]>([]);
@@ -117,6 +120,11 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
             const schedule = list.find((s: any) => s.id === id);
             if (schedule) {
                 setScheduleName(schedule.name);
+                // Extract semester and school year from config if available
+                if (schedule.config) {
+                    const config = typeof schedule.config === 'string' ? JSON.parse(schedule.config) : schedule.config;
+                    if (config.semester) setSemester(config.semester === '1' ? 'First Semester' : 'Second Semester');
+                }
             }
 
             setAllSubjects(subs);
@@ -186,21 +194,27 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                     <HiArrowLeft />
                 </Button>
 
-                <Button
-                    color={isAlreadyDisplay ? "success" : "alternative"}
-                    size="sm"
-                    onClick={handleSetDisplay}
-                    disabled={isAlreadyDisplay || isUpdating}
-                >
-                    {isAlreadyDisplay ? (
-                        <>
-                            <HiCheck className="mr-2 h-4 w-4" />
-                            Currently Displayed on Dashboard
-                        </>
-                    ) : (
-                        "Set as Display on Dashboard"
-                    )}
-                </Button>
+                <div className={"flex gap-4"}>
+                    <Button
+                        color={isAlreadyDisplay ? "success" : "alternative"}
+                        size="sm"
+                        onClick={handleSetDisplay}
+                        disabled={isAlreadyDisplay || isUpdating}
+                    >
+                        {isAlreadyDisplay ? (
+                            <>
+                                <HiCheck className="mr-2 h-4 w-4" />
+                                Currently Displayed on Dashboard
+                            </>
+                        ) : (
+                            "Set as Display on Dashboard"
+                        )}
+                    </Button>
+                    <Button onClick={() => exportScheduleToExcel(id, scheduleName, semester, schoolYear)}>
+                        <HiDownload className="mr-2 h-4 w-4" />
+                        Export
+                    </Button>
+                </div>
             </div>
             {/* Header */}
             <div className="flex justify-between items-center bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
@@ -214,8 +228,8 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                 </div>
                 <div className="flex gap-2">
                     <Button color="blue" size="sm" onClick={() => redirect(`${id}/timetable`)}>
-                        <HiPencilAlt className="mr-2" />
-                        Open Editor
+                        <HiTable className="mr-2" />
+                        Open Timetable
                     </Button>
                     <Button color="failure" size="sm" onClick={handleDelete}>
                         <HiTrash className="mr-2" />

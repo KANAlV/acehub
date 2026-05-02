@@ -37,8 +37,8 @@ import {IoMdArrowDropdown} from "react-icons/io";
 
 /** --- Helper Components --- **/
 const AvailabilityManager = ({ availability, onUpdate, employmentType }: { availability: any[], onUpdate: (val: any[]) => void, employmentType: string }) => {
-    // Hidden for Full-Time (Regular/Proby)
-    if (employmentType === "Regular" || employmentType === "Proby") return null;
+    // Hidden for Full-Time (FT/PTFL)
+    if (employmentType === "FT" || employmentType === "PTFL") return null;
 
     const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     
@@ -112,7 +112,7 @@ export default function TeacherManager() {
     const [name, setName] = useState("");
     const [code, setCode] = useState("");
     const [spec, setSpec] = useState("");
-    const [type, setType] = useState("Regular");
+    const [type, setType] = useState("FT");
     const [availability, setAvailability] = useState<any[]>([]);
 
     // Search and Filter
@@ -156,7 +156,7 @@ export default function TeacherManager() {
         setName("");
         setCode("");
         setSpec("");
-        setType("Regular");
+        setType("FT");
         setAvailability([]);
         setOpenWarningModal(false);
         setEditModal(false);
@@ -182,7 +182,7 @@ export default function TeacherManager() {
         if (!pscsId || !name || !code) return;
         setLoading(true);
         // Clear availability if Full-Time before saving
-        const finalAvailability = (type === "Regular" || type === "Proby") ? [] : availability;
+        const finalAvailability = (type === "FT" || type === "PTFL") ? [] : availability;
         const stat = await insertTeacher(pscsId, name, code, spec, type, finalAvailability);
         setStatusCode(stat);
         setLoading(false);
@@ -197,7 +197,7 @@ export default function TeacherManager() {
     async function updateEntry() {
         setLoading(true);
         // Clear availability if Full-Time before saving
-        const finalAvailability = (type === "Regular" || type === "Proby") ? [] : availability;
+        const finalAvailability = (type === "FT" || type === "FTPT") ? [] : availability;
         const stat = await updateTeacher(pscsId, name, code, spec, type, finalAvailability);
         setStatusCode(stat);
         setLoading(false);
@@ -303,11 +303,11 @@ export default function TeacherManager() {
                 name: 'James Murfhy C. Reurreccion',
                 code: 'JMR',
                 spec: 'Business and Management',
-                type: 'Regular',
+                type: 'FT',
                 availability: 'NO SELECTION'
             });
 
-            const typeOptions = ['Regular', 'PTFL', 'PT', 'Proby'];
+            const typeOptions = ['FT', 'PTFL', 'PT', ''];
             for (let i = 2; i <= 100; i++) {
                 worksheet.getCell(`E${i}`).dataValidation = {
                     type: 'list',
@@ -344,7 +344,7 @@ export default function TeacherManager() {
                     const name = row.getCell(2).value?.toString().trim();
                     const code = row.getCell(3).value?.toString().trim();
                     const spec = row.getCell(4).value?.toString().trim() || "";
-                    const type = row.getCell(5).value?.toString().trim() || "Regular";
+                    const type = row.getCell(5).value?.toString().trim() || "FT";
                     const availStr = row.getCell(6).value?.toString().trim() || "";
 
                     // Skip rows starting with # (Template format)
@@ -495,7 +495,7 @@ export default function TeacherManager() {
                                         ) : (
                                             <span className="text-gray-400 italic">NO SELECTION</span>
                                         )}
-                                        {(t.employment_type === "PT" || t.employment_type === "PTFL") && (t.availability || []).length === 0 && (
+                                        {(t.employment_type === "PT") && (t.availability || []).length === 0 && (
                                             <span className="text-yellow-500 italic font-medium">Pending Entry</span>
                                         )}
                                     </div>

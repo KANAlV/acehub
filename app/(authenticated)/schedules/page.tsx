@@ -16,9 +16,8 @@ import { useRouter } from "next/navigation";
 import { 
     fetchSchedulesList, deleteGeneratedSchedule, saveGeneratedSchedule,
     fetchCurriculumVersions, fetchAllSubjects, fetchAllTeachers, getAllProgramsData,
-    fetchScheduleDetails, fetchSystemSettings
+    fetchSystemSettings
 } from "@/services/userService";
-import { getMaxUnitsSync, getOverloadMaxSync } from "@/lib/teachingLoadUtils";
 
 /** --- Helper Component: Autocomplete Select --- **/
 const AutocompleteSelect = ({
@@ -98,8 +97,6 @@ export default function SchedulesDashboard() {
     const [loading, setLoading] = useState(true);
     const [schedules, setSchedules] = useState<any[]>([]);
     const [systemSettings, setSystemSettings] = useState<any>(null);
-    const [teacherAnalysis, setTeacherAnalysis] = useState<any[]>([]);
-    
     // --- Generator State ---
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [activeTab, setActiveTab] = useState(0);
@@ -166,42 +163,6 @@ export default function SchedulesDashboard() {
             setAllTeachers(teachs);
             setAllSections(secs);
             setSystemSettings(settings);
-
-            // Calculate teacher analysis across all schedules
-            if (list.length > 0 && teachs.length > 0) {
-                const allScheduleDetails = await Promise.all(
-                    list.map(schedule => fetchScheduleDetails(schedule.id))
-                );
-
-                const teacherWorkload = teachs.map(teacher => {
-                    const teacherSchedules = allScheduleDetails.flat().filter(schedule =>
-                        String(schedule.teacher_id) === String(teacher.pscs_id)
-                    );
-
-                    const totalUnits = teacherSchedules.reduce((total, schedule) => {
-                        return total + (Number(schedule.end_time) - Number(schedule.start_time)) / 60;
-                    }, 0);
-
-                    
-                    const maxUnits = getMaxUnitsSync(teacher.employment_type, settings);
-                    const overloadMax = getOverloadMaxSync(settings);
-                    const absoluteMax = maxUnits + overloadMax;
-                    const isOverloaded = totalUnits > maxUnits;
-                    const isAtAbsoluteMax = totalUnits >= absoluteMax;
-
-                    return {
-                        ...teacher,
-                        totalUnits,
-                        maxUnits,
-                        absoluteMax,
-                        isOverloaded,
-                        isAtAbsoluteMax,
-                        utilizationRate: maxUnits > 0 ? (totalUnits / maxUnits) * 100 : 0
-                    };
-                });
-
-                setTeacherAnalysis(teacherWorkload);
-            }
         } catch (e) {
             console.error(e);
         } finally {
@@ -284,6 +245,7 @@ export default function SchedulesDashboard() {
     };
 
     const handleCreate = async () => {
+        setShowCreateModal(false);
         if (!newScheduleName || chosenSubjects.length === 0) {
             setStatusCode("400");
             setShowToast(true);
@@ -311,7 +273,7 @@ export default function SchedulesDashboard() {
         
         const res = await saveGeneratedSchedule(newScheduleName, config);
         if (res.status === "201") {
-            router.push(`/schedules/generated_schedule/${res.id}`);
+            router.push(`/schedules/${res.id}`);
         } else {
             setLoading(false);
             setStatusCode("500");
@@ -433,110 +395,6 @@ export default function SchedulesDashboard() {
                     </TableBody>
                 </Table>
             </Card>
-
-            {/* Teacher Analysis Section */}
-            {teacherAnalysis.length > 0 && (
-                <Card className="border-none shadow-sm mt-6">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-semibold flex items-center gap-2">
-                            <HiUserGroup className="h-5 w-5" /> Teacher Analysis (All Schedules)
-                        </h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                            Combined workload across all generated schedules
-                        </p>
-                    </div>
-
-                    {/* Summary Statistics */}
-                    <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                        <h4 className="font-semibold text-sm mb-3 text-blue-800 dark:text-blue-200">Overall Teacher Workload Summary</h4>
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-xs">
-                            <div>
-                                <p className="text-gray-600 dark:text-gray-400">Total Teachers</p>
-                                <p className="font-bold text-lg">{teacherAnalysis.length}</p>
-                            </div>
-                            <div>
-                                <p className="text-gray-600 dark:text-gray-400">Active in Any Schedule</p>
-                                <p className="font-bold text-lg text-green-600">
-                                    {teacherAnalysis.filter(t => t.totalUnits > 0).length}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-gray-600 dark:text-gray-400">Overloaded</p>
-                                <p className="font-bold text-lg text-red-600">
-                                    {teacherAnalysis.filter(t => t.isOverloaded).length}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-gray-600 dark:text-gray-400">Total Units Assigned</p>
-                                <p className="font-bold text-lg text-blue-600">
-                                    {teacherAnalysis.reduce((sum, t) => sum + t.totalUnits, 0).toFixed(1)}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-gray-600 dark:text-gray-400">Avg Utilization</p>
-                                <p className="font-bold text-lg text-purple-600">
-                                    {(teacherAnalysis.reduce((avg, t) => avg + t.utilizationRate, 0) / teacherAnalysis.length).toFixed(1)}%
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Teacher Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {teacherAnalysis.slice(0, 6).map(teacher => {
-                            let statusColor = "green";
-                            let statusText = "Available";
-                            if (teacher.totalUnits > teacher.absoluteMax) {
-                                statusColor = "red";
-                                statusText = "Overloaded";
-                            } else if (teacher.totalUnits > teacher.maxUnits) {
-                                statusColor = "orange";
-                                statusText = "Overloaded (Within Limit)";
-                            } else if (teacher.totalUnits >= teacher.maxUnits * 0.95) {
-                                statusColor = "red";
-                                statusText = "At Max Capacity";
-                            } else if (teacher.totalUnits >= teacher.maxUnits * 0.85) {
-                                statusColor = "yellow";
-                                statusText = "Near Capacity";
-                            } else if (teacher.totalUnits >= teacher.maxUnits * 0.6) {
-                                statusColor = "blue";
-                                statusText = "Moderate Load";
-                            }
-
-                            return (
-                                <div key={teacher.pscs_id} className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                                    <div className="flex justify-between items-start mb-3">
-                                        <div>
-                                            <h4 className="font-semibold text-sm">{teacher.name}</h4>
-                                            <p className="text-xs text-gray-500">{teacher.employment_type} • {teacher.pscs_id}</p>
-                                        </div>
-                                        <div className={`px-2 py-1 rounded text-xs font-medium bg-${statusColor}-100 text-${statusColor}-800 dark:bg-${statusColor}-900 dark:text-${statusColor}-200`}>
-                                            {statusText}
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between text-xs">
-                                            <span>Total Units:</span><span className="font-medium">{teacher.totalUnits.toFixed(1)}</span>
-                                        </div>
-                                        <div className="flex justify-between text-xs">
-                                            <span>Max Units:</span><span className="font-medium">{teacher.maxUnits}</span>
-                                        </div>
-                                        <div className="flex justify-between text-xs">
-                                            <span>Absolute Max:</span><span className="font-medium text-orange-600">{teacher.absoluteMax}</span>
-                                        </div>
-                                        <div className="mt-3">
-                                            <div className="flex justify-between text-xs mb-1">
-                                                <span>Utilization</span><span>{teacher.utilizationRate.toFixed(1)}%</span>
-                                            </div>
-                                            <Progress progress={Math.min(100, Math.max(0, teacher.utilizationRate))} color={statusColor} size="sm" className="h-2" />
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </Card>
-            )}
 
             <Modal show={showCreateModal} onClose={() => setShowCreateModal(false)} size="7xl">
                 <ModalHeader>Configure New Schedule Generation</ModalHeader>

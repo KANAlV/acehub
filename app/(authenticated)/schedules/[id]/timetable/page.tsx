@@ -326,7 +326,7 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
 
             <div className="flex justify-between items-center bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-4">
-                    <Button color="gray" size="sm" onClick={() => router.push("/schedules")}><HiArrowLeft /></Button>
+                    <Button color="gray" size="sm" onClick={() => router.push(`/schedules/${id}`)}><HiArrowLeft /></Button>
                     <div>
                         <h1 className="text-xl font-black truncate max-w-xs">{scheduleName || "Unnamed Schedule"}</h1>
                         <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Live Visual Editor</p>

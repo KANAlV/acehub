@@ -302,7 +302,8 @@ export async function generateScheduleData(config: any) {
             return (start >= range.start && end <= range.end);
         });
 
-        const isFT = teacher.employment_type === "Regular" || teacher.employment_type === "Proby";
+        const isFT = teacher.employment_type === "FT" ||
+                     teacher.employment_type === "PTFL";
         const isSaturday = day === "Saturday";
         
         if (!hasAvailability && (!isFT || isSaturday)) return false;
