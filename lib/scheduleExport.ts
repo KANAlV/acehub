@@ -12,7 +12,7 @@ export interface ScheduleEntry {
     schedule_id?: string;
     subject_id: string;
     teacher_id: string;
-    room_id: string;
+    room_id: string | number | null | undefined; // Updated type to be more robust
     section_id: string;
     day: string;
     start_time: number;
@@ -82,12 +82,20 @@ export async function exportScheduleToExcel(
         // Extract unique IDs used in this schedule
         const usedTeacherIds = new Set(entries.map(e => e.teacher_id));
         const usedSubjectIds = new Set(entries.map(e => e.subject_id));
-        const usedRoomIds = new Set(entries.map(e => e.room_id));
+        // Robustly get used room IDs
+        const usedRoomIds = new Set(entries.map(e => {
+            const rawRoomId = e.room_id;
+            if (rawRoomId != null && String(rawRoomId).trim() !== '' && !isNaN(Number(rawRoomId))) {
+                return Number(rawRoomId);
+            }
+            return null;
+        }).filter(id => id !== null));
+
 
         // Filter to only include data relevant to this schedule
         const teachers = (allTeachers as TeacherInfo[]).filter(t => usedTeacherIds.has(t.pscs_id));
         const subjects = (allSubjects as SubjectInfo[]).filter(s => usedSubjectIds.has(s.course_code));
-        const rooms = (allRooms as RoomInfo[]).filter(r => usedRoomIds.has(r.room_id.toString()));
+        const rooms = (allRooms as RoomInfo[]).filter(r => usedRoomIds.has(r.room_id));
 
         const data: ExportData = {
             scheduleName,
@@ -196,7 +204,13 @@ async function createMasterScheduleSheet(workbook: ExcelJS.Workbook, data: Expor
     sortedEntries.forEach((entry, index) => {
         const subject = subjects.find(s => s.course_code === entry.subject_id);
         const teacher = teachers.find(t => t.pscs_id === entry.teacher_id);
-        const room = rooms.find(r => r.room_id.toString() === entry.room_id);
+
+        let room: RoomInfo | undefined;
+        const rawRoomId = entry.room_id;
+        if (rawRoomId != null && String(rawRoomId).trim() !== '' && !isNaN(Number(rawRoomId))) {
+            const roomIdAsNumber = Number(rawRoomId);
+            room = rooms.find(r => r.room_id === roomIdAsNumber);
+        }
 
         const rowData = {
             section: entry.section_id,
@@ -352,8 +366,14 @@ async function createTeacherScheduleSheets(workbook: ExcelJS.Workbook, data: Exp
 
                 if (entry) {
                     const subject = subjects.find(s => s.course_code === entry.subject_id);
-                    const room = rooms.find(r => r.room_id.toString() === entry.room_id);
-                    rowData[day] = `${entry.subject_id}\n${subject?.course_name || ''}\n${room?.room_name || ''}`;
+                    let roomName = '';
+                    const rawRoomId = entry.room_id;
+                    if (rawRoomId != null && String(rawRoomId).trim() !== '' && !isNaN(Number(rawRoomId))) {
+                        const roomIdAsNumber = Number(rawRoomId);
+                        const room = rooms.find(r => r.room_id === roomIdAsNumber);
+                        roomName = room?.room_name || '';
+                    }
+                    rowData[day] = `${entry.subject_id}\n${subject?.course_name || ''}\n${roomName}`;
                 }
             });
 
@@ -368,7 +388,12 @@ async function createTeacherScheduleSheets(workbook: ExcelJS.Workbook, data: Exp
                     bottom: { style: 'thin' },
                     right: { style: 'thin' }
                 };
-                cell.alignment = { vertical: 'top', wrapText: true };
+                // Apply specific alignment for day columns (2, 4, 6, 8, 10, 12)
+                if (colNumber > 1 && colNumber % 2 === 0) { // These are the day data columns
+                    cell.alignment = { vertical: 'top', horizontal: 'center', wrapText: true };
+                } else {
+                    cell.alignment = { vertical: 'top', wrapText: true }; // Default for other cells
+                }
 
                 // Highlight time column
                 if (colNumber === 1) {
@@ -381,7 +406,7 @@ async function createTeacherScheduleSheets(workbook: ExcelJS.Workbook, data: Exp
                 }
 
                 // Style spacer columns
-                if (colNumber % 2 === 0 && colNumber !== 12) { // Even columns (spacers)
+                if (colNumber > 1 && colNumber % 2 !== 0) { // These are the spacer columns (3, 5, 7, 9, 11)
                     cell.fill = {
                         type: 'pattern',
                         pattern: 'solid',
@@ -400,7 +425,13 @@ async function createRoomScheduleSheets(workbook: ExcelJS.Workbook, data: Export
     const roomEntries = rooms.reduce((acc, room) => {
         acc[room.room_id] = {
             room,
-            entries: entries.filter(e => e.room_id === room.room_id.toString())
+            entries: entries.filter(e => {
+                const rawEntryRoomId = e.room_id;
+                if (rawEntryRoomId != null && String(rawEntryRoomId).trim() !== '' && !isNaN(Number(rawEntryRoomId))) {
+                    return Number(rawEntryRoomId) === room.room_id;
+                }
+                return false;
+            })
         };
         return acc;
     }, {} as Record<string, { room: RoomInfo; entries: ScheduleEntry[] }>);
@@ -518,7 +549,12 @@ async function createRoomScheduleSheets(workbook: ExcelJS.Workbook, data: Export
                     bottom: { style: 'thin' },
                     right: { style: 'thin' }
                 };
-                cell.alignment = { vertical: 'top', wrapText: true };
+                // Apply specific alignment for day columns (2, 4, 6, 8, 10, 12)
+                if (colNumber > 1 && colNumber % 2 === 0) { // These are the day data columns
+                    cell.alignment = { vertical: 'top', horizontal: 'center', wrapText: true };
+                } else {
+                    cell.alignment = { vertical: 'top', wrapText: true }; // Default for other cells
+                }
 
                 // Highlight time column
                 if (colNumber === 1) {
@@ -583,7 +619,7 @@ async function createSummarySheet(workbook: ExcelJS.Workbook, data: ExportData):
         totalEntries: entries.length,
         totalSubjects: new Set(entries.map(e => e.subject_id)).size,
         totalTeachers: new Set(entries.map(e => e.teacher_id)).size,
-        totalRooms: new Set(entries.map(e => e.room_id)).size,
+        totalRooms: new Set(entries.map(e => e.room_id)).size, // This will now correctly handle mixed types
         totalSections: new Set(entries.map(e => e.section_id)).size,
         totalUnits: entries.reduce((total, entry) => {
             const subject = subjects.find(s => s.course_code === entry.subject_id);

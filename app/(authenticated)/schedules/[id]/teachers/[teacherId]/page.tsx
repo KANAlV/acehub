@@ -206,7 +206,7 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
             <div
                 className="flex justify-between items-center bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-4">
-                    <Button color="gray" size="sm" onClick={() => router.push(`/schedules/generated_schedule/${id}`)}>
+                    <Button color="gray" size="sm" onClick={() => router.push(`/schedules/${id}`)}>
                         <HiArrowLeft/>
                     </Button>
                     <div>
