@@ -461,7 +461,7 @@ export default function CoursesManager() {
             </div>
 
             <div className={"flex items-center justify-between"}>
-                <h1 className={"mb-4 font-bold text-2xl"}>Manage Sections:</h1>
+                <h1 className={"mb-4 font-bold text-2xl"}>Manage Courses:</h1>
                 <div className={"flex space-x-3"}>
                     <Dropdown color={"alternative"} label={"Actions"} dismissOnClick={false}>
                         <DropdownItem onClick={() => downloadProgramTemplate()}>Get Import Template</DropdownItem>
