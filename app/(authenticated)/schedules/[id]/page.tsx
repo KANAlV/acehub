@@ -22,6 +22,7 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
     const { id } = use(params);
 
     const [loading, setLoading] = useState(true);
+    const [scheduleExists, setScheduleExists] = useState<boolean | null>(null);
     const [scheduleName, setScheduleName] = useState("");
     const [semester, setSemester] = useState("1");
     const [schoolYear, setSchoolYear] = useState("2025-2026");
@@ -119,12 +120,17 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
 
             const schedule = list.find((s: any) => s.id === id);
             if (schedule) {
+                setScheduleExists(true);
                 setScheduleName(schedule.name);
                 // Extract semester and school year from config if available
                 if (schedule.config) {
                     const config = typeof schedule.config === 'string' ? JSON.parse(schedule.config) : schedule.config;
                     if (config.semester) setSemester(config.semester === '1' ? 'First Semester' : 'Second Semester');
                 }
+            } else {
+                setScheduleExists(false);
+                setLoading(false);
+                return; // Exit early if schedule doesn't exist
             }
 
             setAllSubjects(subs);
@@ -136,6 +142,7 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
 
         } catch (error) {
             console.error("Error loading schedule data:", error);
+            setScheduleExists(false);
         } finally {
             setLoading(false);
         }
@@ -182,6 +189,41 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
             <div className="p-8 h-full w-full overflow-y-auto font-sans">
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
                     <Spinner size="xl" />
+                </div>
+            </div>
+        );
+    }
+
+    if (scheduleExists === false) {
+        return (
+            <div className="p-8 h-full w-full overflow-y-auto font-sans">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 max-w-md text-center">
+                        <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 dark:bg-red-900/20 mb-4">
+                            <HiExclamation className="h-8 w-8 text-red-600 dark:text-red-400" />
+                        </div>
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                            Schedule Not Found
+                        </h2>
+                        <p className="text-gray-600 dark:text-gray-400 mb-6">
+                            The schedule with ID "{id}" does not exist or may have been deleted.
+                        </p>
+                        <div className="flex gap-3 justify-center">
+                            <Button 
+                                color="alternative" 
+                                onClick={() => redirect("/schedules")}
+                            >
+                                <HiArrowLeft className="mr-2" />
+                                Back to Schedules
+                            </Button>
+                            <Button 
+                                color="blue" 
+                                onClick={() => window.location.reload()}
+                            >
+                                Try Again
+                            </Button>
+                        </div>
+                    </div>
                 </div>
             </div>
         );

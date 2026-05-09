@@ -72,6 +72,8 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
     const {id, teacherId} = use(params);
 
     const [loading, setLoading] = useState(true);
+    const [scheduleExists, setScheduleExists] = useState<boolean | null>(null);
+    const [teacherExists, setTeacherExists] = useState<boolean | null>(null);
     const [teacher, setTeacher] = useState<any>(null);
     const [scheduleEntries, setScheduleEntries] = useState<any[]>([]);
     const [allSubjects, setAllSubjects] = useState<any[]>([]);
@@ -81,31 +83,43 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
     useEffect(() => {
         const loadTeacherData = async () => {
             setLoading(true);
+            setScheduleExists(null);
+            setTeacherExists(null);
+            
             try {
-                // Fetch teacher data
-                const teachers = await fetchTeachers("", 1);
-                const foundTeacher = teachers.find((t: any) => t.pscs_id === teacherId);
-                if (!foundTeacher) {
-                    router.push(`/schedules/generated_schedule/${id}`);
+                // First check if schedule exists
+                const scheduleList = await fetchSchedulesList();
+                const schedule = scheduleList.find((s: any) => s.id === id);
+                
+                if (!schedule) {
+                    setScheduleExists(false);
+                    setLoading(false);
                     return;
                 }
+                setScheduleExists(true);
+                setScheduleName(schedule.name);
+
+                // Then check if teacher exists
+                const teachers = await fetchTeachers("", 1);
+                const foundTeacher = teachers.find((t: any) => t.pscs_id === teacherId);
+                
+                if (!foundTeacher) {
+                    setTeacherExists(false);
+                    setLoading(false);
+                    return;
+                }
+                setTeacherExists(true);
                 setTeacher(foundTeacher);
 
                 // Fetch schedule entries and subjects
-                const [entries, subjects, scheduleList, settings] = await Promise.all([
+                const [entries, subjects, settings] = await Promise.all([
                     fetchScheduleDetails(id),
                     fetchAllSubjects(),
-                    fetchSchedulesList(),
                     fetchSystemSettings()
                 ]);
 
                 setAllSubjects(subjects);
                 setSystemSettings(settings);
-
-                const scheduleMeta = scheduleList.find((s: any) => s.id === id);
-                if (scheduleMeta) {
-                    setScheduleName(scheduleMeta.name);
-                }
 
                 // Filter entries for this teacher
                 const teacherEntries = entries.filter((entry: any) => entry.teacher_id === teacherId);
@@ -113,6 +127,8 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
 
             } catch (error) {
                 console.error("Error loading teacher data:", error);
+                setScheduleExists(false);
+                setTeacherExists(false);
             } finally {
                 setLoading(false);
             }
@@ -131,11 +147,71 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
         );
     }
 
-    if (!teacher) {
+    if (scheduleExists === false) {
         return (
             <div className="p-8 h-full w-full overflow-y-auto font-sans">
-                <div className="text-center text-gray-500">
-                    Teacher not found
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 max-w-md text-center">
+                        <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 dark:bg-red-900/20 mb-4">
+                            <HiExclamationCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
+                        </div>
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                            Schedule Not Found
+                        </h2>
+                        <p className="text-gray-600 dark:text-gray-400 mb-6">
+                            The schedule with ID "{id}" does not exist or may have been deleted.
+                        </p>
+                        <div className="flex gap-3 justify-center">
+                            <Button 
+                                color="alternative" 
+                                onClick={() => router.push("/schedules")}
+                            >
+                                <HiArrowLeft className="mr-2" />
+                                Back to Schedules
+                            </Button>
+                            <Button 
+                                color="blue" 
+                                onClick={() => window.location.reload()}
+                            >
+                                Try Again
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (teacherExists === false) {
+        return (
+            <div className="p-8 h-full w-full overflow-y-auto font-sans">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 max-w-md text-center">
+                        <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 dark:bg-red-900/20 mb-4">
+                            <HiExclamationCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
+                        </div>
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                            Teacher Not Found
+                        </h2>
+                        <p className="text-gray-600 dark:text-gray-400 mb-6">
+                            The teacher with ID "{teacherId}" does not exist or may have been removed.
+                        </p>
+                        <div className="flex gap-3 justify-center">
+                            <Button 
+                                color="alternative" 
+                                onClick={() => router.push(`/schedules/${id}`)}
+                            >
+                                <HiArrowLeft className="mr-2" />
+                                Back to Schedule
+                            </Button>
+                            <Button 
+                                color="blue" 
+                                onClick={() => window.location.reload()}
+                            >
+                                Try Again
+                            </Button>
+                        </div>
+                    </div>
                 </div>
             </div>
         );

@@ -99,7 +99,7 @@ export function SidebarComponent({ username }: { username: string }) {
                             Rooms
                         </SidebarItem>
                         <SidebarItem as={Link} href="/courses" className={"hover:bg-gray-500/14"} icon={HiUserGroup} onClick={() => setIsOpen(false)}>
-                            courses
+                            Courses
                         </SidebarItem>
                         <SidebarItem as={Link} href="/teachers" className={"hover:bg-gray-500/14"} icon={HiAcademicCap} onClick={() => setIsOpen(false)}>
                             Teachers

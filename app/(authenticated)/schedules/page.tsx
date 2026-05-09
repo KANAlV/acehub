@@ -80,7 +80,7 @@ const AutocompleteSelect = ({
                                 }}
                             >
                                 <div className="text-xs font-bold text-gray-900 dark:text-white">{opt.label}</div>
-                                {opt.subLabel && <div className="text-[10px] text-gray-500 dark:text-gray-400 italic">{opt.subLabel}</div>}
+                                {opt.subLabel && <div className="text-sm text-blue-500 font-extrabold italic">{opt.subLabel}</div>}
                             </div>
                         ))
                     ) : (
@@ -413,12 +413,16 @@ export default function SchedulesDashboard() {
                                         </Select>
                                     </div>
                                     <div className="relative">
-                                        <Label>Batch Add by Curriculum</Label>
+                                        <Label>Available Subjects</Label>
                                         <AutocompleteSelect 
-                                            options={availableCurriculums.map(c => ({ id: c.version, label: c.version }))}
-                                            value={batchCurriculum}
-                                            onChange={handleBatchAdd}
-                                            placeholder="Search Curriculum..."
+                                            options={availableSubjects.map(s => ({ 
+                                                id: s.id, 
+                                                label: `${s.course_code} - ${s.course_name}`, 
+                                                subLabel: `${s.curriculumn_version} | Lec: ${s.lecture_units || 0}, Lab: ${s.lab_units || 0}` 
+                                            }))}
+                                            value=""
+                                            onChange={addSubject}
+                                            placeholder="Search Subjects..."
                                         />
                                     </div>
                                 </div>
@@ -427,58 +431,84 @@ export default function SchedulesDashboard() {
                                     <div className="flex flex-col col-span-1 h-[50vh]">
                                         <div className="flex items-center justify-between mb-2">
                                             <h4 className="font-bold text-sm text-gray-500 flex items-center gap-2">
-                                                Available Subjects
-                                                <span className="bg-gray-200 px-2 rounded text-xs text-gray-700">{availableSubjects.length}</span>
+                                                Available Curriculum
+                                                <span className="bg-gray-200 px-2 rounded text-xs text-gray-700">{availableCurriculums.length}</span>
                                             </h4>
                                             <div className="w-32"><TextInput sizing="sm" placeholder="Search..." icon={HiSearch} value={subjectSearch} onChange={e => setSubjectSearch(e.target.value)} /></div>
                                         </div>
                                         <div className="flex-1 border rounded-lg overflow-hidden bg-white dark:bg-gray-800 shadow-inner">
-                                            <div className="h-full overflow-y-auto">
-                                                <Table hoverable>
-                                                    <TableHead className="sticky top-0 z-10">
-                                                        <TableRow>
-                                                            <TableHeadCell>Curr</TableHeadCell>
-                                                            <TableHeadCell>Code</TableHeadCell>
-                                                            <TableHeadCell>Name</TableHeadCell>
-                                                            <TableHeadCell></TableHeadCell>
-                                                        </TableRow>
-                                                    </TableHead>
-                                                    <TableBody className="divide-y text-gray-900 dark:text-white">{availableSubjects.map(s => (
-                                                        <TableRow key={s.id} className="hover:bg-gray-500/30">
-                                                            <TableCell className="text-xs">
-                                                                <Tooltip content={(
-                                                                    <>
-                                                                        <div>Lec: {s.lecture_units}</div>
-                                                                        <div>Lab: {s.lab_units}</div>
-                                                                    </>
-                                                                )}>
-                                                                    {s.curriculumn_version}
-                                                                </Tooltip>
-                                                            </TableCell>
-                                                            <TableCell className="font-mono text-[10px]">
-                                                                <Tooltip content={(
-                                                                    <>
-                                                                        <div>Lec: {s.lecture_units}</div>
-                                                                        <div>Lab: {s.lab_units}</div>
-                                                                    </>
-                                                                )}>
-                                                                    {s.course_code}
-                                                                </Tooltip>
-                                                            </TableCell>
-                                                            <TableCell className="text-xs">
-                                                                <Tooltip content={(
-                                                                    <>
-                                                                        <div>Lec: {s.lecture_units}</div>
-                                                                        <div>Lab: {s.lab_units}</div>
-                                                                    </>
-                                                                )}>
-                                                                    {s.course_name}
-                                                                </Tooltip>
-                                                            </TableCell>
-                                                            <TableCell><Button size="xs" color="blue" onClick={() => addSubject(s.id)}><HiArrowRight size="18" /></Button></TableCell>
-                                                        </TableRow>
-                                                    ))}</TableBody>
-                                                </Table>
+                                            <div className="h-full overflow-y-auto p-2">
+                                                <Accordion collapseAll>
+                                                    {availableCurriculums.map(c => {
+                                                        const subjectsInCurr = allSubjects.filter(s => s.curriculumn_version === c.version);
+                                                        const selectedInCurr = subjectsInCurr.filter(s => selectedSubjectIds.includes(s.id));
+                                                        const availableInCurr = subjectsInCurr.filter(s => !selectedSubjectIds.includes(s.id));
+                                                        return (
+                                                            <AccordionPanel key={c.version}>
+                                                                <div className="flex w-full justify-between items-center p-3 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                                                    <div className="flex w-full items-center gap-3">
+                                                                        <AccordionTitle className="flex-1 p-0 w-full hover:bg-transparent">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <span className="font-bold text-sm">{c.version}</span>
+                                                                                <span className="text-xs text-gray-500">{subjectsInCurr.length} subjects</span>
+                                                                                <span className="text-xs text-blue-500">{selectedInCurr.length} selected</span>
+                                                                            </div>
+                                                                        </AccordionTitle>
+                                                                    </div>
+                                                                    <Button
+                                                                        size="xs"
+                                                                        color="default"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleBatchAdd(c.version);
+                                                                        }}
+                                                                        disabled={availableInCurr.length === 0}
+                                                                    >
+                                                                        <HiArrowRight size="14" />
+                                                                    </Button>
+                                                                </div>
+                                                                <AccordionContent className="p-0 border-none">
+                                                                    <div className="max-h-60 overflow-y-auto">
+                                                                        <Table hoverable>
+                                                                            <TableHead className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-800">
+                                                                                <TableRow>
+                                                                                    <TableHeadCell className="text-xs">Code</TableHeadCell>
+                                                                                    <TableHeadCell className="text-xs">Name</TableHeadCell>
+                                                                                    <TableHeadCell className="text-xs">Units</TableHeadCell>
+                                                                                    <TableHeadCell className="text-xs"></TableHeadCell>
+                                                                                </TableRow>
+                                                                            </TableHead>
+                                                                            <TableBody className="divide-y">
+                                                                                {subjectsInCurr.map(s => (
+                                                                                    <TableRow key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                                                                        <TableCell className="text-xs font-mono">{s.course_code}</TableCell>
+                                                                                        <TableCell className="text-xs">{s.course_name}</TableCell>
+                                                                                        <TableCell className="text-xs">
+                                                                                            <Tooltip content={`Lec: ${s.lecture_units}, Lab: ${s.lab_units}`}>
+                                                                                                {s.lecture_units + s.lab_units}
+                                                                                            </Tooltip>
+                                                                                        </TableCell>
+                                                                                        <TableCell className="text-right">
+                                                                                            {selectedSubjectIds.includes(s.id) ? (
+                                                                                                <Button size="xs" color="gray" disabled>
+                                                                                                    <HiCheck size="14" />
+                                                                                                </Button>
+                                                                                            ) : (
+                                                                                                <Button size="xs" color="blue" onClick={() => addSubject(s.id)}>
+                                                                                                    <HiArrowRight size="14" />
+                                                                                                </Button>
+                                                                                            )}
+                                                                                        </TableCell>
+                                                                                    </TableRow>
+                                                                                ))}
+                                                                            </TableBody>
+                                                                        </Table>
+                                                                    </div>
+                                                                </AccordionContent>
+                                                            </AccordionPanel>
+                                                        );
+                                                    })}
+                                                </Accordion>
                                             </div>
                                         </div>
                                     </div>

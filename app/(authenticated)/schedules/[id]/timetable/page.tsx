@@ -37,6 +37,7 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
     const { id } = use(params);
 
     const [loading, setLoading] = useState(true);
+    const [scheduleExists, setScheduleExists] = useState<boolean | null>(null);
     const [scheduleName, setScheduleName] = useState("");
     
     // Entity Data
@@ -90,13 +91,9 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
                 fetchScheduleDetails(id)
             ]);
 
-            setRooms(roomData);
-            setSections(sectionData);
-            setTeachers(teacherData);
-            setAllSubjects(subjectData);
-            
             const meta = scheduleList.find((s: any) => s.id === id);
             if (meta) {
+                setScheduleExists(true);
                 setScheduleName(meta.name);
                 const config = meta.generation_config || {};
                 const selectedIds = config.subjects || [];
@@ -115,7 +112,16 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
                     };
                 }).filter((p: any) => p.courseCode);
                 setAvailablePayload(payload);
+            } else {
+                setScheduleExists(false);
+                setLoading(false);
+                return; // Exit early if schedule doesn't exist
             }
+
+            setRooms(roomData);
+            setSections(sectionData);
+            setTeachers(teacherData);
+            setAllSubjects(subjectData);
 
             const mappedEntries = currentEntries.map((e: any) => ({
                 id: e.id,
@@ -134,6 +140,7 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
             
         } catch (e) {
             console.error(e);
+            setScheduleExists(false);
         } finally {
             setLoading(false);
         }
@@ -323,6 +330,37 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
     return (
         <div className="p-8 space-y-6 h-full w-full overflow-y-auto font-sans">
             {loading && <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm"><Spinner size="xl" /></div>}
+
+            {scheduleExists === false && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 max-w-md text-center">
+                        <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 dark:bg-red-900/20 mb-4">
+                            <HiExclamation className="h-8 w-8 text-red-600 dark:text-red-400" />
+                        </div>
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                            Schedule Not Found
+                        </h2>
+                        <p className="text-gray-600 dark:text-gray-400 mb-6">
+                            The schedule with ID "{id}" does not exist or may have been deleted.
+                        </p>
+                        <div className="flex gap-3 justify-center">
+                            <Button 
+                                color="alternative" 
+                                onClick={() => router.push("/schedules")}
+                            >
+                                <HiArrowLeft className="mr-2" />
+                                Back to Schedules
+                            </Button>
+                            <Button 
+                                color="blue" 
+                                onClick={() => window.location.reload()}
+                            >
+                                Try Again
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="flex justify-between items-center bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-4">

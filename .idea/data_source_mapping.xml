@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DataSourcePerFileMappings">
+    <file url="file://$APPLICATION_CONFIG_DIR$/consoles/db/f202380e-83aa-424f-bb64-281710c6a8f6/schedule_generation_migration.sql" value="f202380e-83aa-424f-bb64-281710c6a8f6" />
+    <file url="file://$APPLICATION_CONFIG_DIR$/consoles/db/f202380e-83aa-424f-bb64-281710c6a8f6/subjects_id_migration.sql" value="f202380e-83aa-424f-bb64-281710c6a8f6" />
+    <file url="file://$APPLICATION_CONFIG_DIR$/consoles/db/sched.sql" value="f202380e-83aa-424f-bb64-281710c6a8f6" />
+  </component>
+</project>
