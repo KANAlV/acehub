@@ -13,9 +13,9 @@ import {
     fetchScheduleDetails, getAllRoomsData, getAllProgramsData, fetchTeachers,
     fetchAllSubjects, fetchSchedulesList, deleteGeneratedSchedule, setDisplay, getDisplay,
     fetchSystemSettings
-} from "services/userService";
-import { getMaxUnitsSync, getOverloadMaxSync, getPrepLimitSync } from "@/lib/teachingLoadUtils";
-import { exportScheduleToExcel } from "@/lib/scheduleExport";
+} from "@/services/userService.ts";
+import { getMaxUnitsSync, getOverloadMaxSync, getPrepLimitSync } from "@/lib/teachingLoadUtils.ts";
+import { exportScheduleToExcel } from "@/lib/scheduleExport.ts";
 import {redirect} from "next/navigation";
 
 export default function ScheduleSummary({ params }: { params: Promise<{ id: string }> }) {
@@ -364,14 +364,8 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                             <div className="flex justify-between items-center">
                                 <span className="text-sm">Sections</span>
                                 <div className="flex items-center gap-2">
-                                    <Progress 
-                                        progress={sections.length > 0 ? (stats.uniqueSections / sections.length) * 100 : 0} 
-                                        size="sm" 
-                                        color="purple"
-                                        className="w-20"
-                                    />
                                     <span className="text-sm font-medium">
-                                        {stats.uniqueSections}/{sections.length}
+                                        {stats.uniqueSections}
                                     </span>
                                 </div>
                             </div>

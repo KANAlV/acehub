@@ -11,7 +11,7 @@ import {
     fetchScheduleDetails, updateScheduleEntries, 
     getAllRoomsData, getAllProgramsData, fetchTeachers, fetchAllSubjects, 
     fetchSchedulesList 
-} from "services/userService";
+} from "@/services/userService.ts";
 
 /* ================= CONSTANTS ================= */
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];

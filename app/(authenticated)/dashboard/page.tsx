@@ -16,7 +16,7 @@ import {
     fetchTeachers,
     getAllRoomsData,
     fetchSchedulesList,
-    fetchSystemSettings
+    fetchSystemSettings, getCurrentUser
 } from "@/services/userService";
 import { getMaxUnitsSync, getOverloadMaxSync, getPrepLimitSync } from "@/lib/teachingLoadUtils";
 
@@ -30,6 +30,17 @@ export default function DashboardSummary() {
     const [teachers, setTeachers] = useState<any[]>([]);
     const [schedules, setSchedules] = useState<any[]>([]);
     const [systemSettings, setSystemSettings] = useState<any>(null);
+    const [isViewer, setIsViewer] = useState(true);
+
+    const checkUserStatus = async () => {
+        const fetchedUser = await getCurrentUser();
+        const role = await fetchedUser.role;
+        setIsViewer(role == "Viewer");
+    };
+
+    useEffect(() => {
+        checkUserStatus();
+    }, []);
 
     // Logic for max units as defined in your reference
     const getMaxUnits = (employmentType: string): number => {
@@ -110,8 +121,10 @@ export default function DashboardSummary() {
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{scheduleName}</h1>
                     <p className="text-sm text-gray-500 italic">Active Display ID: {activeScheduleId}</p>
                 </div>
-                <Button color="blue" onClick={() => router.push(`/schedules/${activeScheduleId}/timetable`)}>
-                    <HiPencilAlt className="mr-2 h-5 w-5" /> Edit Full Timetable
+                <Button color="blue" onClick={() => isViewer? router.push(`./timetable`) : router.push(`/schedules/${activeScheduleId}/timetable`)}>
+                    {!isViewer && <HiPencilAlt className="mr-2 h-5 w-5" />}
+                    {isViewer && <HiCalendar className="mr-2 h-5 w-5" />}
+                    {isViewer? "View Timetable":"Edit Timetable"}
                 </Button>
             </div>
 
@@ -207,7 +220,7 @@ export default function DashboardSummary() {
 
                         return (
                             <div key={teacher.pscs_id} className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md transition-all"
-                                 onClick={() => router.push(`/schedules/${activeScheduleId}/teachers/${teacher.pscs_id}`)}>
+                                 onClick={() => router.push(`./overview/${teacher.pscs_id}`)}>
                                 <div className="flex justify-between items-start mb-3">
                                     <div>
                                         <h4 className="font-semibold text-sm">{teacher.name}</h4>

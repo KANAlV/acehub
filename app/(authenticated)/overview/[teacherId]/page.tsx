@@ -12,10 +12,11 @@ import {
 } from "react-icons/hi";
 import { useRouter } from "next/navigation";
 import {
+    getDisplay,
     fetchScheduleDetails, fetchTeachers, fetchAllSubjects, fetchSchedulesList,
     fetchSystemSettings
-} from "services/userService";
-import { getMaxUnitsSync, getOverloadMaxSync, getPrepLimitSync } from "@/lib/teachingLoadUtils";
+} from "@/services/userService";
+import { getMaxUnitsSync, getOverloadMaxSync, getPrepLimitSync } from "@/lib/teachingLoadUtils.ts";
 
 /* ================= CONSTANTS ================= */
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -67,42 +68,45 @@ function getEmploymentTypeDisplay(employmentType: string): string {
     }
 }
 
-export default function TeacherAnalysis({ params }: { params: Promise<{ id: string, teacherId: string }> }) {
+export default function TeacherAnalysis({ params }: { params: Promise<{ teacherId: string }> }) {
     const router = useRouter();
-    const {id, teacherId} = use(params);
+    const {teacherId} = use(params);
 
     const [loading, setLoading] = useState(true);
-    const [scheduleExists, setScheduleExists] = useState<boolean | null>(null);
+    const [activeScheduleId, setActiveScheduleId] = useState<string | null>(null);
     const [teacherExists, setTeacherExists] = useState<boolean | null>(null);
     const [teacher, setTeacher] = useState<any>(null);
     const [scheduleEntries, setScheduleEntries] = useState<any[]>([]);
     const [allSubjects, setAllSubjects] = useState<any[]>([]);
-    const [scheduleName, setScheduleName] = useState("");
+    const [scheduleName, setScheduleName] = useState("No Active Schedule");
     const [systemSettings, setSystemSettings] = useState<any>(null);
 
     useEffect(() => {
         const loadTeacherData = async () => {
             setLoading(true);
-            setScheduleExists(null);
             setTeacherExists(null);
-            
+
             try {
-                // First check if schedule exists
-                const scheduleList = await fetchSchedulesList();
-                const schedule = scheduleList.find((s: any) => s.id === id);
-                
-                if (!schedule) {
-                    setScheduleExists(false);
+                // Get active schedule ID using dashboard pattern
+                const rawDisplayId = await getDisplay();
+                const displayId = String(rawDisplayId).replace(/^"|"$/g, '');
+
+                if (!displayId || displayId === "null") {
                     setLoading(false);
                     return;
                 }
-                setScheduleExists(true);
-                setScheduleName(schedule.name);
 
-                // Then check if teacher exists
+                setActiveScheduleId(displayId);
+
+                // Get schedule metadata
+                const scheduleList = await fetchSchedulesList();
+                const schedule = scheduleList.find((s: any) => String(s.id) === String(displayId));
+                if (schedule) setScheduleName(schedule.name);
+
+                // Check if teacher exists
                 const teachers = await fetchTeachers("", 1);
                 const foundTeacher = teachers.find((t: any) => t.pscs_id === teacherId);
-                
+
                 if (!foundTeacher) {
                     setTeacherExists(false);
                     setLoading(false);
@@ -113,7 +117,7 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
 
                 // Fetch schedule entries and subjects
                 const [entries, subjects, settings] = await Promise.all([
-                    fetchScheduleDetails(id),
+                    fetchScheduleDetails(displayId),
                     fetchAllSubjects(),
                     fetchSystemSettings()
                 ]);
@@ -127,7 +131,6 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
 
             } catch (error) {
                 console.error("Error loading teacher data:", error);
-                setScheduleExists(false);
                 setTeacherExists(false);
             } finally {
                 setLoading(false);
@@ -135,52 +138,17 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
         };
 
         loadTeacherData();
-    }, [id, teacherId, router]);
+    }, [teacherId, router]);
 
-    if (loading) {
-        return (
-            <div className="p-8 h-full w-full overflow-y-auto font-sans">
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
-                    <Spinner size="xl"/>
-                </div>
-            </div>
-        );
-    }
+    if (loading) return <div className="flex h-screen items-center justify-center"><Spinner size="xl" /></div>;
 
-    if (scheduleExists === false) {
-        return (
-            <div className="p-8 h-full w-full overflow-y-auto font-sans">
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 max-w-md text-center">
-                        <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 dark:bg-red-900/20 mb-4">
-                            <HiExclamationCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
-                        </div>
-                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                            Schedule Not Found
-                        </h2>
-                        <p className="text-gray-600 dark:text-gray-400 mb-6">
-                            The schedule with ID "{id}" does not exist or may have been deleted.
-                        </p>
-                        <div className="flex gap-3 justify-center">
-                            <Button 
-                                color="alternative" 
-                                onClick={() => router.push("/schedules")}
-                            >
-                                <HiArrowLeft className="mr-2" />
-                                Back to Schedules
-                            </Button>
-                            <Button 
-                                color="blue" 
-                                onClick={() => window.location.reload()}
-                            >
-                                Try Again
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+    if (!activeScheduleId) return (
+        <Card className="m-8 text-center max-w-2xl mx-auto">
+            <HiExclamationCircle className="mx-auto h-12 w-12 text-yellow-400" />
+            <h3 className="text-xl font-bold mt-4">No Active Schedule Set</h3>
+            <Button className="mt-4 mx-auto" onClick={() => router.push('/schedules')}>Go to Schedules</Button>
+        </Card>
+    );
 
     if (teacherExists === false) {
         return (
@@ -197,15 +165,15 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
                             The teacher with ID "{teacherId}" does not exist or may have been removed.
                         </p>
                         <div className="flex gap-3 justify-center">
-                            <Button 
-                                color="alternative" 
-                                onClick={() => router.push(`/schedules/${id}`)}
+                            <Button
+                                color="alternative"
+                                onClick={() => router.push('/dashboard')}
                             >
                                 <HiArrowLeft className="mr-2" />
-                                Back to Schedule
+                                Back to Dashboard
                             </Button>
-                            <Button 
-                                color="blue" 
+                            <Button
+                                color="blue"
                                 onClick={() => window.location.reload()}
                             >
                                 Try Again
@@ -282,7 +250,7 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
             <div
                 className="flex justify-between items-center bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-4">
-                    <Button color="gray" size="sm" onClick={() => router.push(`/schedules/${id}`)}>
+                    <Button color="gray" size="sm" onClick={() => router.push('/dashboard')}>
                         <HiArrowLeft/>
                     </Button>
                     <div>

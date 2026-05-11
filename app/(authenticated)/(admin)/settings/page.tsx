@@ -13,20 +13,22 @@ import {
     TableHead, TableHeadCell, ModalBody, TableBody, TableRow, TableCell, ModalHeader, ModalFooter,
     Toast, ToastToggle, Progress, Spinner, Select
 } from "flowbite-react";
-import { 
-    HiPlus, HiTrash, HiSave, HiClock, HiUserGroup, HiAcademicCap, HiCog, 
-    HiDownload, HiUpload, HiCheck, HiExclamation 
+import {
+    HiPlus, HiTrash, HiSave, HiClock, HiUserGroup, HiAcademicCap, HiCog,
+    HiDownload, HiUpload, HiCheck, HiExclamation
 } from "react-icons/hi";
-import { 
-    deleteBreakPeriod, deletePreset, fetchAuthorizedAccounts, fetchBreakPeriods, 
-    fetchPresets, fetchSystemSettings, insertBreakPeriod, savePreset, 
+import {
+    deleteBreakPeriod, deletePreset, fetchAuthorizedAccounts, fetchBreakPeriods,
+    fetchPresets, fetchSystemSettings, insertBreakPeriod, savePreset,
     updateAccountRole, updateBreakPeriod, updateSystemSetting,
-    insertUser, deleteUser
+    insertUser, deleteUser, getCurrentUser
 } from "@/services/userService.ts";
+
+
 
 export default function Settings() {
     const [loading, setLoading] = useState(true);
-    
+
     // UI State
     const [showToast, setShowToast] = useState(false);
     const [statusCode, setStatusCode] = useState("200");
@@ -46,12 +48,18 @@ export default function Settings() {
     const [showAddBreakModal, setShowAddBreakModal] = useState(false);
     const [editingBreak, setEditingBreak] = useState<any>(null);
     const [newBreak, setNewBreak] = useState({ dayOfWeek: "", startTime: "", endTime: "", description: "" });
-    
+
     const [showAddAccountModal, setShowAddAccountModal] = useState(false);
     const [newAccount, setNewAccount] = useState({ username: "", email: "", role: "Faculty" });
-    
+
     const [showSavePresetModal, setShowSavePresetModal] = useState(false);
     const [newPresetName, setNewPresetName] = useState("");
+    const [isSuperUser, setIsSuperUser] = useState(false);
+
+    // Debug logging for isSuperUser state
+    useEffect(() => {
+        console.log('isSuperUser state changed:', isSuperUser);
+    }, [isSuperUser]);
 
     const STATUS_MESSAGES = {
         "200": "Operation completed successfully",
@@ -85,7 +93,7 @@ export default function Settings() {
             if (settings.prepLimits) setPrepLimits(settings.prepLimits);
             if (settings.overloadMax) setOverloadMax(settings.overloadMax);
             if (settings.activePresetId) setActivePresetId(settings.activePresetId);
-            
+
             setBreakPeriods(breaks);
             setAuthorizedAccounts(accounts);
             setPresets(availablePresets);
@@ -96,7 +104,16 @@ export default function Settings() {
         }
     };
 
-    useEffect(() => { loadAllData(); }, []);
+    useEffect(() => { 
+        loadAllData();
+        checkSuperUserStatus();
+    }, []);
+
+    const checkSuperUserStatus = async () => {
+        const fetchedUser = await getCurrentUser();
+        const role = await fetchedUser.role;
+        setIsSuperUser(role == "SuperAdmin");
+    };
 
     const triggerNotification = (code: string) => {
         setStatusCode(code);
@@ -213,6 +230,55 @@ export default function Settings() {
         triggerNotification(res);
     };
 
+    const displayAccountControl = () => {
+        if(isSuperUser) {
+            return (
+                <TabItem title="Users & Roles" icon={HiCog}>
+                    <Card className="mt-6 border-none shadow-sm">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-lg font-bold">Access Control</h3>
+                            <Button size="sm" onClick={() => setShowAddAccountModal(true)}>
+                                <HiPlus className="mr-2" /> Add User
+                            </Button>
+                        </div>
+                        <Table hoverable>
+                            <TableHead>
+                                <TableRow>
+                                    <TableHeadCell>Username</TableHeadCell>
+                                    <TableHeadCell>Email</TableHeadCell>
+                                    <TableHeadCell>Role</TableHeadCell>
+                                    <TableHeadCell><span className="sr-only">Actions</span></TableHeadCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody className="divide-y">
+                                {authorizedAccounts.map(account => (
+                                    <TableRow key={account.id}>
+                                        <TableCell className="font-medium">{account.username}</TableCell>
+                                        <TableCell>{account.email}</TableCell>
+                                        <TableCell>
+                                            <Select value={account.role} onChange={(e) => handleUpdateRole(account.id, e.target.value)}>
+                                                <option value="Administrator">Administrator</option>
+                                                <option value="SuperAdmin">SuperAdmin</option>
+                                            </Select>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex justify-end">
+                                                <Button color="red" size="xs" onClick={() => handleDeleteUserAction(account.id)}>
+                                                    <HiTrash />
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </Card>
+                </TabItem>
+            );
+        }
+    }
+
+    
     return (
         <div className="p-8 h-full w-full overflow-y-auto font-sans">
             {loading && (
@@ -355,48 +421,10 @@ export default function Settings() {
                     </Card>
                 </TabItem>
 
-                {/* Account Management */}
-                <TabItem title="Users & Roles" icon={HiCog}>
-                    <Card className="mt-6 border-none shadow-sm">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-lg font-bold">Access Control</h3>
-                            <Button size="sm" onClick={() => setShowAddAccountModal(true)}>
-                                <HiPlus className="mr-2" /> Add User
-                            </Button>
-                        </div>
-                        <Table hoverable>
-                            <TableHead>
-                                <TableRow>
-                                    <TableHeadCell>Username</TableHeadCell>
-                                    <TableHeadCell>Email</TableHeadCell>
-                                    <TableHeadCell>Role</TableHeadCell>
-                                    <TableHeadCell><span className="sr-only">Actions</span></TableHeadCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody className="divide-y">
-                                {authorizedAccounts.map(account => (
-                                    <TableRow key={account.id}>
-                                        <TableCell className="font-medium">{account.username}</TableCell>
-                                        <TableCell>{account.email}</TableCell>
-                                        <TableCell>
-                                            <Select value={account.role} onChange={(e) => handleUpdateRole(account.id, e.target.value)}>
-                                                <option value="Administrator">Administrator</option>
-                                                <option value="Scheduler">Scheduler</option>
-                                            </Select>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex justify-end">
-                                                <Button color="red" size="xs" onClick={() => handleDeleteUserAction(account.id)}>
-                                                    <HiTrash />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </Card>
-                </TabItem>
+                {/* Account Management */
+                    displayAccountControl()
+                }
+
 
                 {/* Presets */}
                 <TabItem title="Presets" icon={HiDownload}>

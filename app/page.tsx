@@ -41,8 +41,9 @@ export default function Login() {
                     <div className="w-full bg-white rounded-xl shadow-lg dark:border md:mt-0 sm:max-w-md xl:p-0 dark:bg-gray-800 dark:border-gray-700">
                         <div className="p-8 space-y-6">
                             <div className="text-center">
+                                <img src="/achehub-logo.png" alt="Achehub Logo" className="w-16 mb-4 mx-auto" />
                                 <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-                                    Academic Head Portal
+                                    Achehub Login Portal
                                 </h1>
                                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                                     Please sign in with your organizational account to manage faculty schedules.

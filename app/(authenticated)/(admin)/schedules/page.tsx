@@ -17,7 +17,7 @@ import {
     fetchSchedulesList, deleteGeneratedSchedule, saveGeneratedSchedule,
     fetchCurriculumVersions, fetchAllSubjects, fetchAllTeachers, getAllProgramsData,
     fetchSystemSettings
-} from "@/services/userService";
+} from "@/services/userService.ts";
 
 /** --- Helper Component: Autocomplete Select --- **/
 const AutocompleteSelect = ({

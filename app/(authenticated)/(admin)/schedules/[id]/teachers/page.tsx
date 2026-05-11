@@ -4,7 +4,7 @@ import React, { useEffect, useState, use } from "react";
 import { Button, Spinner } from "flowbite-react";
 import { HiExclamation, HiArrowLeft } from "react-icons/hi";
 import { useRouter } from "next/navigation";
-import { fetchSchedulesList } from "services/userService";
+import { fetchSchedulesList } from "@/services/userService.ts";
 
 export default function ScheduleSummary({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
