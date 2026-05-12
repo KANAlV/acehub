@@ -3,6 +3,8 @@ import sql from '@/lib/db';
 import {revalidatePath} from 'next/cache';
 import { cookies } from 'next/headers';
 import { generateScheduleData } from '@/lib/schedulerEngine';
+import { spawn } from "child_process";
+import { NextResponse } from "next/server";
 
 /** --- Login & User Session --- **/
 export interface User {
@@ -175,6 +177,88 @@ export async function deleteBreakPeriod(id: number) {
     } catch (error) {
         console.error("[DB_ERROR]: Failed to delete break:", error);
         return "500";
+    }
+}
+
+/** --- Database Truncation --- **/
+
+export async function truncateTables(selectedTables: {
+    schedules: boolean;
+    programs: boolean;
+    rooms: boolean;
+    subjects: boolean;
+    teachers: boolean;
+    users: boolean;
+}) {
+    try {
+        const result = await sql`
+            SELECT * FROM truncate_tables(
+                ${selectedTables.schedules},
+                ${selectedTables.programs},
+                ${selectedTables.rooms},
+                ${selectedTables.subjects},
+                ${selectedTables.teachers},
+                ${selectedTables.users}
+            )
+        `;
+        revalidatePath('/settings');
+        return result;
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to truncate tables:", error);
+        throw new Error("Failed to truncate tables");
+    }
+}
+
+/** --- Database Export --- **/
+
+export async function pgDump() {
+    const dumpUrl = process.env.DUMP_URL;
+
+    if (!dumpUrl) {
+        return new NextResponse("Server configuration error: DUMP_URL is missing.", { status: 500 });
+    }
+
+    try {
+        // Spawn pg_dump as a child process streaming directly to stdout
+        const pgDump = spawn("pg_dump", ["-d", dumpUrl]);
+
+        // Create a ReadableStream from the pg_dump stdout
+        const stream = new ReadableStream({
+            start(controller) {
+                pgDump.stdout.on("data", (chunk) => {
+                    controller.enqueue(chunk);
+                });
+
+                pgDump.stderr.on("data", (data) => {
+                    console.warn(`pg_dump status: ${data.toString()}`);
+                });
+
+                pgDump.on("close", (code) => {
+                    if (code !== 0) {
+                        controller.error(new Error(`pg_dump process exited with code ${code}`));
+                    } else {
+                        controller.close();
+                    }
+                });
+
+                pgDump.on("error", (err) => {
+                    controller.error(err);
+                });
+            },
+        });
+
+        const timestamp = Date.now();
+
+        // Return the stream with headers that force a browser download
+        return new NextResponse(stream, {
+            headers: {
+                "Content-Type": "application/octet-stream",
+                "Content-Disposition": `attachment; filename="neon_backup_${timestamp}.sql"`,
+            },
+        });
+    } catch (error: any) {
+        console.error("Streaming export failed:", error);
+        return new NextResponse("Failed to generate database export.", { status: 500 });
     }
 }
 

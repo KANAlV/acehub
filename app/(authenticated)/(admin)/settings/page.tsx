@@ -21,8 +21,10 @@ import {
     deleteBreakPeriod, deletePreset, fetchAuthorizedAccounts, fetchBreakPeriods,
     fetchPresets, fetchSystemSettings, insertBreakPeriod, savePreset,
     updateAccountRole, updateBreakPeriod, updateSystemSetting,
-    insertUser, deleteUser, getCurrentUser
+    insertUser, deleteUser, getCurrentUser, pgDump, truncateTables
 } from "@/services/userService.ts";
+import {BsDatabaseDash, BsDatabaseDown} from "react-icons/bs";
+import {FaDatabase} from "react-icons/fa";
 
 
 
@@ -52,6 +54,18 @@ export default function Settings() {
     const [showAddAccountModal, setShowAddAccountModal] = useState(false);
     const [newAccount, setNewAccount] = useState({ username: "", email: "", role: "Faculty" });
 
+    // Truncate Table Modal
+    const [showTruncateModal, setShowTruncateModal] = useState(false);
+    const [tablesToTruncate, setTablesToTruncate] = useState({
+        courses: false,
+        rooms: false,
+        schedules: false,
+        subjects: false,
+        teachers: false,
+        users: false
+    });
+
+    // Role conts
     const [showSavePresetModal, setShowSavePresetModal] = useState(false);
     const [newPresetName, setNewPresetName] = useState("");
     const [isSuperUser, setIsSuperUser] = useState(false);
@@ -230,54 +244,364 @@ export default function Settings() {
         triggerNotification(res);
     };
 
-    const displayAccountControl = () => {
+    const handleDatabaseExport = async () => {
+        try {
+            setLoading(true);
+            console.log('Starting database export...');
+            
+            // First, check if the export is configured
+            const response = await fetch('/api/export-database', {
+                method: 'GET',
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                console.error('Export failed:', errorData);
+                
+                if (response.status === 503) {
+                    alert('Database export is not configured. Please set the DUMP_URL environment variable in your .env.local file.');
+                } else {
+                    alert(`Export failed: ${errorData.error || 'Unknown error'}`);
+                }
+                triggerNotification("500");
+                setLoading(false)
+                return;
+            }
+
+            const contentType = response.headers.get('content-type');
+            
+            // If it's a JSON response, it means there's a configuration issue
+            if (contentType && contentType.includes('application/json')) {
+                const data = await response.json();
+                if (data.error) {
+                    alert(`Database export error: ${data.message || data.error}`);
+                    triggerNotification("500");
+                    setLoading(false)
+                    return;
+                }
+            }
+
+            // If we get here, it should be a file download
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            const timestamp = Date.now();
+            a.download = `neon_backup_${timestamp}.sql`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            triggerNotification("200");
+            setLoading(false)
+            
+        } catch (error) {
+            console.error('Database export failed:', error);
+            alert('Database export failed. Please check your internet connection and try again.');
+            triggerNotification("500");
+            setLoading(false)
+        }
+    };
+
+    const handleTruncateTables = async () => {
+        const selectedTables = Object.entries(tablesToTruncate)
+            .filter(([_, selected]) => selected)
+            .map(([table, _]) => table);
+
+        if (selectedTables.length === 0) {
+            alert('Please select at least one table to truncate.');
+            return;
+        }
+
+        const confirmMessage = `Are you sure you want to truncate the following tables?\n\n${selectedTables.join(', ')}\n\nThis action cannot be undone!`;
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+
+        try {
+            setLoading(true);
+            
+            // Map checkbox state to stored procedure parameters
+            const truncateParams = {
+                schedules: tablesToTruncate.schedules,
+                programs: tablesToTruncate.courses, // Note: courses maps to programs table
+                rooms: tablesToTruncate.rooms,
+                subjects: tablesToTruncate.subjects,
+                teachers: tablesToTruncate.teachers,
+                users: tablesToTruncate.users
+            };
+            
+            const result = await truncateTables(truncateParams);
+            
+            console.log('Truncate results:', result);
+            
+            // Show success message with details
+            const successMessage = result
+                .filter((row: any) => row.status === 'truncated' || row.status === 'deleted non-SuperAdmin users')
+                .map((row: any) => `${row.table_name}: ${row.rows_affected} rows`)
+                .join('\n');
+            
+            alert(`Tables truncated successfully:\n\n${successMessage}`);
+            
+            // Reset checkboxes
+            setTablesToTruncate({
+                courses: false,
+                rooms: false,
+                schedules: false,
+                subjects: false,
+                teachers: false,
+                users: false
+            });
+            
+            // Close modal
+            setShowTruncateModal(false);
+            
+            // Reload data
+            await loadAllData();
+            
+            triggerNotification("200");
+            setLoading(false);
+            
+        } catch (error) {
+            console.error('Table truncation failed:', error);
+            alert('Failed to truncate tables. Please check console for details.');
+            triggerNotification("500");
+            setLoading(false);
+        }
+    };
+
+    const displayTabs = () => {
         if(isSuperUser) {
             return (
-                <TabItem title="Users & Roles" icon={HiCog}>
-                    <Card className="mt-6 border-none shadow-sm">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-lg font-bold">Access Control</h3>
-                            <Button size="sm" onClick={() => setShowAddAccountModal(true)}>
-                                <HiPlus className="mr-2" /> Add User
-                            </Button>
-                        </div>
-                        <Table hoverable>
-                            <TableHead>
-                                <TableRow>
-                                    <TableHeadCell>Username</TableHeadCell>
-                                    <TableHeadCell>Email</TableHeadCell>
-                                    <TableHeadCell>Role</TableHeadCell>
-                                    <TableHeadCell><span className="sr-only">Actions</span></TableHeadCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody className="divide-y">
-                                {authorizedAccounts.map(account => (
-                                    <TableRow key={account.id}>
-                                        <TableCell className="font-medium">{account.username}</TableCell>
-                                        <TableCell>{account.email}</TableCell>
-                                        <TableCell>
-                                            <Select value={account.role} onChange={(e) => handleUpdateRole(account.id, e.target.value)}>
-                                                <option value="Administrator">Administrator</option>
-                                                <option value="SuperAdmin">SuperAdmin</option>
-                                            </Select>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex justify-end">
-                                                <Button color="red" size="xs" onClick={() => handleDeleteUserAction(account.id)}>
-                                                    <HiTrash />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
+                <Tabs aria-label="Settings categories" variant="underline">
+                    <TabItem title="Users & Roles" icon={HiUserGroup}>
+                        <Card className="mt-6 border-none shadow-sm">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-lg font-bold">Access Control</h3>
+                                <Button size="sm" onClick={() => setShowAddAccountModal(true)}>
+                                    <HiPlus className="mr-2" /> Add User
+                                </Button>
+                            </div>
+                            <Table hoverable>
+                                <TableHead>
+                                    <TableRow>
+                                        <TableHeadCell>Username</TableHeadCell>
+                                        <TableHeadCell>Email</TableHeadCell>
+                                        <TableHeadCell>Role</TableHeadCell>
+                                        <TableHeadCell><span className="sr-only">Actions</span></TableHeadCell>
                                     </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </Card>
-                </TabItem>
+                                </TableHead>
+                                <TableBody className="divide-y">
+                                    {authorizedAccounts.map(account => (
+                                        <TableRow key={account.id}>
+                                            <TableCell className="font-medium">{account.username}</TableCell>
+                                            <TableCell>{account.email}</TableCell>
+                                            <TableCell>
+                                                <Select value={account.role} onChange={(e) => handleUpdateRole(account.id, e.target.value)}>
+                                                    <option value="Viewer">Viewer</option>
+                                                    <option value="Administrator">Administrator</option>
+                                                    <option value="SuperAdmin">SuperAdmin</option>
+                                                </Select>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex justify-end">
+                                                    <Button color="red" size="xs" onClick={() => handleDeleteUserAction(account.id)}>
+                                                        <HiTrash />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </Card>
+                    </TabItem>
+
+                    <TabItem title="Database Management" icon={FaDatabase}>
+                        <Card className="mt-6 border-none shadow-sm max-w-2xl">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-lg font-bold">DB Controls</h3>
+                            </div>
+                            <Button size="lg" onClick={handleDatabaseExport}>
+                                <BsDatabaseDown size={22} className="mr-2" /> Export Database
+                            </Button>
+
+                            <Button size="lg" onClick={() => setShowTruncateModal(true)}>
+                                <BsDatabaseDash size={22} className="mr-2" /> Truncate Table Data
+                            </Button>
+                        </Card>
+                    </TabItem>
+                </Tabs>
+            );
+        } else {
+            return (
+                <Tabs aria-label="Settings categories" variant="underline">
+                    {/* Break Periods */}
+                    <TabItem title="Break Periods" icon={HiClock}>
+                        <Card className="mt-6 border-none shadow-sm">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-lg font-bold">Manage Mandatory Breaks</h3>
+                                <Button size="sm" onClick={() => { setEditingBreak(null); setShowAddBreakModal(true); }}>
+                                    <HiPlus className="mr-2" /> Add Period
+                                </Button>
+                            </div>
+                            <Table hoverable>
+                                <TableHead>
+                                    <TableRow>
+                                        <TableHeadCell>Day</TableHeadCell>
+                                        <TableHeadCell>Start</TableHeadCell>
+                                        <TableHeadCell>End</TableHeadCell>
+                                        <TableHeadCell>Description</TableHeadCell>
+                                        <TableHeadCell><span className="sr-only">Actions</span></TableHeadCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody className="divide-y">
+                                    {breakPeriods.map((period) => (
+                                        <TableRow key={period.id}>
+                                            <TableCell className="capitalize font-medium">{period.day_of_week}</TableCell>
+                                            <TableCell>{period.start_time}</TableCell>
+                                            <TableCell>{period.end_time}</TableCell>
+                                            <TableCell className="text-gray-500">{period.description || "-"}</TableCell>
+                                            <TableCell>
+                                                <div className="flex space-x-2 justify-end">
+                                                    <Button color="alternative" size="xs" onClick={() => {
+                                                        setEditingBreak(period);
+                                                        setNewBreak({
+                                                            dayOfWeek: period.day_of_week,
+                                                            startTime: period.start_time,
+                                                            endTime: period.end_time,
+                                                            description: period.description
+                                                        });
+                                                        setShowAddBreakModal(true);
+                                                    }}>Edit</Button>
+                                                    <Button color="red" size="xs" onClick={() => handleDeleteBreak(period.id)}>
+                                                        <HiTrash />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </Card>
+                    </TabItem>
+
+                    {/* Faculty Load */}
+                    <TabItem title="Faculty Load" icon={HiAcademicCap}>
+                        <div className="space-y-6">
+                            {/* Teaching Load Parameters */}
+                            <Card className="border-none shadow-sm max-w-2xl">
+                                <h3 className="text-lg font-bold mb-4">Teaching Load Parameters</h3>
+                                <div className="grid grid-cols-1 gap-6">
+                                    <div>
+                                        <Label htmlFor="ft">Full-Time (FT) Max Load</Label>
+                                        <TextInput id="ft" type="number" value={facultyLoad.FT} onChange={e => setFacultyLoad({...facultyLoad, FT: parseInt(e.target.value)})} />
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="ptfl">Part-Time Full Load (PTFL)</Label>
+                                        <TextInput id="ptfl" type="number" value={facultyLoad.PTFL} onChange={e => setFacultyLoad({...facultyLoad, PTFL: parseInt(e.target.value)})} />
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="pt">Part-Time (PT)</Label>
+                                        <TextInput id="pt" type="number" value={facultyLoad.PT} onChange={e => setFacultyLoad({...facultyLoad, PT: parseInt(e.target.value)})} />
+                                    </div>
+                                    <Button className="mt-4" onClick={handleSaveFacultyLoad}><HiSave className="mr-2" /> Save Load Configuration</Button>
+                                </div>
+                            </Card>
+
+                            {/* Prep Limits */}
+                            <Card className="border-none shadow-sm max-w-2xl">
+                                <h3 className="text-lg font-bold mb-4">Prep Limits (Number of Subjects)</h3>
+                                <div className="grid grid-cols-1 gap-6">
+                                    <div>
+                                        <Label htmlFor="prep-ft">Full-Time (FT) Max Subjects</Label>
+                                        <TextInput id="prep-ft" type="number" value={prepLimits.FT} onChange={e => setPrepLimits({...prepLimits, FT: parseInt(e.target.value)})} />
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="prep-ptfl">Part-Time Full Load (PTFL) Max Subjects</Label>
+                                        <TextInput id="prep-ptfl" type="number" value={prepLimits.PTFL} onChange={e => setPrepLimits({...prepLimits, PTFL: parseInt(e.target.value)})} />
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="prep-pt">Part-Time (PT) Max Subjects</Label>
+                                        <TextInput id="prep-pt" type="number" value={prepLimits.PT} onChange={e => setPrepLimits({...prepLimits, PT: parseInt(e.target.value)})} />
+                                    </div>
+                                    <Button className="mt-4" onClick={handleSavePrepLimits}><HiSave className="mr-2" /> Save Prep Configuration</Button>
+                                </div>
+                            </Card>
+
+                            {/* Overloading Max */}
+                            <Card className="border-none shadow-sm max-w-2xl">
+                                <h3 className="text-lg font-bold mb-4">Overloading Parameters</h3>
+                                <div className="space-y-4">
+                                    <div>
+                                        <Label htmlFor="overload-max">Maximum Units Above Load Limit</Label>
+                                        <TextInput id="overload-max" type="number" value={overloadMax} onChange={e => setOverloadMax(parseInt(e.target.value))} />
+                                        <p className="text-sm text-gray-500 mt-1">Maximum additional units a teacher can take beyond their standard load limit</p>
+                                    </div>
+                                    <Button onClick={handleSaveOverloadMax}><HiSave className="mr-2" /> Save Overload Configuration</Button>
+                                </div>
+                            </Card>
+                        </div>
+                    </TabItem>
+
+                    {/* Class Settings */}
+                    <TabItem title="Class Settings" icon={HiUserGroup}>
+                        <Card className="mt-6 border-none shadow-sm max-w-md">
+                            <h3 className="text-lg font-bold mb-4">Enrollment Constraints</h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <Label htmlFor="maxStudents">Max Students per Section</Label>
+                                    <TextInput id="maxStudents" type="number" value={maxStudents} onChange={e => setMaxStudents(parseInt(e.target.value))} />
+                                </div>
+                                <Button onClick={handleSaveMaxStudents}><HiSave className="mr-2" /> Save Constraints</Button>
+                            </div>
+                        </Card>
+                    </TabItem>
+
+                    {/* Presets */}
+                    <TabItem title="Presets" icon={HiDownload}>
+                        <Card className="mt-6 border-none shadow-sm">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-lg font-bold">Environment Presets</h3>
+                                <Button onClick={() => setShowSavePresetModal(true)}>
+                                    <HiUpload className="mr-2" /> Save Current Snapshot
+                                </Button>
+                            </div>
+                            <Table hoverable>
+                                <TableHead>
+                                    <TableRow>
+                                        <TableHeadCell>Preset Name</TableHeadCell>
+                                        <TableHeadCell>Date Saved</TableHeadCell>
+                                        <TableHeadCell><span className="sr-only">Actions</span></TableHeadCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody className="divide-y">
+                                    {presets.map((preset) => (
+                                        <TableRow key={preset.preset_name}>
+                                            <TableCell className="font-bold">{preset.preset_name}</TableCell>
+                                            <TableCell>{new Date(preset.created_at).toLocaleDateString()}</TableCell>
+                                            <TableCell>
+                                                <div className="flex space-x-2 justify-end">
+                                                    <Button size="xs" color="alternative" onClick={() => handleLoadPreset(preset)}>
+                                                        <HiDownload className="mr-2" /> Load
+                                                    </Button>
+                                                    <Button size="xs" color="failure" onClick={() => handleDeletePresetAction(preset.preset_name)}>
+                                                        <HiTrash />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </Card>
+                    </TabItem>
+                </Tabs>
             );
         }
     }
-
     
     return (
         <div className="p-8 h-full w-full overflow-y-auto font-sans">
@@ -298,173 +622,9 @@ export default function Settings() {
                 </div>
             </div>
 
-            <Tabs aria-label="Settings categories" variant="underline">
-                {/* Break Periods */}
-                <TabItem title="Break Periods" icon={HiClock}>
-                    <Card className="mt-6 border-none shadow-sm">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-lg font-bold">Manage Mandatory Breaks</h3>
-                            <Button size="sm" onClick={() => { setEditingBreak(null); setShowAddBreakModal(true); }}>
-                                <HiPlus className="mr-2" /> Add Period
-                            </Button>
-                        </div>
-                        <Table hoverable>
-                            <TableHead>
-                                <TableRow>
-                                    <TableHeadCell>Day</TableHeadCell>
-                                    <TableHeadCell>Start</TableHeadCell>
-                                    <TableHeadCell>End</TableHeadCell>
-                                    <TableHeadCell>Description</TableHeadCell>
-                                    <TableHeadCell><span className="sr-only">Actions</span></TableHeadCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody className="divide-y">
-                                {breakPeriods.map((period) => (
-                                    <TableRow key={period.id}>
-                                        <TableCell className="capitalize font-medium">{period.day_of_week}</TableCell>
-                                        <TableCell>{period.start_time}</TableCell>
-                                        <TableCell>{period.end_time}</TableCell>
-                                        <TableCell className="text-gray-500">{period.description || "-"}</TableCell>
-                                        <TableCell>
-                                            <div className="flex space-x-2 justify-end">
-                                                <Button color="alternative" size="xs" onClick={() => {
-                                                    setEditingBreak(period);
-                                                    setNewBreak({
-                                                        dayOfWeek: period.day_of_week,
-                                                        startTime: period.start_time,
-                                                        endTime: period.end_time,
-                                                        description: period.description
-                                                    });
-                                                    setShowAddBreakModal(true);
-                                                }}>Edit</Button>
-                                                <Button color="red" size="xs" onClick={() => handleDeleteBreak(period.id)}>
-                                                    <HiTrash />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </Card>
-                </TabItem>
-
-                {/* Faculty Load */}
-                <TabItem title="Faculty Load" icon={HiAcademicCap}>
-                    <div className="space-y-6">
-                        {/* Teaching Load Parameters */}
-                        <Card className="border-none shadow-sm max-w-2xl">
-                            <h3 className="text-lg font-bold mb-4">Teaching Load Parameters</h3>
-                            <div className="grid grid-cols-1 gap-6">
-                                <div>
-                                    <Label htmlFor="ft">Full-Time (FT) Max Load</Label>
-                                    <TextInput id="ft" type="number" value={facultyLoad.FT} onChange={e => setFacultyLoad({...facultyLoad, FT: parseInt(e.target.value)})} />
-                                </div>
-                                <div>
-                                    <Label htmlFor="ptfl">Part-Time Full Load (PTFL)</Label>
-                                    <TextInput id="ptfl" type="number" value={facultyLoad.PTFL} onChange={e => setFacultyLoad({...facultyLoad, PTFL: parseInt(e.target.value)})} />
-                                </div>
-                                <div>
-                                    <Label htmlFor="pt">Part-Time (PT)</Label>
-                                    <TextInput id="pt" type="number" value={facultyLoad.PT} onChange={e => setFacultyLoad({...facultyLoad, PT: parseInt(e.target.value)})} />
-                                </div>
-                                <Button className="mt-4" onClick={handleSaveFacultyLoad}><HiSave className="mr-2" /> Save Load Configuration</Button>
-                            </div>
-                        </Card>
-
-                        {/* Prep Limits */}
-                        <Card className="border-none shadow-sm max-w-2xl">
-                            <h3 className="text-lg font-bold mb-4">Prep Limits (Number of Subjects)</h3>
-                            <div className="grid grid-cols-1 gap-6">
-                                <div>
-                                    <Label htmlFor="prep-ft">Full-Time (FT) Max Subjects</Label>
-                                    <TextInput id="prep-ft" type="number" value={prepLimits.FT} onChange={e => setPrepLimits({...prepLimits, FT: parseInt(e.target.value)})} />
-                                </div>
-                                <div>
-                                    <Label htmlFor="prep-ptfl">Part-Time Full Load (PTFL) Max Subjects</Label>
-                                    <TextInput id="prep-ptfl" type="number" value={prepLimits.PTFL} onChange={e => setPrepLimits({...prepLimits, PTFL: parseInt(e.target.value)})} />
-                                </div>
-                                <div>
-                                    <Label htmlFor="prep-pt">Part-Time (PT) Max Subjects</Label>
-                                    <TextInput id="prep-pt" type="number" value={prepLimits.PT} onChange={e => setPrepLimits({...prepLimits, PT: parseInt(e.target.value)})} />
-                                </div>
-                                <Button className="mt-4" onClick={handleSavePrepLimits}><HiSave className="mr-2" /> Save Prep Configuration</Button>
-                            </div>
-                        </Card>
-
-                        {/* Overloading Max */}
-                        <Card className="border-none shadow-sm max-w-2xl">
-                            <h3 className="text-lg font-bold mb-4">Overloading Parameters</h3>
-                            <div className="space-y-4">
-                                <div>
-                                    <Label htmlFor="overload-max">Maximum Units Above Load Limit</Label>
-                                    <TextInput id="overload-max" type="number" value={overloadMax} onChange={e => setOverloadMax(parseInt(e.target.value))} />
-                                    <p className="text-sm text-gray-500 mt-1">Maximum additional units a teacher can take beyond their standard load limit</p>
-                                </div>
-                                <Button onClick={handleSaveOverloadMax}><HiSave className="mr-2" /> Save Overload Configuration</Button>
-                            </div>
-                        </Card>
-                    </div>
-                </TabItem>
-
-                {/* Class Settings */}
-                <TabItem title="Class Settings" icon={HiUserGroup}>
-                    <Card className="mt-6 border-none shadow-sm max-w-md">
-                        <h3 className="text-lg font-bold mb-4">Enrollment Constraints</h3>
-                        <div className="space-y-4">
-                            <div>
-                                <Label htmlFor="maxStudents">Max Students per Section</Label>
-                                <TextInput id="maxStudents" type="number" value={maxStudents} onChange={e => setMaxStudents(parseInt(e.target.value))} />
-                            </div>
-                            <Button onClick={handleSaveMaxStudents}><HiSave className="mr-2" /> Save Constraints</Button>
-                        </div>
-                    </Card>
-                </TabItem>
-
-                {/* Account Management */
-                    displayAccountControl()
-                }
-
-
-                {/* Presets */}
-                <TabItem title="Presets" icon={HiDownload}>
-                    <Card className="mt-6 border-none shadow-sm">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-lg font-bold">Environment Presets</h3>
-                            <Button onClick={() => setShowSavePresetModal(true)}>
-                                <HiUpload className="mr-2" /> Save Current Snapshot
-                            </Button>
-                        </div>
-                        <Table hoverable>
-                            <TableHead>
-                                <TableRow>
-                                    <TableHeadCell>Preset Name</TableHeadCell>
-                                    <TableHeadCell>Date Saved</TableHeadCell>
-                                    <TableHeadCell><span className="sr-only">Actions</span></TableHeadCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody className="divide-y">
-                                {presets.map((preset) => (
-                                    <TableRow key={preset.preset_name}>
-                                        <TableCell className="font-bold">{preset.preset_name}</TableCell>
-                                        <TableCell>{new Date(preset.created_at).toLocaleDateString()}</TableCell>
-                                        <TableCell>
-                                            <div className="flex space-x-2 justify-end">
-                                                <Button size="xs" color="alternative" onClick={() => handleLoadPreset(preset)}>
-                                                    <HiDownload className="mr-2" /> Load
-                                                </Button>
-                                                <Button size="xs" color="failure" onClick={() => handleDeletePresetAction(preset.preset_name)}>
-                                                    <HiTrash />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </Card>
-                </TabItem>
-            </Tabs>
+            {/* Displayed Tabs */
+                displayTabs()
+            }
 
             {/* Modals */}
             <Modal show={showAddBreakModal} onClose={() => setShowAddBreakModal(false)}>
@@ -546,6 +706,95 @@ export default function Settings() {
                 <ModalFooter className="justify-end">
                     <Button color="gray" onClick={() => setShowSavePresetModal(false)}>Cancel</Button>
                     <Button onClick={handleSavePreset}>Save Snapshot</Button>
+                </ModalFooter>
+            </Modal>
+
+            <Modal size="sm" show={showTruncateModal} onClose={() => setShowTruncateModal(false)}>
+                <ModalHeader>Select Tables to Truncate</ModalHeader>
+                <ModalBody>
+                    <div className="flex space-x-6 pl-4">
+                        <div className="space-y-3">
+                            <div className="flex items-center">
+                                <input
+                                    type="checkbox"
+                                    id="courses"
+                                    checked={tablesToTruncate.courses}
+                                    onChange={(e) => setTablesToTruncate({...tablesToTruncate, courses: e.target.checked})}
+                                    className="mr-2 h-6 w-6 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 hover:cursor-pointer"
+                                />
+                                <label htmlFor="courses" className="text-md font-medium text-gray-900 dark:text-gray-300 hover:cursor-pointer select-none">
+                                    Courses
+                                </label>
+                            </div>
+                            <div className="flex items-center">
+                                <input
+                                    type="checkbox"
+                                    id="rooms"
+                                    checked={tablesToTruncate.rooms}
+                                    onChange={(e) => setTablesToTruncate({...tablesToTruncate, rooms: e.target.checked})}
+                                    className="mr-2 h-6 w-6 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 hover:cursor-pointer"
+                                />
+                                <label htmlFor="rooms" className="text-md font-medium text-gray-900 dark:text-gray-300 hover:cursor-pointer select-none">
+                                    Rooms
+                                </label>
+                            </div>
+                            <div className="flex items-center">
+                                <input
+                                    type="checkbox"
+                                    id="schedules"
+                                    checked={tablesToTruncate.schedules}
+                                    onChange={(e) => setTablesToTruncate({...tablesToTruncate, schedules: e.target.checked})}
+                                    className="mr-2 h-6 w-6 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 hover:cursor-pointer"
+                                />
+                                <label htmlFor="schedules" className="text-md font-medium text-gray-900 dark:text-gray-300 hover:cursor-pointer select-none">
+                                    Schedules
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div className="flex items-center">
+                                <input
+                                    type="checkbox"
+                                    id="subjects"
+                                    checked={tablesToTruncate.subjects}
+                                    onChange={(e) => setTablesToTruncate({...tablesToTruncate, subjects: e.target.checked})}
+                                    className="mr-2 h-6 w-6 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 hover:cursor-pointer"
+                                />
+                                <label htmlFor="subjects" className="text-md font-medium text-gray-900 dark:text-gray-300 hover:cursor-pointer select-none">
+                                    Subjects
+                                </label>
+                            </div>
+                            <div className="flex items-center">
+                                <input
+                                    type="checkbox"
+                                    id="teachers"
+                                    checked={tablesToTruncate.teachers}
+                                    onChange={(e) => setTablesToTruncate({...tablesToTruncate, teachers: e.target.checked})}
+                                    className="mr-2 h-6 w-6 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 hover:cursor-pointer"
+                                />
+                                <label htmlFor="teachers" className="text-md font-medium text-gray-900 dark:text-gray-300 hover:cursor-pointer select-none">
+                                    Teachers
+                                </label>
+                            </div>
+                            <div className="flex items-center">
+                                <input
+                                    type="checkbox"
+                                    id="users"
+                                    checked={tablesToTruncate.users}
+                                    onChange={(e) => setTablesToTruncate({...tablesToTruncate, users: e.target.checked})}
+                                    className="mr-2 h-6 w-6 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 hover:cursor-pointer"
+                                />
+                                <label htmlFor="users" className="text-md font-medium text-gray-900 dark:text-gray-300 hover:cursor-pointer select-none">
+                                    Users
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </ModalBody>
+                <ModalFooter className="justify-end">
+                    <Button color="gray" onClick={() => setShowTruncateModal(false)}>Cancel</Button>
+                    <Button onClick={handleTruncateTables}>Truncate</Button>
                 </ModalFooter>
             </Modal>
 

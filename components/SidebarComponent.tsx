@@ -25,8 +25,14 @@ export function SidebarComponent({ username, role }: { username: string, role: s
     const pathname = usePathname();
     const { instance, accounts } = useMsal();
 
+    if (role !== "Administrator") {
+        if(pathname.includes("/schedules") || pathname.includes("/rooms") || pathname.includes("/courses") || pathname.includes("/teachers") || pathname.includes("/subjects")) {
+            window.location.href = "/unauthorized";
+        }
+    }
+
     if (role == "Viewer") {
-        if(pathname.includes("schedules") || pathname.includes("/rooms") || pathname.includes("/courses") || pathname.includes("/teachers") || pathname.includes("/subjects") || pathname.includes("/settings")) {
+        if(pathname.includes("/settings")) {
             window.location.href = "/unauthorized";
         }
     }
@@ -98,37 +104,37 @@ export function SidebarComponent({ username, role }: { username: string, role: s
                         <SidebarItem as={Link} href="/dashboard" className={"hover:bg-gray-500/14"} icon={HiChartPie} onClick={() => setIsOpen(false)}>
                             Dashboard
                         </SidebarItem>
-                        <SidebarItem hidden={role == "Viewer"}
+                        <SidebarItem hidden={role !== "Administrator"}
                                      as={Link} href="/schedules" className={"hover:bg-gray-500/14"} icon={HiTable} onClick={() => setIsOpen(false)}>
                             Schedules
                         </SidebarItem>
-                        <SidebarItem hidden={role == "Viewer"}
+                        <SidebarItem hidden={role !== "Administrator"}
                                      as={Link} href="/rooms" className={"hover:bg-gray-500/14"} icon={HiLibrary} onClick={() => setIsOpen(false)}>
                             Rooms
                         </SidebarItem>
-                        <SidebarItem hidden={role == "Viewer"}
+                        <SidebarItem hidden={role !== "Administrator"}
                                      as={Link} href="/courses" className={"hover:bg-gray-500/14"} icon={HiUserGroup} onClick={() => setIsOpen(false)}>
                             Courses
                         </SidebarItem>
-                        <SidebarItem hidden={role == "Viewer"}
+                        <SidebarItem hidden={role !== "Administrator"}
                                      as={Link} href="/teachers" className={"hover:bg-gray-500/14"} icon={HiAcademicCap} onClick={() => setIsOpen(false)}>
                             Teachers
                         </SidebarItem>
-                        <SidebarItem hidden={role == "Viewer"}
+                        <SidebarItem hidden={role !== "Administrator"}
                                      as={Link} href="/subjects" className={"hover:bg-gray-500/14"} icon={HiBookOpen} onClick={() => setIsOpen(false)}>
                             Subjects
                         </SidebarItem>
-                        <SidebarItem hidden={role == "Viewer"}
+                        <SidebarItem hidden={role !== "Administrator"}
                                      as={Link} href="/maintenance" className={"hover:bg-gray-500/14"} icon={HiClipboardCheck} onClick={() => setIsOpen(false)}>
                             MAQ (*)
                         </SidebarItem>
-                        <SidebarItem hidden={role == "Viewer"}
+                        <SidebarItem hidden={role !== "Administrator"}
                                      as={Link} href="/maintenance" className={"hover:bg-gray-500/14"} icon={HiClipboardCheck} onClick={() => setIsOpen(false)}>
                             FCCE (*)
                         </SidebarItem>
                     </SidebarItemGroup>
                     <SidebarItemGroup>
-                        <SidebarItem hidden={role == "Viewer"}
+                        <SidebarItem hidden={role !== "Administrator"}
                                      as={Link} href="#" className={"hover:bg-gray-500/14"} icon={HiQuestionMarkCircle}>
                             Help (*)
                         </SidebarItem>
