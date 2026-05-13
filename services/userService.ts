@@ -730,6 +730,8 @@ export async function updateScheduleEntries(scheduleId: string, entries: any[]) 
             `;
         }
         revalidatePath(`/generated_schedule/${scheduleId}`);
+        revalidatePath(`/schedules/${scheduleId}`);
+        revalidatePath(`/schedules`);
         return "200";
     } catch (error) {
         console.error("[DB_ERROR]: Failed to update schedule entries:", error);

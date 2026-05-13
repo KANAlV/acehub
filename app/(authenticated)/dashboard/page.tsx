@@ -14,11 +14,10 @@ import {
     getDisplay,
     fetchScheduleDetails,
     fetchTeachers,
-    getAllRoomsData,
     fetchSchedulesList,
     fetchSystemSettings, getCurrentUser
 } from "@/services/userService";
-import { getMaxUnitsSync, getOverloadMaxSync, getPrepLimitSync } from "@/lib/teachingLoadUtils";
+import { getOverloadMaxSync, getPrepLimitSync } from "@/lib/teachingLoadUtils";
 
 export default function DashboardSummary() {
     const router = useRouter();
@@ -34,7 +33,7 @@ export default function DashboardSummary() {
 
     const checkUserStatus = async () => {
         const fetchedUser = await getCurrentUser();
-        const role = await fetchedUser.role;
+        const role = fetchedUser.role;
         setRole(role);
     };
 
@@ -172,8 +171,6 @@ export default function DashboardSummary() {
                                         return total;
                                     }, 0);
                                     const maxUnits = getMaxUnits(t.employment_type);
-                                    const overloadMax = getOverloadMaxSync(systemSettings);
-                                    const absoluteMax = maxUnits + overloadMax;
                                     return teacherUnits > maxUnits;
                                 }).length}
                             </p>

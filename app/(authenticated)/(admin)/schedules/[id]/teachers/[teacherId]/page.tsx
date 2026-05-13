@@ -1,21 +1,23 @@
 "use client";
 
-import React, { useEffect, useState, use } from "react";
+import React, { useEffect, useState, useMemo, useCallback, use } from "react";
 import {
     Card, Button, Spinner, Label, Progress,
     Table, TableBody, TableCell, TableHead, TableHeadCell, TableRow,
-    Badge, Tooltip
+    Badge, Tooltip, Modal, ModalHeader, ModalBody, ModalFooter, Checkbox, TextInput, Toast, ToastToggle
 } from "flowbite-react";
 import {
     HiUserGroup, HiArrowLeft, HiClock, HiBookOpen, HiCalendar,
-    HiTrendingUp, HiTrendingDown, HiCheckCircle, HiExclamationCircle
+    HiTrendingUp, HiTrendingDown, HiCheckCircle, HiExclamationCircle, HiSearch,
+    HiCheck, HiExclamation
 } from "react-icons/hi";
 import { useRouter } from "next/navigation";
 import {
     fetchScheduleDetails, fetchTeachers, fetchAllSubjects, fetchSchedulesList,
-    fetchSystemSettings
+    fetchSystemSettings, fetchAllTeachers, getAllRoomsData, fetchBreakPeriods, updateScheduleEntries
 } from "@/services/userService.ts";
 import { getMaxUnitsSync, getOverloadMaxSync, getPrepLimitSync } from "@/lib/teachingLoadUtils.ts";
+import { transferSubjectSectionForTeacher, blocksToPayload } from "@/lib/scheduleTransferUtils.ts";
 
 /* ================= CONSTANTS ================= */
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -76,9 +78,24 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
     const [teacherExists, setTeacherExists] = useState<boolean | null>(null);
     const [teacher, setTeacher] = useState<any>(null);
     const [scheduleEntries, setScheduleEntries] = useState<any[]>([]);
+    const [allScheduleEntries, setAllScheduleEntries] = useState<any[]>([]);
+    const [allTeachers, setAllTeachers] = useState<any[]>([]);
     const [allSubjects, setAllSubjects] = useState<any[]>([]);
+    const [rooms, setRooms] = useState<any[]>([]);
     const [scheduleName, setScheduleName] = useState("");
     const [systemSettings, setSystemSettings] = useState<any>(null);
+
+    const [transferModalOpen, setTransferModalOpen] = useState(false);
+    const [transferTargetEntry, setTransferTargetEntry] = useState<any | null>(null);
+    const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
+    const [recipientSearch, setRecipientSearch] = useState("");
+
+    const [transferSaving, setTransferSaving] = useState(false);
+    const [showToast, setShowToast] = useState(false);
+    const [toastMessage, setToastMessage] = useState("");
+    const [toastOk, setToastOk] = useState(true);
+
+    const MAX_TRANSFER_RECIPIENTS = 1;
 
     useEffect(() => {
         const loadTeacherData = async () => {
@@ -112,14 +129,19 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
                 setTeacher(foundTeacher);
 
                 // Fetch schedule entries and subjects
-                const [entries, subjects, settings] = await Promise.all([
+                const [entries, subjects, settings, teachersAll, roomList] = await Promise.all([
                     fetchScheduleDetails(id),
                     fetchAllSubjects(),
-                    fetchSystemSettings()
+                    fetchSystemSettings(),
+                    fetchAllTeachers(),
+                    getAllRoomsData()
                 ]);
 
                 setAllSubjects(subjects);
                 setSystemSettings(settings);
+                setAllScheduleEntries(entries);
+                setAllTeachers(teachersAll);
+                setRooms(Array.isArray(roomList) ? roomList : []);
 
                 // Filter entries for this teacher
                 const teacherEntries = entries.filter((entry: any) => entry.teacher_id === teacherId);
@@ -136,6 +158,195 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
 
         loadTeacherData();
     }, [id, teacherId, router]);
+
+    /** All timetable rows for this teacher for the same course code + section (lec + lab blocks, every day). */
+    const transferBundleInfo = useMemo(() => {
+        if (!transferTargetEntry) {
+            return {
+                entries: [] as any[],
+                scheduledUnits: 0,
+                catalogLec: 0,
+                catalogLab: 0,
+                catalogTotal: 0,
+                transferLoadAdd: 0,
+                subjectMeta: null as any,
+            };
+        }
+        const sid = String(transferTargetEntry.subject_id);
+        const sec = String(transferTargetEntry.section_id);
+        const entries = scheduleEntries.filter(
+            (e: any) => String(e.subject_id) === sid && String(e.section_id) === sec
+        );
+        const scheduledUnits = entries.reduce(
+            (t: number, e: any) => t + (e.end_time - e.start_time) / 60,
+            0
+        );
+        const subjectMeta = allSubjects.find((s: any) => s.course_code === sid) || null;
+        const catalogLec = Number(subjectMeta?.lecture_units) || 0;
+        const catalogLab = Number(subjectMeta?.lab_units) || 0;
+        const catalogTotal = catalogLec + catalogLab;
+        const transferLoadAdd = catalogTotal > 0 ? catalogTotal : scheduledUnits;
+        return {
+            entries,
+            scheduledUnits,
+            catalogLec,
+            catalogLab,
+            catalogTotal,
+            transferLoadAdd,
+            subjectMeta,
+        };
+    }, [transferTargetEntry, scheduleEntries, allSubjects]);
+
+    const otherTeachersWithLoad = useMemo(() => {
+        const settings = systemSettings || {};
+        const add = transferBundleInfo.transferLoadAdd;
+        return allTeachers
+            .filter((t: any) => String(t.pscs_id) !== String(teacherId))
+            .map((t: any) => {
+                const tEntries = allScheduleEntries.filter(
+                    (e: any) => String(e.teacher_id) === String(t.pscs_id)
+                );
+                const currentUnits = tEntries.reduce(
+                    (total: number, entry: any) => total + (entry.end_time - entry.start_time) / 60,
+                    0
+                );
+                const maxUnits = getMaxUnitsSync(t.employment_type, settings);
+                const projectedUnits = currentUnits + add;
+                const utilizationRate = maxUnits > 0 ? (projectedUnits / maxUnits) * 100 : 0;
+                let barColor: "green" | "yellow" | "orange" | "red" | "blue" = "green";
+                if (utilizationRate > 100) barColor = "red";
+                else if (utilizationRate >= 95) barColor = "red";
+                else if (utilizationRate >= 85) barColor = "yellow";
+                else if (utilizationRate >= 60) barColor = "blue";
+                return { teacher: t, currentUnits, projectedUnits, maxUnits, utilizationRate, barColor };
+            })
+            .sort((a, b) => String(a.teacher.name).localeCompare(String(b.teacher.name)));
+    }, [
+        allTeachers,
+        allScheduleEntries,
+        teacherId,
+        systemSettings,
+        transferBundleInfo.transferLoadAdd,
+    ]);
+
+    const filteredRecipientTeachers = useMemo(() => {
+        const q = recipientSearch.trim().toLowerCase();
+        if (!q) return otherTeachersWithLoad;
+        return otherTeachersWithLoad.filter(({ teacher: t }) =>
+            [t.name, t.teacher_code, t.pscs_id].some((field) =>
+                String(field ?? "").toLowerCase().includes(q)
+            )
+        );
+    }, [otherTeachersWithLoad, recipientSearch]);
+
+    const closeTransferModal = useCallback(() => {
+        setTransferModalOpen(false);
+        setTransferTargetEntry(null);
+        setSelectedRecipientIds([]);
+        setRecipientSearch("");
+    }, []);
+
+    const openTransferModal = useCallback((entry: any) => {
+        setTransferTargetEntry(entry);
+        setSelectedRecipientIds([]);
+        setRecipientSearch("");
+        setTransferModalOpen(true);
+    }, []);
+
+    const toggleRecipientSelection = useCallback((id: string) => {
+        setSelectedRecipientIds((prev) => {
+            if (prev.includes(id)) return prev.filter((x) => x !== id);
+            if (prev.length >= MAX_TRANSFER_RECIPIENTS) {
+                if (MAX_TRANSFER_RECIPIENTS === 1) return [id];
+                return prev;
+            }
+            return [...prev, id];
+        });
+    }, []);
+
+    const getRoomName = useCallback(
+        (roomId: string | number | undefined | null) => {
+            if (roomId == null || roomId === "") return "—";
+            const r = rooms.find((x: any) => String(x.room_id) === String(roomId));
+            return r?.room_name ?? `Room ${roomId}`;
+        },
+        [rooms]
+    );
+
+    const refreshScheduleSlice = useCallback(async () => {
+        const entries = await fetchScheduleDetails(id);
+        setAllScheduleEntries(entries);
+        setScheduleEntries(entries.filter((entry: any) => String(entry.teacher_id) === String(teacherId)));
+    }, [id, teacherId]);
+
+    useEffect(() => {
+        if (!showToast) return;
+        const t = setTimeout(() => setShowToast(false), 4500);
+        return () => clearTimeout(t);
+    }, [showToast]);
+
+    const handleConfirmTransfer = useCallback(async () => {
+        const tid = selectedRecipientIds[0];
+        if (!tid || !transferTargetEntry) return;
+        setTransferSaving(true);
+        try {
+            const breaks = await fetchBreakPeriods();
+            const recipient = allTeachers.find((t: any) => String(t.pscs_id) === String(tid));
+            if (!recipient) {
+                setToastMessage("Selected teacher could not be found.");
+                setToastOk(false);
+                setShowToast(true);
+                return;
+            }
+            const result = transferSubjectSectionForTeacher({
+                allRows: allScheduleEntries,
+                fromTeacherId: teacherId,
+                subjectId: transferTargetEntry.subject_id,
+                sectionId: transferTargetEntry.section_id,
+                toTeacherId: tid,
+                recipientTeacher: recipient,
+                rooms,
+                breaks,
+                systemSettings: systemSettings || {},
+            });
+            if (result.ok === false) {
+                setToastMessage(result.message);
+                setToastOk(false);
+                setShowToast(true);
+                return;
+            }
+            const res = await updateScheduleEntries(id, blocksToPayload(result.blocks));
+            if (res !== "200") {
+                setToastMessage("Saving the schedule failed. Please try again.");
+                setToastOk(false);
+                setShowToast(true);
+                return;
+            }
+            await refreshScheduleSlice();
+            closeTransferModal();
+            setToastMessage("Subject–section transferred successfully.");
+            setToastOk(true);
+            setShowToast(true);
+        } catch (e) {
+            console.error(e);
+            setToastMessage("Something went wrong while transferring.");
+            setToastOk(false);
+            setShowToast(true);
+        } finally {
+            setTransferSaving(false);
+        }
+    }, [
+        selectedRecipientIds,
+        transferTargetEntry,
+        allScheduleEntries,
+        teacherId,
+        allTeachers,
+        rooms,
+        systemSettings,
+        id,
+        refreshScheduleSlice,
+        closeTransferModal,
+    ]);
 
     if (loading) {
         return (
@@ -441,16 +652,26 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
                                             const subject = allSubjects.find(s => s.course_code === entry.subject_id);
                                             return (
                                                 <div key={idx}
-                                                     className="bg-gray-50 dark:bg-gray-800 p-2 rounded text-xs">
-                                                    <div className="font-medium">
-                                                        {subject?.course_name || entry.subject_id}
+                                                     className="flex bg-gray-50 dark:bg-gray-800 p-2 rounded text-xs">
+                                                    <div className={"w-full flex-1"}>
+                                                        <div className="font-medium">
+                                                            {subject?.course_name || entry.subject_id}
+                                                        </div>
+                                                        <div className="text-gray-500">
+                                                            {formatTime(entry.start_time)} - {formatTime(entry.end_time)}
+                                                        </div>
+                                                        <div className="text-gray-400">
+                                                            Room: {getRoomName(entry.room_id)} • Section: {entry.section_id}
+                                                        </div>
                                                     </div>
-                                                    <div className="text-gray-500">
-                                                        {formatTime(entry.start_time)} - {formatTime(entry.end_time)}
-                                                    </div>
-                                                    <div className="text-gray-400">
-                                                        Room: {entry.room_id} • Section: {entry.section_id}
-                                                    </div>
+                                                    <Button
+                                                        size="xs"
+                                                        color="light"
+                                                        type="button"
+                                                        onClick={() => openTransferModal(entry)}
+                                                    >
+                                                        Transfer
+                                                    </Button>
                                                 </div>
                                             );
                                         })}
@@ -510,6 +731,283 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
                     </TableBody>
                 </Table>
             </Card>
+
+            <Modal
+                show={transferModalOpen}
+                onClose={() => {
+                    if (!transferSaving) closeTransferModal();
+                }}
+                size="7xl"
+            >
+                <ModalHeader>Transfer subject–section</ModalHeader>
+                <ModalBody className="overflow-x-hidden">
+                    <div className="flex flex-col gap-6 lg:flex-row lg:items-stretch">
+                        {/* Left: context, bundle, selection */}
+                        <div className="min-w-0 flex-1 space-y-4">
+                            <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+                                You are transferring a <strong className="text-gray-900 dark:text-gray-100">subject–section</strong> assignment: every class block this teacher holds for that course and section moves together, including separate lecture and laboratory hours scheduled under the same course code for that section (for example, Computer Programming for BSIT 612).
+                            </p>
+
+                            {transferTargetEntry && (
+                                <>
+                                    <div className="rounded-lg border border-blue-200 bg-blue-50/80 p-4 dark:border-blue-800 dark:bg-blue-900/25">
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-blue-800 dark:text-blue-200">
+                                            Assignment
+                                        </p>
+                                        <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
+                                            {transferBundleInfo.subjectMeta?.course_name ||
+                                                transferTargetEntry.subject_id}
+                                        </p>
+                                        <p className="mt-0.5 text-sm text-gray-700 dark:text-gray-300">
+                                            <span className="font-mono">{transferTargetEntry.subject_id}</span>
+                                            <span className="text-gray-500 dark:text-gray-400"> · </span>
+                                            Section{" "}
+                                            <span className="font-medium">{transferTargetEntry.section_id}</span>
+                                        </p>
+                                        <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                                            From <span className="font-medium text-gray-800 dark:text-gray-200">{teacher?.name}</span> on this schedule.
+                                        </p>
+                                    </div>
+
+                                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-600 dark:bg-gray-800/80">
+                                        <div className="flex flex-wrap gap-x-6 gap-y-2">
+                                            <div>
+                                                <span className="text-gray-500 dark:text-gray-400">Catalog units </span>
+                                                <span className="font-medium text-gray-900 dark:text-white">
+                                                    {transferBundleInfo.catalogLec > 0 || transferBundleInfo.catalogLab > 0
+                                                        ? `${transferBundleInfo.catalogLec} lec + ${transferBundleInfo.catalogLab} lab = ${transferBundleInfo.catalogTotal.toFixed(1)}`
+                                                        : "—"}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span className="text-gray-500 dark:text-gray-400">Scheduled hours (this bundle) </span>
+                                                <span className="font-medium text-gray-900 dark:text-white">
+                                                    {transferBundleInfo.scheduledUnits.toFixed(1)} h
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span className="text-gray-500 dark:text-gray-400">Load added to recipient </span>
+                                                <span className="font-medium text-blue-700 dark:text-blue-300">
+                                                    +{transferBundleInfo.transferLoadAdd.toFixed(1)} units
+                                                </span>
+                                                <span className="text-gray-500 dark:text-gray-400">
+                                                    {" "}
+                                                    ({transferBundleInfo.catalogTotal > 0 ? "from subject catalog" : "from scheduled time"})
+                                                </span>
+                                            </div>
+                                        </div>
+                                        {transferBundleInfo.entries.length > 0 && (
+                                            <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto border-t border-gray-200 pt-2 text-xs text-gray-600 dark:border-gray-600 dark:text-gray-400">
+                                                {[...transferBundleInfo.entries]
+                                                    .sort(
+                                                        (a, b) =>
+                                                            DAYS.indexOf(a.day) - DAYS.indexOf(b.day) ||
+                                                            a.start_time - b.start_time
+                                                    )
+                                                    .map((e: any, i: number) => (
+                                                        <li key={i}>
+                                                            <span className="font-medium text-gray-800 dark:text-gray-200">
+                                                                {e.day}
+                                                            </span>{" "}
+                                                            {formatTime(e.start_time)} – {formatTime(e.end_time)} ·{" "}
+                                                            {getRoomName(e.room_id)}
+                                                        </li>
+                                                    ))}
+                                            </ul>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <Label className="mb-2 block text-sm">
+                                            Candidate teachers ({selectedRecipientIds.length} / {MAX_TRANSFER_RECIPIENTS})
+                                        </Label>
+                                        {selectedRecipientIds.length === 0 ? (
+                                            <p className="text-sm italic text-gray-500 dark:text-gray-400">
+                                                None selected yet — choose one teacher from the list on the right.
+                                            </p>
+                                        ) : (
+                                            <ul className="flex flex-wrap gap-2">
+                                                {selectedRecipientIds.map((rid) => {
+                                                    const t = allTeachers.find(
+                                                        (x: any) => String(x.pscs_id) === String(rid)
+                                                    );
+                                                    if (!t) return null;
+                                                    return (
+                                                        <li key={rid}>
+                                                            <Badge color="info" className="px-2 py-1 text-xs font-normal">
+                                                                {t.name}{" "}
+                                                                <span className="opacity-75">({t.teacher_code})</span>
+                                                            </Badge>
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Right: search + teacher list */}
+                        <div className="flex w-full shrink-0 flex-col gap-2 lg:w-[min(100%,30rem)] xl:w-[34rem]">
+                            <Label htmlFor="recipient-teacher-search" className="text-sm">
+                                Available teachers
+                            </Label>
+                            <TextInput
+                                id="recipient-teacher-search"
+                                type="search"
+                                placeholder="Search name, code, or ID…"
+                                icon={HiSearch}
+                                value={recipientSearch}
+                                onChange={(e) => setRecipientSearch(e.target.value)}
+                                sizing="md"
+                            />
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                Utilization shows load after this transfer (+{transferBundleInfo.transferLoadAdd.toFixed(1)} units).
+                            </p>
+                            {MAX_TRANSFER_RECIPIENTS > 1 &&
+                                selectedRecipientIds.length >= MAX_TRANSFER_RECIPIENTS && (
+                                <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                                    Maximum {MAX_TRANSFER_RECIPIENTS} teachers selected.
+                                </p>
+                            )}
+                            <div className="max-h-[min(420px,50vh)] flex-1 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                                {filteredRecipientTeachers.length === 0 ? (
+                                    <p className="p-4 text-sm text-gray-500">
+                                        {otherTeachersWithLoad.length === 0
+                                            ? "No other teachers found."
+                                            : "No teachers match your search."}
+                                    </p>
+                                ) : (
+                                    <Table hoverable>
+                                        <TableHead>
+                                            <TableRow>
+                                                <TableHeadCell className="w-10 px-2"></TableHeadCell>
+                                                <TableHeadCell>Teacher</TableHeadCell>
+                                                <TableHeadCell className="hidden sm:table-cell">Units</TableHeadCell>
+                                                <TableHeadCell>After</TableHeadCell>
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                            {filteredRecipientTeachers.map(
+                                                ({
+                                                    teacher: t,
+                                                    currentUnits,
+                                                    projectedUnits,
+                                                    maxUnits,
+                                                    utilizationRate,
+                                                    barColor,
+                                                }) => {
+                                                    const tid = String(t.pscs_id);
+                                                    const selected = selectedRecipientIds.includes(tid);
+                                                    const atCap =
+                                                        MAX_TRANSFER_RECIPIENTS > 1 &&
+                                                        selectedRecipientIds.length >= MAX_TRANSFER_RECIPIENTS &&
+                                                        !selected;
+                                                    return (
+                                                        <TableRow
+                                                            key={tid}
+                                                            className={
+                                                                atCap
+                                                                    ? "cursor-not-allowed opacity-50"
+                                                                    : "cursor-pointer"
+                                                            }
+                                                            onClick={() => {
+                                                                if (!atCap) toggleRecipientSelection(tid);
+                                                            }}
+                                                        >
+                                                            <TableCell className="pointer-events-none w-10 px-2">
+                                                                <Checkbox
+                                                                    checked={selected}
+                                                                    disabled={atCap}
+                                                                    readOnly
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <div className="font-medium leading-tight">{t.name}</div>
+                                                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                                    {t.teacher_code}
+                                                                </div>
+                                                                <div className="mt-1 sm:hidden">
+                                                                    <span className="text-xs text-gray-500">
+                                                                        {currentUnits.toFixed(1)} →{" "}
+                                                                        <span className="font-medium text-gray-800 dark:text-gray-200">
+                                                                            {projectedUnits.toFixed(1)}
+                                                                        </span>
+                                                                        /{maxUnits}
+                                                                    </span>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="hidden text-sm sm:table-cell">
+                                                                {currentUnits.toFixed(1)} →{" "}
+                                                                <span className="font-medium">
+                                                                    {projectedUnits.toFixed(1)}
+                                                                </span>
+                                                                <span className="text-gray-500"> / {maxUnits}</span>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <div className="flex w-24 flex-col gap-0.5">
+                                                                    <span className="text-[10px] text-gray-600 dark:text-gray-300">
+                                                                        {utilizationRate.toFixed(0)}%
+                                                                    </span>
+                                                                    <Progress
+                                                                        progress={Math.min(
+                                                                            100,
+                                                                            Math.max(0, utilizationRate)
+                                                                        )}
+                                                                        color={barColor}
+                                                                        size="sm"
+                                                                    />
+                                                                </div>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                }
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </ModalBody>
+                <ModalFooter className={"justify-end"}>
+                    <Button color="alternative" type="button" disabled={transferSaving} onClick={closeTransferModal}>
+                        Cancel
+                    </Button>
+                    <Button
+                        color="blue"
+                        type="button"
+                        disabled={selectedRecipientIds.length === 0 || transferSaving}
+                        onClick={() => void handleConfirmTransfer()}
+                    >
+                        {transferSaving ? (
+                            <>
+                                <Spinner size="sm" className="mr-2" />
+                                Saving…
+                            </>
+                        ) : (
+                            "Confirm"
+                        )}
+                    </Button>
+                </ModalFooter>
+            </Modal>
+
+            {showToast && (
+                <Toast className="fixed bottom-6 right-6 z-[100] max-w-md shadow-lg">
+                    <div
+                        className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                            toastOk
+                                ? "bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-300"
+                                : "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300"
+                        }`}
+                    >
+                        {toastOk ? <HiCheck className="h-5 w-5" /> : <HiExclamation className="h-5 w-5" />}
+                    </div>
+                    <div className="ml-3 text-sm font-normal text-gray-700 dark:text-gray-200">{toastMessage}</div>
+                    <ToastToggle onDismiss={() => setShowToast(false)} />
+                </Toast>
+            )}
         </div>
     )
 }

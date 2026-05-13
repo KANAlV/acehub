@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, use } from "react";
+import React, {useEffect, useState, use, useCallback} from "react";
 import {
     Card, Button, Spinner, Label, Progress,
     Table, TableBody, TableCell, TableHead, TableHeadCell, TableRow,
@@ -14,7 +14,7 @@ import { useRouter } from "next/navigation";
 import {
     getDisplay,
     fetchScheduleDetails, fetchTeachers, fetchAllSubjects, fetchSchedulesList,
-    fetchSystemSettings
+    fetchSystemSettings, getAllRoomsData
 } from "@/services/userService";
 import { getMaxUnitsSync, getOverloadMaxSync, getPrepLimitSync } from "@/lib/teachingLoadUtils.ts";
 
@@ -78,6 +78,7 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ teacherI
     const [teacher, setTeacher] = useState<any>(null);
     const [scheduleEntries, setScheduleEntries] = useState<any[]>([]);
     const [allSubjects, setAllSubjects] = useState<any[]>([]);
+    const [rooms, setRooms] = useState<any[]>([]);
     const [scheduleName, setScheduleName] = useState("No Active Schedule");
     const [systemSettings, setSystemSettings] = useState<any>(null);
 
@@ -116,13 +117,15 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ teacherI
                 setTeacher(foundTeacher);
 
                 // Fetch schedule entries and subjects
-                const [entries, subjects, settings] = await Promise.all([
+                const [entries, subjects, settings, roomList] = await Promise.all([
                     fetchScheduleDetails(displayId),
                     fetchAllSubjects(),
-                    fetchSystemSettings()
+                    fetchSystemSettings(),
+                    getAllRoomsData()
                 ]);
 
                 setAllSubjects(subjects);
+                setRooms(Array.isArray(roomList) ? roomList : []);
                 setSystemSettings(settings);
 
                 // Filter entries for this teacher
@@ -139,6 +142,15 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ teacherI
 
         loadTeacherData();
     }, [teacherId, router]);
+
+    const getRoomName = useCallback(
+        (roomId: string | number | undefined | null) => {
+            if (roomId == null || roomId === "") return "—";
+            const r = rooms.find((x: any) => String(x.room_id) === String(roomId));
+            return r?.room_name ?? `Room ${roomId}`;
+        },
+        [rooms]
+    );
 
     if (loading) return <div className="flex h-screen items-center justify-center"><Spinner size="xl" /></div>;
 
@@ -417,7 +429,7 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ teacherI
                                                         {formatTime(entry.start_time)} - {formatTime(entry.end_time)}
                                                     </div>
                                                     <div className="text-gray-400">
-                                                        Room: {entry.room_id} • Section: {entry.section_id}
+                                                        Room: {getRoomName(entry.room_id)} • Section: {entry.section_id}
                                                     </div>
                                                 </div>
                                             );
