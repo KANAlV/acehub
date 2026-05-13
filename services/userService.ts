@@ -27,7 +27,7 @@ export async function getOrCreateUser(email: string, name: string) {
 
         const newUser = await sql`
             INSERT INTO users (username, email, hash_password, role)
-            VALUES (${name}, ${email}, 'OAUTH_USER', 'Faculty')
+            VALUES (${name}, ${email}, 'OAUTH_USER', 'Viewer')
             RETURNING *
         `;
 

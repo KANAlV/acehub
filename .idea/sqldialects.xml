@@ -4,6 +4,7 @@
     <file url="file://$APPLICATION_CONFIG_DIR$/consoles/db/f202380e-83aa-424f-bb64-281710c6a8f6/schedule_generation_migration.sql" dialect="PostgreSQL" />
     <file url="file://$APPLICATION_CONFIG_DIR$/consoles/db/f202380e-83aa-424f-bb64-281710c6a8f6/settings_migration.sql" dialect="PostgreSQL" />
     <file url="file://$APPLICATION_CONFIG_DIR$/consoles/db/f202380e-83aa-424f-bb64-281710c6a8f6/subjects_id_migration.sql" dialect="PostgreSQL" />
+    <file url="file://$APPLICATION_CONFIG_DIR$/consoles/db/f202380e-83aa-424f-bb64-281710c6a8f6/truncate_tables.sql" dialect="PostgreSQL" />
     <file url="file://$APPLICATION_CONFIG_DIR$/consoles/db/sched.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/services/userService.ts" dialect="GenericSQL" />
   </component>

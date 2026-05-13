@@ -31,7 +31,7 @@ export function SidebarComponent({ username, role }: { username: string, role: s
         }
     }
 
-    if (role == "Viewer") {
+    if (role !== "Administrator" && role !== "SuperAdmin") {
         if(pathname.includes("/settings")) {
             window.location.href = "/unauthorized";
         }
@@ -138,7 +138,7 @@ export function SidebarComponent({ username, role }: { username: string, role: s
                                      as={Link} href="#" className={"hover:bg-gray-500/14"} icon={HiQuestionMarkCircle}>
                             Help (*)
                         </SidebarItem>
-                        <SidebarItem hidden={role == "Viewer"}
+                        <SidebarItem hidden={role !== "Administrator" && role !== "SuperAdmin"}
                                      as={Link} href="/settings" className={"hover:bg-gray-500/14"} icon={IoMdSettings}>
                             Settings
                         </SidebarItem>
