@@ -30,12 +30,12 @@ export default function DashboardSummary() {
     const [teachers, setTeachers] = useState<any[]>([]);
     const [schedules, setSchedules] = useState<any[]>([]);
     const [systemSettings, setSystemSettings] = useState<any>(null);
-    const [isViewer, setIsViewer] = useState(true);
+    const [role, setRole] = useState("");
 
     const checkUserStatus = async () => {
         const fetchedUser = await getCurrentUser();
         const role = await fetchedUser.role;
-        setIsViewer(role == "Viewer");
+        setRole(role);
     };
 
     useEffect(() => {
@@ -121,10 +121,10 @@ export default function DashboardSummary() {
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{scheduleName}</h1>
                     <p className="text-sm text-gray-500 italic">Active Display ID: {activeScheduleId}</p>
                 </div>
-                <Button color="blue" onClick={() => isViewer? router.push(`./timetable`) : router.push(`/schedules/${activeScheduleId}/timetable`)}>
-                    {!isViewer && <HiPencilAlt className="mr-2 h-5 w-5" />}
-                    {isViewer && <HiCalendar className="mr-2 h-5 w-5" />}
-                    {isViewer? "View Timetable":"Edit Timetable"}
+                <Button color="blue" onClick={() => role != "Administrator"? router.push(`./timetable`) : router.push(`/schedules/${activeScheduleId}/timetable`)}>
+                    {role == "Administrator" && <HiPencilAlt className="mr-2 h-5 w-5" />}
+                    {role != "Administrator" && <HiCalendar className="mr-2 h-5 w-5" />}
+                    {role? "View Timetable":"Edit Timetable"}
                 </Button>
             </div>
 
