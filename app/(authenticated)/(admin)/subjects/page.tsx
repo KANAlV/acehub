@@ -451,9 +451,7 @@ export default function SubjectsManager() {
     useEffect(() => {
         let isCancelled = false;
         const fetchData = async () => {
-            setLoading(true);
             await loadData();
-            if (!isCancelled) setLoading(false);
         };
         fetchData();
         return () => { isCancelled = true; };
@@ -470,7 +468,7 @@ export default function SubjectsManager() {
 
     useEffect(() => { setCurrentPage(1); }, [debouncedSearch]);
     useEffect(() => {
-        const handler = setTimeout(() => setDebouncedSearch(search), 1000);
+        const handler = setTimeout(() => setDebouncedSearch(search), 2000);
         return () => clearTimeout(handler);
     }, [search]);
 

@@ -423,12 +423,10 @@ export default function CoursesManager() {
     useEffect(() => {
         let isCancelled = false;
         const fetchData = async () => {
-            setLoading(true);
             try {
                 await Promise.all([loadProgramCount(), loadProgramData()]);
-                if (!isCancelled) setLoading(false);
             } catch (error) {
-                if (!isCancelled) setLoading(false);
+                console.error("[ERROR]:", error);
             }
         };
         fetchData();
@@ -446,7 +444,7 @@ export default function CoursesManager() {
 
     useEffect(() => { setCurrentPage(1); }, [debouncedSearch]);
     useEffect(() => {
-        const handler = setTimeout(() => setDebouncedSearch(search), 1000);
+        const handler = setTimeout(() => setDebouncedSearch(search), 2000);
         return () => clearTimeout(handler);
     }, [search]);
 

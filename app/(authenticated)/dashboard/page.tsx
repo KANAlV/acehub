@@ -123,7 +123,7 @@ export default function DashboardSummary() {
                 <Button color="blue" onClick={() => role != "Administrator"? router.push(`./timetable`) : router.push(`/schedules/${activeScheduleId}/timetable`)}>
                     {role == "Administrator" && <HiPencilAlt className="mr-2 h-5 w-5" />}
                     {role != "Administrator" && <HiCalendar className="mr-2 h-5 w-5" />}
-                    {role? "View Timetable":"Edit Timetable"}
+                    {role != "Administrator"? "View Timetable":"Edit Timetable"}
                 </Button>
             </div>
 
@@ -217,7 +217,7 @@ export default function DashboardSummary() {
 
                         return (
                             <div key={teacher.pscs_id} className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md transition-all"
-                                 onClick={() => router.push(`./overview/${teacher.pscs_id}`)}>
+                                 onClick={() => role != "Administrator"? router.push(`./overview/${teacher.pscs_id}`) : router.push(`/schedules/${activeScheduleId}/teachers/${teacher.pscs_id}`) }>
                                 <div className="flex justify-between items-start mb-3">
                                     <div>
                                         <h4 className="font-semibold text-sm">{teacher.name}</h4>

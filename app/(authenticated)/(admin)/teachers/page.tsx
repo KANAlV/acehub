@@ -417,7 +417,7 @@ export default function TeacherManager() {
 
     useEffect(() => { setCurrentPage(1); }, [debouncedSearch, filterType]); // Add filterType to dependencies
     useEffect(() => {
-        const handler = setTimeout(() => setDebouncedSearch(search), 1000);
+        const handler = setTimeout(() => setDebouncedSearch(search), 2000);
         return () => clearTimeout(handler);
     }, [search]);
 

@@ -424,23 +424,19 @@ export default function RoomManager() {
                 ]);
 
                 if (isCancelled) {
-                    setLoading(false);
                     return;
                 }
                 console.log("[LIFECYCLE]: Page data refreshed.");
             } catch (error) {
-                setLoading(false);
                 console.error("[LIFECYCLE_ERROR]: Failed to sync rooms:", error);
             }
         };
 
         fetchData().catch((err) => {
-            setLoading(false);
             console.error("[CRITICAL_ERROR]: Fetch failed in useEffect", err);
         });
 
         return () => {
-            setLoading(false);
             isCancelled = true; // 2. Cancel state updates if component re-renders
         };
     }, [currentPage, debouncedSearch]);
@@ -472,14 +468,13 @@ export default function RoomManager() {
     }, [showToast]);
 
     useEffect(() => { // Resetting Page to 1 When Searching
-        setLoading(true);
         setCurrentPage(1);
     }, [debouncedSearch]);
 
     useEffect(() => { // Adds 1 sec delay to querying while typing
         const handler = setTimeout(() => {
             setDebouncedSearch(search);
-        }, 1000); // 1000ms = 1 seconds
+        }, 2000); // 1000ms = 1 seconds
 
         return () => {
             clearTimeout(handler); // Cancel the timer if the user types
