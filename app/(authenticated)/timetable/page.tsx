@@ -1,19 +1,92 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
-    Card, Button, Spinner, Label, Select
+    Card, Button, Spinner, Label, Select, TextInput
 } from "flowbite-react";
-import { HiArrowLeft, HiExclamation } from "react-icons/hi";
+import { HiArrowLeft, HiExclamation, HiSearch } from "react-icons/hi";
 import { useRouter } from "next/navigation";
 import {
     getDisplay,
     fetchScheduleDetails,
-    fetchTeachers,
+    fetchAllTeachers,
     getAllRoomsData,
     fetchSchedulesList,
     fetchAllSubjects
 } from "@/services/userService";
+
+/** --- Helper Component: Autocomplete Select --- **/
+const AutocompleteSelect = ({
+    options,
+    value,
+    onChange,
+    placeholder,
+    noOptionsMessage = "No results found"
+}: {
+    options: { id: string, label: string, subLabel?: string }[],
+    value: string,
+    onChange: (id: string) => void,
+    placeholder: string,
+    noOptionsMessage?: string
+}) => {
+    const [query, setQuery] = useState("");
+    const [isOpen, setIsOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    const selectedOption = options.find(o => o.id === value);
+
+    const filtered = options.filter(o =>
+        o.label.toLowerCase().includes(query.toLowerCase()) ||
+        (o.subLabel && o.subLabel.toLowerCase().includes(query.toLowerCase()))
+    );
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+                setQuery("");
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    return (
+        <div className="relative w-full" ref={containerRef}>
+            <TextInput
+                value={isOpen ? query : (selectedOption?.label || "")}
+                placeholder={placeholder}
+                onFocus={() => { setIsOpen(true); setQuery(""); }}
+                onChange={(e) => setQuery(e.target.value)}
+                icon={HiSearch}
+                sizing="sm"
+                autoComplete="off"
+            />
+            {isOpen && (
+                <div className="absolute z-100 mt-1 w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {filtered.length > 0 ? (
+                        filtered.map(opt => (
+                            <div
+                                key={opt.id}
+                                className="px-3 py-2 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/30 border-b last:border-0 border-gray-100 dark:border-gray-600"
+                                onClick={() => {
+                                    onChange(opt.id);
+                                    setIsOpen(false);
+                                    setQuery("");
+                                }}
+                            >
+                                <div className="text-xs font-bold text-gray-900 dark:text-white">{opt.label}</div>
+                                {opt.subLabel && <div className="text-sm text-blue-500 font-extrabold italic">{opt.subLabel}</div>}
+                            </div>
+                        ))
+                    ) : (
+                        <div className="px-3 py-4 text-center text-xs text-gray-400 italic">{noOptionsMessage}</div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
 
 /* ================= CONSTANTS ================= */
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -70,7 +143,7 @@ export default function TimetableViewer() {
 
             const [details, teacherData, roomData, subjectData, list] = await Promise.all([
                 fetchScheduleDetails(displayId),
-                fetchTeachers("", 1, "All"),
+                fetchAllTeachers(),
                 getAllRoomsData(),
                 fetchAllSubjects(),
                 fetchSchedulesList()
@@ -232,7 +305,19 @@ export default function TimetableViewer() {
                                 </>
                             )}
                             {viewMode === "teachers" && (
-                                <div><Label>Context Teacher</Label><Select sizing="sm" value={selectedTeacher} onChange={e => setSelectedTeacher(e.target.value)}><option value="">Select Teacher</option>{teachers.map(t => <option key={t.pscs_id} value={t.pscs_id}>{t.name}</option>)}</Select></div>
+                                <div>
+                                    <Label>Select Teacher</Label>
+                                    <AutocompleteSelect 
+                                        options={teachers.map(t => ({ 
+                                            id: t.pscs_id, 
+                                            label: t.name, 
+                                            subLabel: `${t.pscs_id} | ${t.teacher_code}` 
+                                        }))}
+                                        value={selectedTeacher}
+                                        onChange={setSelectedTeacher}
+                                        placeholder="Search Teachers..."
+                                    />
+                                </div>
                             )}
                         </div>
                     </Card>
