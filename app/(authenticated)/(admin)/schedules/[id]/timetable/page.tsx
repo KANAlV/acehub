@@ -1,17 +1,90 @@
 "use client";
 
-import React, { useEffect, useState, use } from "react";
+import React, { useEffect, useState, use, useRef } from "react";
 import { 
     Tooltip, Modal, ModalHeader, ModalBody, ModalFooter, Button, 
     Toast, ToastToggle, Progress, Spinner, Label, Select, TextInput, Card
 } from "flowbite-react";
-import { HiExclamation, HiCheck, HiOutlineExclamationCircle, HiSave, HiArrowLeft } from "react-icons/hi";
+import { HiExclamation, HiCheck, HiOutlineExclamationCircle, HiSave, HiArrowLeft, HiSearch } from "react-icons/hi";
 import { useRouter } from "next/navigation";
 import { 
     fetchScheduleDetails, updateScheduleEntries, 
-    getAllRoomsData, getAllProgramsData, fetchTeachers, fetchAllSubjects, 
+    getAllRoomsData, getAllProgramsData, fetchAllTeachers, fetchAllSubjects, 
     fetchSchedulesList 
 } from "@/services/userService.ts";
+
+/** --- Helper Component: Autocomplete Select --- **/
+const AutocompleteSelect = ({
+    options,
+    value,
+    onChange,
+    placeholder,
+    noOptionsMessage = "No results found"
+}: {
+    options: { id: string, label: string, subLabel?: string }[],
+    value: string,
+    onChange: (id: string) => void,
+    placeholder: string,
+    noOptionsMessage?: string
+}) => {
+    const [query, setQuery] = useState("");
+    const [isOpen, setIsOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    const selectedOption = options.find(o => o.id === value);
+
+    const filtered = options.filter(o =>
+        o.label.toLowerCase().includes(query.toLowerCase()) ||
+        (o.subLabel && o.subLabel.toLowerCase().includes(query.toLowerCase()))
+    );
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+                setQuery("");
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    return (
+        <div className="relative w-full" ref={containerRef}>
+            <TextInput
+                value={isOpen ? query : (selectedOption?.label || "")}
+                placeholder={placeholder}
+                onFocus={() => { setIsOpen(true); setQuery(""); }}
+                onChange={(e) => setQuery(e.target.value)}
+                icon={HiSearch}
+                sizing="sm"
+                autoComplete="off"
+            />
+            {isOpen && (
+                <div className="absolute z-100 mt-1 w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {filtered.length > 0 ? (
+                        filtered.map(opt => (
+                            <div
+                                key={opt.id}
+                                className="px-3 py-2 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/30 border-b last:border-0 border-gray-100 dark:border-gray-600"
+                                onClick={() => {
+                                    onChange(opt.id);
+                                    setIsOpen(false);
+                                    setQuery("");
+                                }}
+                            >
+                                <div className="text-xs font-bold text-gray-900 dark:text-white">{opt.label}</div>
+                                {opt.subLabel && <div className="text-sm text-blue-500 font-extrabold italic">{opt.subLabel}</div>}
+                            </div>
+                        ))
+                    ) : (
+                        <div className="px-3 py-4 text-center text-xs text-gray-400 italic">{noOptionsMessage}</div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
 
 /* ================= CONSTANTS ================= */
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -85,7 +158,7 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
             const [roomData, sectionData, teacherData, subjectData, scheduleList, currentEntries] = await Promise.all([
                 getAllRoomsData(),
                 getAllProgramsData(),
-                fetchTeachers("", 1, "All"),
+                fetchAllTeachers(),
                 fetchAllSubjects(),
                 fetchSchedulesList(),
                 fetchScheduleDetails(id)
@@ -268,7 +341,23 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
         if (!filterValue) return <div className="p-12 text-center italic text-gray-400">Select a context to view the timetable</div>;
 
         return (
-            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
+            <>
+                <div className="flex items-center gap-4 mb-3 text-xs">
+                    <span className="font-bold text-gray-500">Legend:</span>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-blue-600 rounded"></div>
+                        <span className="text-gray-600 dark:text-gray-400">Active (in current context)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-violet-500 rounded"></div>
+                        <span className="text-gray-600 dark:text-gray-400">Context mismatch (different room/section)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-gray-300 rounded opacity-30"></div>
+                        <span className="text-gray-600 dark:text-gray-400">Inactive (not in current context)</span>
+                    </div>
+                </div>
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
                 <div className="grid grid-cols-[80px_repeat(6,1fr)] bg-gray-50 dark:bg-gray-800 border-b border-gray-200">
                     <div className="border-r border-gray-200" />
                     {DAYS.map(d => <div key={d} className="py-2 text-center font-bold text-xs">{d}</div>)}
@@ -324,6 +413,7 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
                     })}
                 </div>
             </div>
+            </>
         );
     };
 
@@ -399,7 +489,19 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
                                 </>
                             )}
                             {scheduleSubTab === "teachers" && (
-                                <div><Label>Context Teacher</Label><Select sizing="sm" value={selectedTeacher} onChange={e => setSelectedTeacher(e.target.value)}><option value="">Select Teacher</option>{teachers.map(t => <option key={t.pscs_id} value={t.pscs_id}>{t.name}</option>)}</Select></div>
+                                <div>
+                                    <Label>Select Teacher</Label>
+                                    <AutocompleteSelect 
+                                        options={teachers.map(t => ({ 
+                                            id: t.pscs_id, 
+                                            label: t.name, 
+                                            subLabel: `${t.pscs_id} | ${t.teacher_code}` 
+                                        }))}
+                                        value={selectedTeacher}
+                                        onChange={setSelectedTeacher}
+                                        placeholder="Search Teachers..."
+                                    />
+                                </div>
                             )}
                         </div>
                     </Card>

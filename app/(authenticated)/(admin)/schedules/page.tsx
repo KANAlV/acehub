@@ -364,7 +364,7 @@ export default function SchedulesDashboard() {
                     setMergeLecLab({});
                     setShowCreateModal(true); 
                 }}>
-                    <HiPlus className="mr-2 h-5 w-5" /> Create New Schedule
+                    <HiPlus className="mr-2 h-5 w-5" /> Generate New Schedule
                 </Button>
             </div>
 

@@ -118,54 +118,71 @@ export default function TimetableViewer() {
         if (!filterValue) return <div className="p-12 text-center italic text-gray-400">Select a context to view the timetable</div>;
 
         return (
-            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
-                <div className="grid grid-cols-[80px_repeat(6,1fr)] bg-gray-50 dark:bg-gray-800 border-b border-gray-200">
-                    <div className="border-r border-gray-200" />
-                    {DAYS.map(d => <div key={d} className="py-2 text-center font-bold text-xs">{d}</div>)}
-                </div>
-                <div className="grid grid-cols-[80px_repeat(6,1fr)] max-h-[600px] overflow-y-auto relative text-gray-900 dark:text-white">
-                    <div className="bg-gray-50 dark:bg-gray-800 sticky left-0 z-20 border-r border-gray-200">
-                        {TIME_SLOTS.map(t => (
-                            <div key={t} style={{ height: SLOT_HEIGHT }} className="flex items-center justify-center text-[10px] text-gray-400 border-b border-gray-100">{formatTime(t)}</div>
-                        ))}
+            <>
+                <div className="flex items-center gap-4 mb-3 text-xs">
+                    <span className="font-bold text-gray-500">Legend:</span>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-blue-600 rounded"></div>
+                        <span className="text-gray-600 dark:text-gray-400">Active (in current context)</span>
                     </div>
-                    {DAYS.map(day => {
-                        return (
-                            <div key={day} className="relative border-r border-gray-100 last:border-r-0" style={{ height: TIME_SLOTS.length * SLOT_HEIGHT }}>
-                                {TIME_SLOTS.map((_, i) => <div key={i} className="absolute left-0 right-0 border-t border-gray-50 dark:border-gray-800" style={{ top: i * SLOT_HEIGHT }} />)}
-
-                                {schedules.filter(s => s.day === day && (
-                                    (viewMode === "sections" && (s.sectionId === selectedSection || (selectedRoom !== "all" && s.roomId === selectedRoom))) ||
-                                    (viewMode === "rooms" && (s.roomId === selectedRoom || (selectedSection !== "all" && s.sectionId === selectedSection))) ||
-                                    (viewMode === "teachers" && s.teacherId === selectedTeacher)
-                                )).map(s => {
-                                    const isActive = (viewMode === "sections" && s.sectionId === selectedSection) ||
-                                        (viewMode === "rooms" && s.roomId === selectedRoom) ||
-                                        (viewMode === "teachers" && s.teacherId === selectedTeacher);
-
-                                    const top = ((s.start - START_MIN) / SLOT) * SLOT_HEIGHT;
-                                    const height = ((s.end - s.start) / SLOT) * SLOT_HEIGHT;
-                                    const sub = getSubjectByCode(s.subjectId);
-                                    const tea = getTeacher(s.teacherId);
-                                    const rom = getRoom(s.roomId);
-
-                                    return (
-                                        <div key={s.id}
-                                             className={`absolute left-0.5 right-0.5 text-[10px] rounded p-1 shadow shadow-black/10 transition-all ${
-                                                 !isActive ? "bg-gray-300 text-gray-500 opacity-30 z-0" :
-                                                     (viewMode === "sections" && s.roomId !== selectedRoom && selectedRoom !== "all") || (viewMode === "rooms" && s.sectionId !== selectedSection && selectedSection !== "all") ? "bg-violet-500 text-white z-10" : "bg-blue-600 text-white z-10"
-                                             }`} style={{ top, height }}>
-                                            <div className="font-bold truncate">{sub?.course_name || s.subjectId}</div>
-                                            <div className="opacity-80 truncate">{tea?.name || 'No Teacher'}</div>
-                                            <div className="opacity-80 truncate">{rom?.room_name}</div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        );
-                    })}
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-violet-500 rounded"></div>
+                        <span className="text-gray-600 dark:text-gray-400">Context mismatch (different room/section)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-gray-300 rounded opacity-30"></div>
+                        <span className="text-gray-600 dark:text-gray-400">Inactive (not in current context)</span>
+                    </div>
                 </div>
-            </div>
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
+                    <div className="grid grid-cols-[80px_repeat(6,1fr)] bg-gray-50 dark:bg-gray-800 border-b border-gray-200">
+                        <div className="border-r border-gray-200" />
+                        {DAYS.map(d => <div key={d} className="py-2 text-center font-bold text-xs">{d}</div>)}
+                    </div>
+                    <div className="grid grid-cols-[80px_repeat(6,1fr)] max-h-[600px] overflow-y-auto relative text-gray-900 dark:text-white">
+                        <div className="bg-gray-50 dark:bg-gray-800 sticky left-0 z-20 border-r border-gray-200">
+                            {TIME_SLOTS.map(t => (
+                                <div key={t} style={{ height: SLOT_HEIGHT }} className="flex items-center justify-center text-[10px] text-gray-400 border-b border-gray-100">{formatTime(t)}</div>
+                            ))}
+                        </div>
+                        {DAYS.map(day => {
+                            return (
+                                <div key={day} className="relative border-r border-gray-100 last:border-r-0" style={{ height: TIME_SLOTS.length * SLOT_HEIGHT }}>
+                                    {TIME_SLOTS.map((_, i) => <div key={i} className="absolute left-0 right-0 border-t border-gray-50 dark:border-gray-800" style={{ top: i * SLOT_HEIGHT }} />)}
+
+                                    {schedules.filter(s => s.day === day && (
+                                        (viewMode === "sections" && (s.sectionId === selectedSection || (selectedRoom !== "all" && s.roomId === selectedRoom))) ||
+                                        (viewMode === "rooms" && (s.roomId === selectedRoom || (selectedSection !== "all" && s.sectionId === selectedSection))) ||
+                                        (viewMode === "teachers" && s.teacherId === selectedTeacher)
+                                    )).map(s => {
+                                        const isActive = (viewMode === "sections" && s.sectionId === selectedSection) ||
+                                            (viewMode === "rooms" && s.roomId === selectedRoom) ||
+                                            (viewMode === "teachers" && s.teacherId === selectedTeacher);
+
+                                        const top = ((s.start - START_MIN) / SLOT) * SLOT_HEIGHT;
+                                        const height = ((s.end - s.start) / SLOT) * SLOT_HEIGHT;
+                                        const sub = getSubjectByCode(s.subjectId);
+                                        const tea = getTeacher(s.teacherId);
+                                        const rom = getRoom(s.roomId);
+
+                                        return (
+                                            <div key={s.id}
+                                                 className={`absolute left-0.5 right-0.5 text-[10px] rounded p-1 shadow shadow-black/10 transition-all ${
+                                                     !isActive ? "bg-gray-300 text-gray-500 opacity-30 z-0" :
+                                                         (viewMode === "sections" && s.roomId !== selectedRoom && selectedRoom !== "all") || (viewMode === "rooms" && s.sectionId !== selectedSection && selectedSection !== "all") ? "bg-violet-500 text-white z-10" : "bg-blue-600 text-white z-10"
+                                                 }`} style={{ top, height }}>
+                                                <div className="font-bold truncate">{sub?.course_name || s.subjectId}</div>
+                                                <div className="opacity-80 truncate">{tea?.name || 'No Teacher'}</div>
+                                                <div className="opacity-80 truncate">{rom?.room_name}</div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </>
         );
     };
 
