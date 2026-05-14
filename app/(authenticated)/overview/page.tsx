@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, use } from "react";
+import React, { useEffect, useState } from "react";
 import {
     Button,
     Spinner,
@@ -22,15 +22,15 @@ import {
     fetchSchedulesList,
     fetchTeachers,
     fetchScheduleDetails,
-    fetchTeachersCount,
-    fetchSystemSettings
+    fetchSystemSettings,
+    getDisplay
 } from "@/services/userService.ts";
 
-export default function ScheduleTeachers({ params }: { params: Promise<{ id: string }> }) {
+export default function ScheduleTeachers() {
     const router = useRouter();
-    const { id: scheduleId } = use(params);
 
     const [loading, setLoading] = useState(true);
+    const [scheduleId, setScheduleId] = useState<string | null>(null);
     const [scheduleExists, setScheduleExists] = useState<boolean | null>(null);
     const [systemSettings, setSystemSettings] = useState<any>(null);
 
@@ -40,7 +40,7 @@ export default function ScheduleTeachers({ params }: { params: Promise<{ id: str
     const [schedules, setSchedules] = useState<any[]>([]);
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState(search);
-    const [filterType, setFilterType] = useState("All"); // New state for filter type
+    const [filterType, setFilterType] = useState("All");
 
     // pagination consts
     const itemsPerPage = 10;
@@ -50,11 +50,22 @@ export default function ScheduleTeachers({ params }: { params: Promise<{ id: str
     const startItem = ((currentPage - 1) * itemsPerPage) + 1;
     const endItem = Math.min(currentPage * itemsPerPage, rowCount);
 
-    const checkScheduleExists = async () => {
+    const initializeSchedule = async () => {
         setLoading(true);
         try {
+            const rawDisplayId = await getDisplay();
+            const displayId = String(rawDisplayId).replace(/^"|"$/g, '');
+
+            if (!displayId || displayId === "null") {
+                setScheduleExists(false);
+                setLoading(false);
+                return;
+            }
+
+            setScheduleId(displayId);
+
             const scheduleList = await fetchSchedulesList();
-            const schedule = scheduleList.find((s: any) => s.id === scheduleId);
+            const schedule = scheduleList.find((s: any) => String(s.id) === displayId);
 
             if (schedule) {
                 setScheduleExists(true);
@@ -65,11 +76,13 @@ export default function ScheduleTeachers({ params }: { params: Promise<{ id: str
             console.error("Error checking schedule:", error);
             setScheduleExists(false);
         } finally {
-            setLoading(false);
+            // Loading remains true if schedule exists to wait for loadTeacherData
+            if (!scheduleId) setLoading(false);
         }
     };
 
     const loadTeacherData = async () => {
+        if (!scheduleId) return;
         setLoading(true);
         try {
             const [teachs, scheduleDetails, settings] = await Promise.all([
@@ -78,12 +91,11 @@ export default function ScheduleTeachers({ params }: { params: Promise<{ id: str
                 fetchSystemSettings()
             ]);
 
-            setAllTeachers(teachs);
             setSchedules(scheduleDetails);
             setSystemSettings(settings);
 
             // Calculate load for each teacher
-            const teachersWithLoad = teachs.map(teacher => {
+            const teachersWithLoad = teachs.map((teacher: any) => {
                 const teacherUnits = (scheduleDetails as any[]).reduce((total: number, schedule: any) => {
                     if (schedule.teacher_id === teacher.pscs_id) {
                         const durationHours = (schedule.end_time - schedule.start_time) / 60;
@@ -105,8 +117,28 @@ export default function ScheduleTeachers({ params }: { params: Promise<{ id: str
                 };
             });
 
-            // Filter teachers based on search and type
-            const filteredTeachers = teachersWithLoad.filter(teacher => {
+            setAllTeachers(teachersWithLoad);
+        } catch (error) {
+            console.error("Error fetching teachers:", error);
+            setTeachers([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        initializeSchedule();
+    }, []);
+
+    useEffect(() => {
+        if (scheduleExists && scheduleId) {
+            loadTeacherData();
+        }
+    }, [scheduleId, scheduleExists]);
+
+    useEffect(() => {
+        if (allTeachers.length > 0) {
+            const filteredTeachers = allTeachers.filter(teacher => {
                 const matchesSearch = !debouncedSearch ||
                     teacher.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
                     teacher.pscs_id.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
@@ -117,49 +149,11 @@ export default function ScheduleTeachers({ params }: { params: Promise<{ id: str
                 return matchesSearch && matchesType;
             });
 
-            // Apply pagination
+            setRowCount(filteredTeachers.length);
             const offset = (currentPage - 1) * itemsPerPage;
-            const paginatedTeachers = filteredTeachers.slice(offset, offset + itemsPerPage);
-
-            setTeachers(paginatedTeachers);
-        } catch (error) {
-            console.error("Error fetching teachers:", error);
-            setTeachers([]);
-        } finally {
-            setLoading(false);
+            setTeachers(filteredTeachers.slice(offset, offset + itemsPerPage));
         }
-    };
-
-    const loadTeacherRowCount = async () => {
-        // Calculate row count based on filtered teachers
-        if (allTeachers.length === 0) return;
-
-        const filteredCount = allTeachers.filter(teacher => {
-            const matchesSearch = !debouncedSearch ||
-                teacher.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-                teacher.pscs_id.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-                teacher.teacher_code.toLowerCase().includes(debouncedSearch.toLowerCase());
-
-            const matchesType = filterType === "All" || teacher.employment_type === filterType;
-            
-            return matchesSearch && matchesType;
-        }).length;
-
-        setRowCount(filteredCount);
-    };
-
-    const onPageChange = (page: number) => setCurrentPage(page);
-
-    useEffect(() => {
-        checkScheduleExists();
-    }, [scheduleId]);
-
-    useEffect(() => {
-        if (scheduleExists) {
-            loadTeacherData();
-            loadTeacherRowCount();
-        }
-    }, [currentPage, debouncedSearch, filterType, scheduleExists]);
+    }, [allTeachers, currentPage, debouncedSearch, filterType]);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -192,7 +186,7 @@ export default function ScheduleTeachers({ params }: { params: Promise<{ id: str
                             Schedule Not Found
                         </h2>
                         <p className="text-gray-600 dark:text-gray-400 mb-6">
-                            The schedule with ID "{scheduleId}" does not exist or may have been deleted.
+                            No active schedule was detected. Please set one in the dashboard.
                         </p>
                         <div className="flex gap-3 justify-center">
                             <Button
@@ -273,7 +267,7 @@ export default function ScheduleTeachers({ params }: { params: Promise<{ id: str
                         <TableBody className="divide-y">
                             {teachers.length > 0 ? (
                                 teachers.map((t) => (
-                                    <TableRow key={t.pscs_id} onClick={() => router.push("/schedules/" + scheduleId + "/teachers/" + t.pscs_id + "/")}>
+                                    <TableRow key={t.pscs_id} onClick={() => router.push("/overview/" + t.pscs_id)}>
                                         <TableCell className="font-bold">{t.pscs_id}</TableCell>
                                         <TableCell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">{t.name}</TableCell>
                                         <TableCell>{t.teacher_code}</TableCell>
@@ -294,7 +288,7 @@ export default function ScheduleTeachers({ params }: { params: Promise<{ id: str
                     <div className="mt-6 flex flex-col items-center">
                         <p className="text-sm mb-2">{rowCount > 0 ? `Showing ${startItem} to ${endItem} of ${rowCount} Entries` : ""}</p>
                         <div className={`${totalPageCount > 1? "":"hidden"}`}>
-                            <Pagination currentPage={currentPage} totalPages={totalPageCount || 1} onPageChange={onPageChange} showIcons />
+                            <Pagination currentPage={currentPage} totalPages={totalPageCount || 1} onPageChange={setCurrentPage} showIcons />
                         </div>
                     </div>
                 </>

@@ -597,6 +597,36 @@ export async function fetchTeachersCount(search = "", type = "All") {
     }
 }
 
+export async function fetchTeachersLoad(scheduleId: string, search = "", page: number, type = "All") {
+    const ITEMS_PER_PAGE = 10;
+    try {
+        const val = search.trim() === "" ? null : search;
+        const offset = (page - 1) * ITEMS_PER_PAGE;
+        // Assuming a SQL function 'get_teachers_load' exists or will be created
+        // that takes schedule_id, search_query, offset, limit, and teacher_type
+        const teachers = await sql`
+            SELECT * FROM get_teachers_load(${scheduleId}::uuid, ${val}, ${offset}, ${ITEMS_PER_PAGE}, ${type})
+        `;
+        return teachers;
+    } catch (error) {
+        console.error(`[DB_ERROR]: Failed to fetch teachers load for schedule ${scheduleId}:`, error);
+        return [];
+    }
+}
+
+export async function fetchTeachersLoadCount(scheduleId: string, search = "", type = "All") {
+    try {
+        const val = search.trim() === "" ? null : search;
+        // Assuming a SQL function 'get_teachers_load_count' exists or will be created
+        const result = await sql`SELECT get_teachers_load_count(${scheduleId}::uuid, ${val}, ${type})`;
+        return result.length > 0 ? result[0].get_teachers_load_count : 0;
+    } catch (error) {
+        console.error(`[DB_ERROR]: Failed to fetch teachers load count for schedule ${scheduleId}:`, error);
+        return 0;
+    }
+}
+
+
 export async function insertTeacher(id: string, name: string, code: string, spec: string, type: string, availability: any[]) {
     try {
         await sql`SELECT create_teacher(

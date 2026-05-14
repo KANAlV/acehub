@@ -586,7 +586,7 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                     )}
 
                     {/* View All Card */}
-                    <div onClick={() => redirect(`/maintenance`)}
+                    <div onClick={() => redirect(`/schedules/${id}/teachers`)}
                          className="flex items-center justify-center
                         p-4 text-center text-gray-500
                         bg-transparent hover:bg-blue-500/20

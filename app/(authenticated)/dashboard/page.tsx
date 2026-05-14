@@ -265,7 +265,7 @@ export default function DashboardSummary() {
                     })}
 
                     {/* View All Card */}
-                    <div onClick={() => router.push(`/maintenance`)}
+                    <div onClick={() => (role != "Administrator"? router.push(`/overview`) : router.push(`/schedules/${activeScheduleId}/teachers`))}
                          className="flex items-center justify-center p-4 text-center text-gray-500 bg-transparent hover:bg-blue-500/20 border border-dashed border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:shadow-md transition-all">
                         View All Teachers
                     </div>
