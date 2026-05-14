@@ -427,6 +427,8 @@ export default function CoursesManager() {
                 await Promise.all([loadProgramCount(), loadProgramData()]);
             } catch (error) {
                 console.error("[ERROR]:", error);
+            } finally {
+                setLoading(false)
             }
         };
         fetchData();
@@ -454,7 +456,7 @@ export default function CoursesManager() {
             <div className={`${loading? "":"hidden"} fixed inset-0 z-9999 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm cursor-wait`}>
                 <div className="flex flex-col items-center gap-4">
                     <Spinner aria-label="Extra large spinner example" size="xl" />
-                    <p className="text-white font-semibold text-lg drop-shadow-md">Syncing Sections...</p>
+                    <p className="text-white font-semibold text-lg drop-shadow-md">Syncing Courses...</p>
                 </div>
             </div>
 
