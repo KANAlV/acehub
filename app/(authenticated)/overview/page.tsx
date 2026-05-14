@@ -118,6 +118,27 @@ export default function ScheduleTeachers() {
             });
 
             setAllTeachers(teachersWithLoad);
+
+            // Filter teachers based on search and type
+            const filteredTeachers = teachersWithLoad.filter(teacher => {
+                const matchesSearch = !debouncedSearch ||
+                    teacher.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+                    teacher.pscs_id.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+                    teacher.teacher_code.toLowerCase().includes(debouncedSearch.toLowerCase());
+
+                const matchesType = filterType === "All" || teacher.employment_type === filterType;
+
+                return matchesSearch && matchesType;
+            });
+
+            // Set row count based on filtered results
+            setRowCount(filteredTeachers.length);
+
+            // Apply pagination
+            const offset = (currentPage - 1) * itemsPerPage;
+            const paginatedTeachers = filteredTeachers.slice(offset, offset + itemsPerPage);
+
+            setTeachers(paginatedTeachers);
         } catch (error) {
             console.error("Error fetching teachers:", error);
             setTeachers([]);
@@ -134,26 +155,7 @@ export default function ScheduleTeachers() {
         if (scheduleExists && scheduleId) {
             loadTeacherData();
         }
-    }, [scheduleId, scheduleExists]);
-
-    useEffect(() => {
-        if (allTeachers.length > 0) {
-            const filteredTeachers = allTeachers.filter(teacher => {
-                const matchesSearch = !debouncedSearch ||
-                    teacher.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-                    teacher.pscs_id.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-                    teacher.teacher_code.toLowerCase().includes(debouncedSearch.toLowerCase());
-
-                const matchesType = filterType === "All" || teacher.employment_type === filterType;
-
-                return matchesSearch && matchesType;
-            });
-
-            setRowCount(filteredTeachers.length);
-            const offset = (currentPage - 1) * itemsPerPage;
-            setTeachers(filteredTeachers.slice(offset, offset + itemsPerPage));
-        }
-    }, [allTeachers, currentPage, debouncedSearch, filterType]);
+    }, [scheduleId, scheduleExists, currentPage, debouncedSearch, filterType]);
 
     useEffect(() => {
         setCurrentPage(1);

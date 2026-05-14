@@ -117,6 +117,9 @@ export default function ScheduleTeachers({ params }: { params: Promise<{ id: str
                 return matchesSearch && matchesType;
             });
 
+            // Set row count based on filtered results
+            setRowCount(filteredTeachers.length);
+
             // Apply pagination
             const offset = (currentPage - 1) * itemsPerPage;
             const paginatedTeachers = filteredTeachers.slice(offset, offset + itemsPerPage);
@@ -130,24 +133,6 @@ export default function ScheduleTeachers({ params }: { params: Promise<{ id: str
         }
     };
 
-    const loadTeacherRowCount = async () => {
-        // Calculate row count based on filtered teachers
-        if (allTeachers.length === 0) return;
-
-        const filteredCount = allTeachers.filter(teacher => {
-            const matchesSearch = !debouncedSearch ||
-                teacher.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-                teacher.pscs_id.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-                teacher.teacher_code.toLowerCase().includes(debouncedSearch.toLowerCase());
-
-            const matchesType = filterType === "All" || teacher.employment_type === filterType;
-            
-            return matchesSearch && matchesType;
-        }).length;
-
-        setRowCount(filteredCount);
-    };
-
     const onPageChange = (page: number) => setCurrentPage(page);
 
     useEffect(() => {
@@ -157,7 +142,6 @@ export default function ScheduleTeachers({ params }: { params: Promise<{ id: str
     useEffect(() => {
         if (scheduleExists) {
             loadTeacherData();
-            loadTeacherRowCount();
         }
     }, [currentPage, debouncedSearch, filterType, scheduleExists]);
 
