@@ -23,7 +23,7 @@ import {
     fetchTeachers,
     fetchScheduleDetails,
     fetchSystemSettings,
-    getDisplay
+    getDisplay, fetchAllTeachers
 } from "@/services/userService.ts";
 
 export default function ScheduleTeachers() {
@@ -86,7 +86,7 @@ export default function ScheduleTeachers() {
         setLoading(true);
         try {
             const [teachs, scheduleDetails, settings] = await Promise.all([
-                fetchTeachers("", 1, "All"),
+                fetchAllTeachers(),
                 fetchScheduleDetails(scheduleId),
                 fetchSystemSettings()
             ]);

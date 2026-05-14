@@ -23,7 +23,7 @@ import {
     fetchTeachers,
     fetchScheduleDetails,
     fetchTeachersCount,
-    fetchSystemSettings
+    fetchSystemSettings, fetchAllTeachers
 } from "@/services/userService.ts";
 
 export default function ScheduleTeachers({ params }: { params: Promise<{ id: string }> }) {
@@ -73,7 +73,7 @@ export default function ScheduleTeachers({ params }: { params: Promise<{ id: str
         setLoading(true);
         try {
             const [teachs, scheduleDetails, settings] = await Promise.all([
-                fetchTeachers("", 1, "All"),
+                fetchAllTeachers(),
                 fetchScheduleDetails(scheduleId),
                 fetchSystemSettings()
             ]);
