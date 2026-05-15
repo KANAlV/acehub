@@ -241,7 +241,6 @@ export default function ScheduleTeachers() {
                     <Table hoverable>
                         <TableHead>
                             <TableRow>
-                                <TableHeadCell>ID</TableHeadCell>
                                 <TableHeadCell>Name</TableHeadCell>
                                 <TableHeadCell>Code</TableHeadCell>
                                 <TableHeadCell>Spec.</TableHeadCell>
@@ -270,7 +269,6 @@ export default function ScheduleTeachers() {
                             {teachers.length > 0 ? (
                                 teachers.map((t) => (
                                     <TableRow key={t.pscs_id} onClick={() => router.push("/overview/" + t.pscs_id)}>
-                                        <TableCell className="font-bold">{t.pscs_id}</TableCell>
                                         <TableCell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">{t.name}</TableCell>
                                         <TableCell>{t.teacher_code}</TableCell>
                                         <TableCell>{t.specialization}</TableCell>

@@ -311,7 +311,7 @@ export default function TimetableViewer() {
                                         options={teachers.map(t => ({ 
                                             id: t.pscs_id, 
                                             label: t.name, 
-                                            subLabel: `${t.pscs_id} | ${t.teacher_code}` 
+                                            subLabel: `${t.teacher_code}`
                                         }))}
                                         value={selectedTeacher}
                                         onChange={setSelectedTeacher}

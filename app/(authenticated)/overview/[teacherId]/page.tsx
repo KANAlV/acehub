@@ -292,10 +292,6 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ teacherI
                             <p className="font-medium">{teacher.name}</p>
                         </div>
                         <div>
-                            <Label className="text-xs text-gray-500">PSCS ID</Label>
-                            <p className="font-medium">{teacher.pscs_id}</p>
-                        </div>
-                        <div>
                             <Label className="text-xs text-gray-500">Teacher Code</Label>
                             <p className="font-medium">{teacher.teacher_code}</p>
                         </div>
@@ -306,6 +302,10 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ teacherI
                         <div>
                             <Label className="text-xs text-gray-500">Specialization</Label>
                             <p className="font-medium">{teacher.specialization || "Not specified"}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-500/0 select-none">spacer</p>
+                            <p className="font-medium text-gray-500/0 select-none">spacer</p>
                         </div>
                     </div>
                 </Card>
