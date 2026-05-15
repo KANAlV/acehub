@@ -78,6 +78,7 @@ const StudentInputs = ({ academicLevelVal, studentsVal, handleStudentChange }: {
 
 export default function CoursesManager() {
     const [loading, setLoading] = useState(true); // spinner state
+    const [tableLoading, setTableLoading] = useState(false); // table-specific loading for search/pagination
     const [programs, setPrograms] = useState([]); // program rows are stored here
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -440,6 +441,7 @@ export default function CoursesManager() {
     const loadProgramData = async () => {
         const data = await fetchPrograms(search, currentPage);
         setPrograms(data);
+        setTableLoading(false);
     }
 
     const loadProgramCount = async () => {
@@ -455,6 +457,10 @@ export default function CoursesManager() {
         let isCancelled = false;
         const fetchData = async () => {
             try {
+                // Only show table loading for search/pagination, not initial load
+                if (!loading) {
+                    setTableLoading(true);
+                }
                 await Promise.all([loadProgramCount(), loadProgramData()]);
             } catch (error) {
                 console.error("[ERROR]:", error);
@@ -510,7 +516,12 @@ export default function CoursesManager() {
                 onChange={(e) => setSearch(e.target.value)}
             />
 
-            <div className={"w-full md:w-auto h-auto overflow-x-scroll md:overflow-clip"}>
+            <div className={"w-full md:w-auto h-auto overflow-x-scroll md:overflow-clip relative"}>
+                {tableLoading && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm">
+                        <Spinner aria-label="Table loading" size="xl" />
+                    </div>
+                )}
                 <Table hoverable>
                     <TableHead>
                         <TableRow>

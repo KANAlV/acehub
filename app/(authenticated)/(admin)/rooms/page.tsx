@@ -29,6 +29,7 @@ import {sanitizeName} from "@/lib/validation.ts";
 
 export default function RoomManager() {
     const [loading, setLoading] = useState(true); // spinner state
+    const [tableLoading, setTableLoading] = useState(false); // table-specific loading for search/pagination
     const [rooms, setRooms] = useState([]); // room rows are stored here
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -117,6 +118,7 @@ export default function RoomManager() {
         console.log(`[DATA_LIFECYCLE]: Rooms loaded. Count: ${data.length}`);
         setRooms(data);
         setLoading(false);
+        setTableLoading(false);
     }
 
     const loadRowCount = async () => {
@@ -417,6 +419,11 @@ export default function RoomManager() {
 
         const fetchData = async () => {
             try {
+                // Only show table loading for search/pagination, not initial load
+                if (!loading) {
+                    setTableLoading(true);
+                }
+                
                 // Run in parallel to save time
                 await Promise.all([
                     loadRowCount(),
@@ -534,7 +541,12 @@ export default function RoomManager() {
             />
 
             {/* Table */}
-            <div className={"w-full md:w-auto h-auto overflow-x-scroll md:overflow-clip"}>
+            <div className={"w-full md:w-auto h-auto overflow-x-scroll md:overflow-clip relative"}>
+                {tableLoading && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm">
+                        <Spinner aria-label="Table loading" size="xl" />
+                    </div>
+                )}
                 <Table hoverable>
                     <TableHead>
                         <TableRow>

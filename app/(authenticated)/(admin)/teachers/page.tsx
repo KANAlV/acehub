@@ -91,6 +91,7 @@ const AvailabilityManager = ({ availability, onUpdate, employmentType }: { avail
 
 export default function TeacherManager() {
     const [loading, setLoading] = useState(true);
+    const [tableLoading, setTableLoading] = useState(false); // table-specific loading for search/pagination
     const [teachers, setTeachers] = useState([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -169,6 +170,7 @@ export default function TeacherManager() {
         const data = await fetchTeachers(search, currentPage, filterType);
         setTeachers(data);
         setLoading(false);
+        setTableLoading(false);
     }
 
     const loadRowCount = async () => {
@@ -394,6 +396,10 @@ export default function TeacherManager() {
         let isCancelled = false;
         const fetchData = async () => {
             try {
+                // Only show table loading for search/pagination, not initial load
+                if (!loading) {
+                    setTableLoading(true);
+                }
                 await Promise.all([loadRowCount(), loadInitialData()]);
                 if (isCancelled) return;
             } catch (error) {
@@ -449,200 +455,207 @@ export default function TeacherManager() {
                 {/* The Select component for filterType is now removed from here */}
             </div>
 
-            <Table hoverable>
-                <TableHead>
-                    <TableRow>
-                        <TableHeadCell>ID</TableHeadCell>
-                        <TableHeadCell>Name</TableHeadCell>
-                        <TableHeadCell>Code</TableHeadCell>
-                        <TableHeadCell>Spec.</TableHeadCell>
-                        <TableHeadCell>
-                            <Dropdown
-                                label="Type"
-                                inline
-                                dismissOnClick={true}
-                                renderTrigger={() => (
-                                    <span className="cursor-pointer flex items-center gap-1 hover:text-blue-500">
-                                        Type {filterType !== "All" && `(${filterType})`} <IoMdArrowDropdown />
-                                    </span>
-                                )}
-                            >
-                                <DropdownItem onClick={() => setFilterType("All")}>All Types</DropdownItem>
-                                <DropdownItem onClick={() => setFilterType("FT")}>FT</DropdownItem>
-                                <DropdownItem onClick={() => setFilterType("PTFL")}>PTFL</DropdownItem>
-                                <DropdownItem onClick={() => setFilterType("PT")}>PT</DropdownItem>
-                            </Dropdown>
-                        </TableHeadCell>
-                        <TableHeadCell>Availability</TableHeadCell>
-                        <TableHeadCell><span className="sr-only">Edit</span></TableHeadCell>
-                    </TableRow>
-                </TableHead>
-                <TableBody className="divide-y">
-                    {teachers.length > 0 ? (
-                        teachers.map((t) => (
-                            <TableRow key={t.pscs_id}>
-                                <TableCell className="font-bold">{t.pscs_id}</TableCell>
-                                <TableCell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">{t.name}</TableCell>
-                                <TableCell>{t.teacher_code}</TableCell>
-                                <TableCell>{t.specialization}</TableCell>
-                                <TableCell>{t.employment_type}</TableCell>
-                                <TableCell>
-                                    <div className="text-xs space-y-1">
-                                        {(t.employment_type === "PT" || t.employment_type === "PTFL") ? (
-                                            (t.availability || []).map((s, i) => (
-                                                <div key={i} className="whitespace-nowrap bg-blue-50 dark:bg-blue-900/20 px-1 rounded">{s.day}: {s.time}</div>
-                                            ))
-                                        ) : (
-                                            <span className="text-gray-400 italic">NO SELECTION</span>
-                                        )}
-                                        {(t.employment_type === "PT") && (t.availability || []).length === 0 && (
-                                            <span className="text-yellow-500 italic font-medium">Pending Entry</span>
-                                        )}
-                                    </div>
-                                </TableCell>
-                                <TableCell className="flex justify-end">
-                                    <Button color="alternative" onClick={() => editModalValue(t.pscs_id)}>Edit</Button>
-                                </TableCell>
-                            </TableRow>
-                        ))
-                    ) : (
+            <div className="relative">
+                {tableLoading && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm">
+                        <Spinner aria-label="Table loading" size="xl" />
+                    </div>
+                )}
+                <Table hoverable>
+                    <TableHead>
                         <TableRow>
-                            <TableCell colSpan={7} className="text-center py-4">No teachers found.</TableCell>
+                            <TableHeadCell>ID</TableHeadCell>
+                            <TableHeadCell>Name</TableHeadCell>
+                            <TableHeadCell>Code</TableHeadCell>
+                            <TableHeadCell>Spec.</TableHeadCell>
+                            <TableHeadCell>
+                                <Dropdown
+                                    label="Type"
+                                    inline
+                                    dismissOnClick={true}
+                                    renderTrigger={() => (
+                                        <span className="cursor-pointer flex items-center gap-1 hover:text-blue-500">
+                                            Type {filterType !== "All" && `(${filterType})`} <IoMdArrowDropdown />
+                                        </span>
+                                    )}
+                                >
+                                    <DropdownItem onClick={() => setFilterType("All")}>All Types</DropdownItem>
+                                    <DropdownItem onClick={() => setFilterType("FT")}>FT</DropdownItem>
+                                    <DropdownItem onClick={() => setFilterType("PTFL")}>PTFL</DropdownItem>
+                                    <DropdownItem onClick={() => setFilterType("PT")}>PT</DropdownItem>
+                                </Dropdown>
+                            </TableHeadCell>
+                            <TableHeadCell>Availability</TableHeadCell>
+                            <TableHeadCell><span className="sr-only">Edit</span></TableHeadCell>
                         </TableRow>
-                    )}
-                </TableBody>
-            </Table>
+                    </TableHead>
+                    <TableBody className="divide-y">
+                        {teachers.length > 0 ? (
+                            teachers.map((t) => (
+                                <TableRow key={t.pscs_id}>
+                                    <TableCell className="font-bold">{t.pscs_id}</TableCell>
+                                    <TableCell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">{t.name}</TableCell>
+                                    <TableCell>{t.teacher_code}</TableCell>
+                                    <TableCell>{t.specialization}</TableCell>
+                                    <TableCell>{t.employment_type}</TableCell>
+                                    <TableCell>
+                                        <div className="text-xs space-y-1">
+                                            {(t.employment_type === "PT" || t.employment_type === "PTFL") ? (
+                                                (t.availability || []).map((s, i) => (
+                                                    <div key={i} className="whitespace-nowrap bg-blue-50 dark:bg-blue-900/20 px-1 rounded">{s.day}: {s.time}</div>
+                                                ))
+                                            ) : (
+                                                <span className="text-gray-400 italic">NO SELECTION</span>
+                                            )}
+                                            {(t.employment_type === "PT") && (t.availability || []).length === 0 && (
+                                                <span className="text-yellow-500 italic font-medium">Pending Entry</span>
+                                            )}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="flex justify-end">
+                                        <Button color="alternative" onClick={() => editModalValue(t.pscs_id)}>Edit</Button>
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={7} className="text-center py-4">No teachers found.</TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
 
-            <div className="mt-6 flex flex-col items-center">
-                <p className="text-sm mb-2">{rowCount > 0 ? `Showing ${startItem} to ${endItem} of ${rowCount} Entries` : ""}</p>
-                <div className={`${totalPageCount > 1? "":"hidden"}`}>
-                    <Pagination currentPage={currentPage} totalPages={totalPageCount || 1} onPageChange={onPageChange} showIcons />
+                <div className="mt-6 flex flex-col items-center">
+                    <p className="text-sm mb-2">{rowCount > 0 ? `Showing ${startItem} to ${endItem} of ${rowCount} Entries` : ""}</p>
+                    <div className={`${totalPageCount > 1? "":"hidden"}`}>
+                        <Pagination currentPage={currentPage} totalPages={totalPageCount || 1} onPageChange={onPageChange} showIcons />
+                    </div>
                 </div>
-            </div>
 
-            {/* Add Modal */}
-            <Modal show={addModal} onClose={() => setAddModal(false)} size="md">
-                <ModalHeader>Add Teacher</ModalHeader>
-                <ModalBody className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <Label>PSCS ID</Label>
-                            <TextInput value={pscsId} onChange={e => { setPscsId(e.target.value); setActiveChanges(true); }} placeholder="0001" />
+                {/* Add Modal */}
+                <Modal show={addModal} onClose={() => setAddModal(false)} size="md">
+                    <ModalHeader>Add Teacher</ModalHeader>
+                    <ModalBody className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <Label>PSCS ID</Label>
+                                <TextInput value={pscsId} onChange={e => { setPscsId(e.target.value); setActiveChanges(true); }} placeholder="0001" />
+                            </div>
+                            <div>
+                                <Label>Teacher Code</Label>
+                                <TextInput value={code} onChange={e => { setCode(sanitizeVeryShortName(e.target.value)); setActiveChanges(true); }} placeholder="ABC" />
+                            </div>
                         </div>
                         <div>
-                            <Label>Teacher Code</Label>
-                            <TextInput value={code} onChange={e => { setCode(sanitizeVeryShortName(e.target.value)); setActiveChanges(true); }} placeholder="ABC" />
+                            <Label>Full Name</Label>
+                            <TextInput value={name} onChange={e => { setName(sanitizeMediumName(e.target.value)); setActiveChanges(true); }} placeholder="John Doe" />
                         </div>
-                    </div>
-                    <div>
-                        <Label>Full Name</Label>
-                        <TextInput value={name} onChange={e => { setName(sanitizeMediumName(e.target.value)); setActiveChanges(true); }} placeholder="John Doe" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <Label>Specialization</Label>
-                            <TextInput value={spec} onChange={e => { setSpec(e.target.value); setActiveChanges(true); }} placeholder="IT / GE" />
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <Label>Specialization</Label>
+                                <TextInput value={spec} onChange={e => { setSpec(e.target.value); setActiveChanges(true); }} placeholder="IT / GE" />
+                            </div>
+                            <div>
+                                <Label>Emp. Type</Label>
+                                <Select value={type} onChange={e => { setType(e.target.value); setActiveChanges(true); }}>
+                                    <option>FT</option>
+                                    <option>PTFL</option>
+                                    <option>PT</option>
+                                </Select>
+                            </div>
                         </div>
-                        <div>
-                            <Label>Emp. Type</Label>
-                            <Select value={type} onChange={e => { setType(e.target.value); setActiveChanges(true); }}>
-                                <option>FT</option>
-                                <option>PTFL</option>
-                                <option>PT</option>
-                            </Select>
-                        </div>
-                    </div>
-                    <AvailabilityManager availability={availability} onUpdate={setAvailability} employmentType={type} />
-                </ModalBody>
-                <ModalFooter className="justify-end">
-                    <Button color="alternative" onClick={activeChanges ? () => setOpenWarningModal(true) : discardEntry}>
-                        {activeChanges ? "Discard" : "Cancel"}
-                    </Button>
-                    <Button onClick={submitTeacher}>Save</Button>
-                </ModalFooter>
-            </Modal>
-
-            {/* Edit Modal */}
-            <Modal show={editModal} onClose={() => setEditModal(false)} size="md">
-                <ModalHeader>Editing: {name}</ModalHeader>
-                <ModalBody className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <Label>PSCS ID (Read-only)</Label>
-                            <TextInput value={pscsId} readOnly disabled />
-                        </div>
-                        <div>
-                            <Label>Teacher Code</Label>
-                            <TextInput value={code} onChange={e => { setCode(sanitizeVeryShortName(e.target.value)); setActiveChanges(true); }} />
-                        </div>
-                    </div>
-                    <div>
-                        <Label>Full Name</Label>
-                        <TextInput value={name} onChange={e => { setName(sanitizeMediumName(e.target.value)); setActiveChanges(true); }} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <Label>Specialization</Label>
-                            <TextInput value={spec} onChange={e => { setSpec(e.target.value); setActiveChanges(true); }} />
-                        </div>
-                        <div>
-                            <Label>Emp. Type</Label>
-                            <Select value={type} onChange={e => { setType(e.target.value); setActiveChanges(true); }}>
-                                <option>FT</option>
-                                <option>PTFL</option>
-                                <option>PT</option>
-                            </Select>
-                        </div>
-                    </div>
-                    <AvailabilityManager availability={availability} onUpdate={(v) => { setAvailability(v); setActiveChanges(true); }} employmentType={type} />
-                </ModalBody>
-                <ModalFooter>
-                    <Button color="failure" onClick={() => setOpenWarningModal(true)}><HiOutlineTrash className="size-5" /></Button>
-                    <div className="flex-1 flex justify-end space-x-2">
+                        <AvailabilityManager availability={availability} onUpdate={setAvailability} employmentType={type} />
+                    </ModalBody>
+                    <ModalFooter className="justify-end">
                         <Button color="alternative" onClick={activeChanges ? () => setOpenWarningModal(true) : discardEntry}>
                             {activeChanges ? "Discard" : "Cancel"}
                         </Button>
-                        <Button onClick={updateEntry}>Update</Button>
-                    </div>
-                </ModalFooter>
-            </Modal>
+                        <Button onClick={submitTeacher}>Save</Button>
+                    </ModalFooter>
+                </Modal>
 
-            {/* Simple Warning Modal */}
-            <Modal show={openWarningModal} size="sm" onClose={() => setOpenWarningModal(false)}>
-                <ModalBody className="text-center py-6">
-                    <HiExclamation className="mx-auto size-12 text-yellow-400 mb-4" />
-                    <p className="font-bold">Are you sure?</p>
-                    <div className="flex justify-center gap-4 mt-6">
-                        <Button color="alternative" onClick={() => setOpenWarningModal(false)}>No</Button>
-                        <Button color="red" onClick={editModal ? deleteRow : discardEntry}>Yes, proceed</Button>
-                    </div>
-                </ModalBody>
-            </Modal>
+                {/* Edit Modal */}
+                <Modal show={editModal} onClose={() => setEditModal(false)} size="md">
+                    <ModalHeader>Editing: {name}</ModalHeader>
+                    <ModalBody className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <Label>PSCS ID (Read-only)</Label>
+                                <TextInput value={pscsId} readOnly disabled />
+                            </div>
+                            <div>
+                                <Label>Teacher Code</Label>
+                                <TextInput value={code} onChange={e => { setCode(sanitizeVeryShortName(e.target.value)); setActiveChanges(true); }} />
+                            </div>
+                        </div>
+                        <div>
+                            <Label>Full Name</Label>
+                            <TextInput value={name} onChange={e => { setName(sanitizeMediumName(e.target.value)); setActiveChanges(true); }} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <Label>Specialization</Label>
+                                <TextInput value={spec} onChange={e => { setSpec(e.target.value); setActiveChanges(true); }} />
+                            </div>
+                            <div>
+                                <Label>Emp. Type</Label>
+                                <Select value={type} onChange={e => { setType(e.target.value); setActiveChanges(true); }}>
+                                    <option>FT</option>
+                                    <option>PTFL</option>
+                                    <option>PT</option>
+                                </Select>
+                            </div>
+                        </div>
+                        <AvailabilityManager availability={availability} onUpdate={(v) => { setAvailability(v); setActiveChanges(true); }} employmentType={type} />
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button color="failure" onClick={() => setOpenWarningModal(true)}><HiOutlineTrash className="size-5" /></Button>
+                        <div className="flex-1 flex justify-end space-x-2">
+                            <Button color="alternative" onClick={activeChanges ? () => setOpenWarningModal(true) : discardEntry}>
+                                {activeChanges ? "Discard" : "Cancel"}
+                            </Button>
+                            <Button onClick={updateEntry}>Update</Button>
+                        </div>
+                    </ModalFooter>
+                </Modal>
 
-            {/* Toast */}
-            <Toast className={`fixed z-50 bottom-10 right-10 transition-all ${showToast ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                <div className="flex items-start">
-                    <div className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${statusCode.startsWith('2') ? 'bg-green-100 text-green-500' : 'bg-red-100 text-red-500'}`}>
-                        {statusCode.startsWith('2') ? <HiCheck className="h-5 w-5" /> : <HiExclamation className="h-5 w-5" />}
-                    </div>
-                    <div className="ml-3 flex-1">
-                        <div className="text-sm font-normal">{STATUS_MESSAGES[statusCode] || "Operation complete"}</div>
-                        <Progress progress={progress} size="sm" className="mt-2" color={statusCode.startsWith('2') ? "green" : "red"} />
-                    </div>
-                    <ToastToggle onDismiss={() => {
-                        setShowToast(false);
-                        setProgress(0);
-                    }} />
-                </div>
-            </Toast>
+                {/* Simple Warning Modal */}
+                <Modal show={openWarningModal} size="sm" onClose={() => setOpenWarningModal(false)}>
+                    <ModalBody className="text-center py-6">
+                        <HiExclamation className="mx-auto size-12 text-yellow-400 mb-4" />
+                        <p className="font-bold">Are you sure?</p>
+                        <div className="flex justify-center gap-4 mt-6">
+                            <Button color="alternative" onClick={() => setOpenWarningModal(false)}>No</Button>
+                            <Button color="red" onClick={editModal ? deleteRow : discardEntry}>Yes, proceed</Button>
+                        </div>
+                    </ModalBody>
+                </Modal>
 
-            <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                accept=".xlsx"
-                onChange={handleImport}
-            />
+                {/* Toast */}
+                <Toast className={`fixed z-50 bottom-10 right-10 transition-all ${showToast ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                    <div className="flex items-start">
+                        <div className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${statusCode.startsWith('2') ? 'bg-green-100 text-green-500' : 'bg-red-100 text-red-500'}`}>
+                            {statusCode.startsWith('2') ? <HiCheck className="h-5 w-5" /> : <HiExclamation className="h-5 w-5" />}
+                        </div>
+                        <div className="ml-3 flex-1">
+                            <div className="text-sm font-normal">{STATUS_MESSAGES[statusCode] || "Operation complete"}</div>
+                            <Progress progress={progress} size="sm" className="mt-2" color={statusCode.startsWith('2') ? "green" : "red"} />
+                        </div>
+                        <ToastToggle onDismiss={() => {
+                            setShowToast(false);
+                            setProgress(0);
+                        }} />
+                    </div>
+                </Toast>
+
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    accept=".xlsx"
+                    onChange={handleImport}
+                />
+            </div>
         </div>
     );
 }

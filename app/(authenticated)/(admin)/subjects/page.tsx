@@ -25,6 +25,7 @@ import {VscSave} from "react-icons/vsc";
 
 export default function SubjectsManager() {
     const [loading, setLoading] = useState(true);
+    const [tableLoading, setTableLoading] = useState(false); // table-specific loading for search/pagination
     const [subjects, setSubjects] = useState([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -440,6 +441,7 @@ export default function SubjectsManager() {
             console.error("[DATA_ERROR]:", error);
         } finally {
             setLoading(false);
+            setTableLoading(false);
         }
     }
 
@@ -451,6 +453,10 @@ export default function SubjectsManager() {
     useEffect(() => {
         let isCancelled = false;
         const fetchData = async () => {
+            // Only show table loading for search/pagination, not initial load
+            if (!loading) {
+                setTableLoading(true);
+            }
             await loadData();
         };
         fetchData();
@@ -522,7 +528,12 @@ export default function SubjectsManager() {
             />
 
             {/** Table **/}
-            <div className="w-full h-auto overflow-x-auto">
+            <div className="w-full h-auto overflow-x-auto relative">
+                {tableLoading && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm">
+                        <Spinner aria-label="Table loading" size="xl" />
+                    </div>
+                )}
                 <Table hoverable>
                     <TableHead>
                         <TableRow>
