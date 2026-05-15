@@ -296,6 +296,15 @@ export default function CoursesManager() {
             const worksheet = workbook.getWorksheet(1);
             const programsToImport: any[] = [];
 
+            // FORMAT VALIDATION: Ensure headers match
+            const firstHeader = worksheet?.getRow(1).getCell(1).value?.toString();
+            if (firstHeader !== 'Program Code') {
+                setStatusCode("400");
+                setLoading(false);
+                setShowToast(true);
+                return;
+            }
+
             worksheet?.eachRow((row, rowNumber) => {
                 if (rowNumber === 1) return;
 
@@ -314,24 +323,46 @@ export default function CoursesManager() {
                 }
             });
 
-            let successCount = 0;
-            for (const program of programsToImport) {
-                const res = await insertProgram(program.code, program.name, program.level, program.students);
-                if (res !== "500" && res !== "409") successCount++;
+            if (programsToImport.length === 0) {
+                setStatusCode("400");
+                setLoading(false);
+                setShowToast(true);
+                return;
             }
 
-            setStatusCode(successCount > 0 ? "201" : "400");
+            let hasConflict = false;
+            let successCount = 0;
+
+            for (const program of programsToImport) {
+                const res = await insertProgram(program.code, program.name, program.level, program.students);
+
+                if (res === "500") {
+                    setStatusCode("500");
+                    setLoading(false);
+                    setShowToast(true);
+                    return; // Kill the process on server error
+                }
+
+                if (res === "409") {
+                    hasConflict = true;
+                } else {
+                    successCount++;
+                }
+            }
+
+            // Logic: If we added at least one thing, call it a success (201)
+            // If we added nothing because everything was a duplicate, show 409
+            setStatusCode(successCount > 0 ? "201" : "409");
             setLoading(false);
             setShowToast(true);
+
             await Promise.all([loadProgramCount(), loadProgramData()]);
 
         } catch (error) {
             console.error("[IMPORT_ERROR]:", error);
             setStatusCode("500");
-            setShowToast(true);
         } finally {
             if (e.target) e.target.value = "";
-            setLoading(false);
         }
     }
 
