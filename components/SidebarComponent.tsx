@@ -140,7 +140,7 @@ export function SidebarComponent({ username, role }: { username: string, role: s
                         </SidebarItem>
                         <SidebarItem hidden={role !== "Administrator" && role !== "SuperAdmin"}
                                      as={Link} href="/settings" className={"hover:bg-gray-500/14"} icon={IoMdSettings}>
-                            Settings
+                            Configuration
                         </SidebarItem>
                     </SidebarItemGroup>
                 </SidebarItems>

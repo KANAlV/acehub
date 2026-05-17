@@ -25,6 +25,11 @@ import {
 } from "@/services/userService.ts";
 import {BsDatabaseDash, BsDatabaseDown} from "react-icons/bs";
 import {FaDatabase} from "react-icons/fa";
+import {
+    numericValueOnly,
+    isStrictPositiveNumber
+} from "@/lib/validation";
+import { clampNumericValue, MAX_FACULTY_LOAD, MAX_PREP_LIMIT, MAX_OVERLOADING, MAX_STUDENTS } from "@/lib/validation";
 
 
 
@@ -142,6 +147,17 @@ export default function Settings() {
             return () => { clearInterval(interval); clearTimeout(timer); };
         }
     }, [showToast]);
+
+    const handlePositiveIntegerInput = (
+        value: string,
+        maxLimit: number,
+        currentValue: string | number, // Added to track the active value before the keypress
+        setter: (value: number) => void
+    ) => {
+        // Pass the currentValue into the validator to allow strict rejection fallbacks
+        const sanitized = clampNumericValue(value, maxLimit, currentValue);
+        setter(sanitized === '' ? 0 : parseInt(sanitized, 10));
+    };
 
     /** Actions **/
     const handleSaveFacultyLoad = async () => {
@@ -496,16 +512,44 @@ export default function Settings() {
                                 <h3 className="text-lg font-bold mb-4">Teaching Load Parameters</h3>
                                 <div className="grid grid-cols-1 gap-6">
                                     <div>
-                                        <Label htmlFor="ft">Full-Time (FT) Max Load</Label>
-                                        <TextInput id="ft" type="number" value={facultyLoad.FT} onChange={e => setFacultyLoad({...facultyLoad, FT: parseInt(e.target.value)})} />
+                                        <Label htmlFor="ft">Full-Time (FT) Max Load (Max: 30)</Label>
+                                        <TextInput
+                                            id="ft"
+                                            type="text"
+                                            inputMode="numeric"
+                                            min="0"
+                                            max="30"
+                                            value={facultyLoad.FT}
+                                            onKeyDown={(e) => {
+                                                if (["-", ".", "e", "+"].includes(e.key)) e.preventDefault();
+                                            }}
+                                            onChange={(e) => handlePositiveIntegerInput(e.target.value, 30, facultyLoad.FT, (value) => setFacultyLoad({...facultyLoad, FT: value}))}/>
                                     </div>
                                     <div>
-                                        <Label htmlFor="ptfl">Part-Time Full Load (PTFL)</Label>
-                                        <TextInput id="ptfl" type="number" value={facultyLoad.PTFL} onChange={e => setFacultyLoad({...facultyLoad, PTFL: parseInt(e.target.value)})} />
+                                        <Label htmlFor="ptfl">Part-Time Full Load (PTFL) (Max: 30)</Label>
+                                        <TextInput id="ptfl"
+                                                   type="text"
+                                                   inputMode="numeric"
+                                                   min="0"
+                                                   max="30"
+                                                   value={facultyLoad.PTFL}
+                                                   onKeyDown={(e) => {
+                                                       if (["-", ".", "e", "+"].includes(e.key)) e.preventDefault();
+                                                   }}
+                                                   onChange={(e) => handlePositiveIntegerInput(e.target.value, 30, facultyLoad.PTFL, (value) => setFacultyLoad({...facultyLoad, PTFL: value}))}/>
                                     </div>
                                     <div>
-                                        <Label htmlFor="pt">Part-Time (PT)</Label>
-                                        <TextInput id="pt" type="number" value={facultyLoad.PT} onChange={e => setFacultyLoad({...facultyLoad, PT: parseInt(e.target.value)})} />
+                                        <Label htmlFor="pt">Part-Time (PT) (Max: 30)</Label>
+                                        <TextInput id="pt"
+                                                   type="text"
+                                                   inputMode="numeric"
+                                                   min="0"
+                                                   max="30"
+                                                   value={facultyLoad.PT}
+                                                   onKeyDown={(e) => {
+                                                       if (["-", ".", "e", "+"].includes(e.key)) e.preventDefault();
+                                                   }}
+                                                   onChange={(e) => handlePositiveIntegerInput(e.target.value, 30, facultyLoad.PT, (value) => setFacultyLoad({...facultyLoad, PT: value}))}/>
                                     </div>
                                     <Button className="mt-4" onClick={handleSaveFacultyLoad}><HiSave className="mr-2" /> Save Load Configuration</Button>
                                 </div>
@@ -516,16 +560,43 @@ export default function Settings() {
                                 <h3 className="text-lg font-bold mb-4">Prep Limits (Number of Subjects)</h3>
                                 <div className="grid grid-cols-1 gap-6">
                                     <div>
-                                        <Label htmlFor="prep-ft">Full-Time (FT) Max Subjects</Label>
-                                        <TextInput id="prep-ft" type="number" value={prepLimits.FT} onChange={e => setPrepLimits({...prepLimits, FT: parseInt(e.target.value)})} />
+                                        <Label htmlFor="prep-ft">Full-Time (FT) Max Subjects (Max: 10)</Label>
+                                        <TextInput  id="prep-ft"
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    min="0"
+                                                    max="10"
+                                                    value={prepLimits.FT}
+                                                    onKeyDown={(e) => {
+                                                        if (["-", ".", "e", "+"].includes(e.key)) e.preventDefault();
+                                                    }}
+                                                    onChange={(e) => handlePositiveIntegerInput(e.target.value, 10, prepLimits.FT, (value) => setPrepLimits({...prepLimits, FT: value}))}/>
                                     </div>
                                     <div>
-                                        <Label htmlFor="prep-ptfl">Part-Time Full Load (PTFL) Max Subjects</Label>
-                                        <TextInput id="prep-ptfl" type="number" value={prepLimits.PTFL} onChange={e => setPrepLimits({...prepLimits, PTFL: parseInt(e.target.value)})} />
+                                        <Label htmlFor="prep-ptfl">Part-Time Full Load (PTFL) Max Subjects (Max: 10)</Label>
+                                        <TextInput id="prep-ptfl"
+                                                   type="text"
+                                                   inputMode="numeric"
+                                                   min="0"
+                                                   max="10"
+                                                   value={prepLimits.PTFL}
+                                                   onKeyDown={(e) => {
+                                                       if (["-", ".", "e", "+"].includes(e.key)) e.preventDefault();
+                                                   }}
+                                                   onChange={(e) => handlePositiveIntegerInput(e.target.value, 10, prepLimits.PTFL, (value) => setPrepLimits({...prepLimits, PTFL: value}))} />
                                     </div>
                                     <div>
-                                        <Label htmlFor="prep-pt">Part-Time (PT) Max Subjects</Label>
-                                        <TextInput id="prep-pt" type="number" value={prepLimits.PT} onChange={e => setPrepLimits({...prepLimits, PT: parseInt(e.target.value)})} />
+                                        <Label htmlFor="prep-pt">Part-Time (PT) Max Subjects (Max: 10)</Label>
+                                        <TextInput  id="prep-pt"
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    min="0"
+                                                    max="10"
+                                                    value={prepLimits.PT}
+                                                    onKeyDown={(e) => {
+                                                        if (["-", ".", "e", "+"].includes(e.key)) e.preventDefault();
+                                                    }}
+                                                    onChange={(e) => handlePositiveIntegerInput(e.target.value, 10, prepLimits.PT, (value) => setPrepLimits({...prepLimits, PT: value}))}/>
                                     </div>
                                     <Button className="mt-4" onClick={handleSavePrepLimits}><HiSave className="mr-2" /> Save Prep Configuration</Button>
                                 </div>
@@ -536,8 +607,17 @@ export default function Settings() {
                                 <h3 className="text-lg font-bold mb-4">Overloading Parameters</h3>
                                 <div className="space-y-4">
                                     <div>
-                                        <Label htmlFor="overload-max">Maximum Units Above Load Limit</Label>
-                                        <TextInput id="overload-max" type="number" value={overloadMax} onChange={e => setOverloadMax(parseInt(e.target.value))} />
+                                        <Label htmlFor="overload-max">Maximum Units Above Load Limit (Max: 10)</Label>
+                                        <TextInput id="overload-max"
+                                                   type="text"
+                                                   inputMode="numeric"
+                                                   min="0"
+                                                   max="10"
+                                                   value={overloadMax}
+                                                   onKeyDown={(e) => {
+                                                       if (["-", ".", "e", "+"].includes(e.key)) e.preventDefault();
+                                                   }}
+                                                   onChange={(e) => handlePositiveIntegerInput(e.target.value, 10, overloadMax, setOverloadMax)} />
                                         <p className="text-sm text-gray-500 mt-1">Maximum additional units a teacher can take beyond their standard load limit</p>
                                     </div>
                                     <Button onClick={handleSaveOverloadMax}><HiSave className="mr-2" /> Save Overload Configuration</Button>
@@ -552,8 +632,17 @@ export default function Settings() {
                             <h3 className="text-lg font-bold mb-4">Enrollment Constraints</h3>
                             <div className="space-y-4">
                                 <div>
-                                    <Label htmlFor="maxStudents">Max Students per Section</Label>
-                                    <TextInput id="maxStudents" type="number" value={maxStudents} onChange={e => setMaxStudents(parseInt(e.target.value))} />
+                                    <Label htmlFor="maxStudents">Max Students per Section (Max: 50)</Label>
+                                    <TextInput  id="max-students"
+                                                type="text"
+                                                inputMode="numeric"
+                                                min="0"
+                                                max="50"
+                                                value={maxStudents}
+                                                onKeyDown={(e) => {
+                                                    if (["-", ".", "e", "+"].includes(e.key)) e.preventDefault();
+                                                }}
+                                                onChange={(e) => handlePositiveIntegerInput(e.target.value, 50, maxStudents, setMaxStudents)}/>
                                 </div>
                                 <Button onClick={handleSaveMaxStudents}><HiSave className="mr-2" /> Save Constraints</Button>
                             </div>
@@ -613,7 +702,7 @@ export default function Settings() {
 
             <div className="flex justify-between items-center mb-8">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">System Settings</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Configuration</h1>
                     <p className="text-gray-500 dark:text-gray-400 mt-1">Configure global parameters and user access</p>
                 </div>
                 <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-100 dark:border-blue-800">

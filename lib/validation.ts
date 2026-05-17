@@ -21,6 +21,14 @@ export const MAX_LENGTH_MEDIUM = 80;
 
 export const LONG_NAME_LIMIT = 150;
 
+export const MAX_FACULTY_LOAD = 30;
+
+export const MAX_PREP_LIMIT = 10;
+
+export const MAX_OVERLOADING = 10;
+
+export const MAX_STUDENTS = 50;
+
 export function sanitizeVeryShortName(input: string): string {
     return input
         .replace(ALLOWED_CHARS_REGEX, '') // 1. Remove bad characters
@@ -122,4 +130,47 @@ export function numericValueOnly(input: string): string {
     // 3. Return '0' if the string is empty (optional, depending on UX)
     // Otherwise, return the clean string
     return clean === '' ? '' : clean;
+}
+
+export function isStrictPositiveNumber(value: any): boolean {
+
+    // Convert to string for consistent validation
+    const strValue = String(value).trim();
+
+    // Must contain digits only
+    if (!/^\d+$/.test(strValue)) {
+        return false;
+    }
+
+    const num = Number(strValue);
+
+    // Must be greater than 0
+    return num > 0;
+}
+
+/**
+ * Sanitizes input to digits only, removes leading zeros,
+ * and caps the value at a specified maximum boundary.
+ */
+export function clampNumericValue(input: string, maxLimit: number, currentValue: string | number): string {
+    // 1. Remove anything that isn't a digit (0-9)
+    let clean = input.replace(/\D/g, '');
+
+    // 2. Remove leading zeros
+    if (clean.length > 1) {
+        clean = clean.replace(/^0+/, '');
+    }
+
+    // 3. If empty, allow it so the user can backspace/clear the field
+    if (clean === '') return '';
+
+    // 4. Validate against the maximum limit
+    const proposedValue = parseInt(clean, 10);
+    if (proposedValue > maxLimit) {
+        // REJECTION: It exceeds the limit! Ignore the new keystroke
+        // and return the current state unchanged.
+        return String(currentValue);
+    }
+
+    return clean;
 }
