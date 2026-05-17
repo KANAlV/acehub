@@ -43,7 +43,7 @@ export default function Login() {
                             <div className="text-center">
                                 <img src="/achehub-logo.png" alt="Achehub Logo" className="w-16 mb-4 mx-auto" />
                                 <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-                                    Achehub Login Portal
+                                    Acehub Login Portal
                                 </h1>
                                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                                     Please sign in with your organizational account to manage faculty schedules.
