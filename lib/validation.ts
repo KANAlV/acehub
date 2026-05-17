@@ -5,9 +5,13 @@ export const ALLOWED_CHARS_REGEX = /[^a-zA-Z0-9_\-:\/\\\.()\[\] ]/g; // Added sp
 
 export const NON_NUMERIC_REGEX = /[^0-9.]/g;
 
+export const ALPHA_REGEX = /[^a-zA-Z\-]/g;
+
 export const MAX_LENGTH_VERY_SHORT = 8;
 
 export const MAX_LENGTH_SHORT = 10; // Updated to match your requirement
+
+export const MAX_MED_SHORT_LENGTH = 20;
 
 export const MAX_LENGTH = 30;
 
@@ -23,16 +27,46 @@ export function sanitizeVeryShortName(input: string): string {
         .slice(0, MAX_LENGTH_VERY_SHORT); // 2. Enforce length
 }
 
+export function sanitizeTeacherCode(input: string): string {
+    return input
+        .replace(ALPHA_REGEX, '') // 1. Remove bad characters
+        .slice(0, 5); // 2. Enforce length
+}
+
+export function sanitizeSuffix(input: string): string {
+    return input
+        .replace(ALPHA_REGEX, '') // 1. Remove bad characters
+        .slice(0, MAX_LENGTH_VERY_SHORT); // 2. Enforce length
+}
+
 export function sanitizeName(input: string): string {
     return input
         .replace(ALLOWED_CHARS_REGEX, '') // 1. Remove bad characters
         .slice(0, MAX_LENGTH); // 2. Enforce length
 }
 
+export function sanitizeTeacherName(input: string): string {
+    return input
+        .replace(ALPHA_REGEX, '') // 1. Remove bad characters
+        .slice(0, MAX_MED_SHORT_LENGTH); // 2. Enforce length
+}
+
+export function sanitizeMiName(input: string): string {
+    return input
+        .toUpperCase()
+        .replace(/[^A-Z]/g, '') // 1. Remove bad characters
+        .slice(0, 1); // 2. Enforce length
+}
+
 export function sanitizeMediumName(input: string): string {
     return input
         .replace(ALLOWED_CHARS_REGEX, '') // 1. Remove bad characters
         .slice(0, MAX_LENGTH_MEDIUM); // 2. Enforce length
+}
+
+export function pscsSanitization(input: string): string {
+    return input
+        .replace(/[^0-9]/g, '')
 }
 
 export function sanitizeLongName(input: string): string {

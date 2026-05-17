@@ -32,18 +32,67 @@ import {
     getAllTeachersData
 } from "@/services/userService.ts";
 import {VscSave} from "react-icons/vsc";
-import {sanitizeMediumName, sanitizeVeryShortName} from "@/lib/validation.ts";
+import {
+    pscsSanitization,
+    sanitizeMediumName,
+    sanitizeMiName, sanitizeSuffix, sanitizeTeacherCode,
+    sanitizeTeacherName,
+    sanitizeVeryShortName
+} from "@/lib/validation.ts";
 import {IoMdArrowDropdown} from "react-icons/io";
 
 /** --- Helper Components --- **/
-const AvailabilityManager = ({ availability, onUpdate, employmentType }: { availability: any[], onUpdate: (val: any[]) => void, employmentType: string }) => {
+const AvailabilityManager = ({
+                                 availability,
+                                 onUpdate,
+                                 employmentType
+                             }: {
+    availability: any[],
+    onUpdate: (val: any[]) => void,
+    employmentType: string
+}) => {
     // Hidden for Full-Time (FT/PTFL)
     if (employmentType === "FT" || employmentType === "PTFL") return null;
 
     const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    
+
+    // Generate time options from 7:00 AM to 8:00 AM next day (30 min interval)
+    const generateTimeOptions = () => {
+        const times: string[] = [];
+
+        // 7:00 AM to 8:00 PM
+        for (let hour = 7; hour <= 20; hour++) {
+            for (const minute of [0, 30]) {
+                // Stop after exactly 8:00 PM
+                if (hour === 20 && minute > 0) continue;
+
+                const period = hour >= 12 ? "PM" : "AM";
+                const displayHour =
+                    hour % 12 === 0 ? 12 : hour % 12;
+
+                const displayMinute =
+                    minute === 0 ? "00" : "30";
+
+                times.push(
+                    `${displayHour}:${displayMinute} ${period}`
+                );
+            }
+        }
+
+        return times;
+    };
+
+    const timeOptions = generateTimeOptions();
+
     const addSlot = () => {
-        onUpdate([...availability, { day: "Monday", time: "7:30 AM - 5:00 PM" }]);
+        onUpdate([
+            ...availability,
+            {
+                day: "Monday",
+                startTime: "7:00 AM",
+                endTime: "7:30 AM"
+            }
+        ]);
     };
 
     const removeSlot = (index: number) => {
@@ -52,44 +101,134 @@ const AvailabilityManager = ({ availability, onUpdate, employmentType }: { avail
 
     const updateSlot = (index: number, field: string, value: string) => {
         const newSlots = [...availability];
-        newSlots[index] = { ...newSlots[index], [field]: value };
+
+        const updatedSlot = {
+            ...newSlots[index],
+            [field]: value
+        };
+
+        const startIndex = timeOptions.indexOf(updatedSlot.startTime);
+        const endIndex = timeOptions.indexOf(updatedSlot.endTime);
+
+        // Prevent invalid ranges
+        if (startIndex > endIndex) {
+            if (field === "startTime") {
+                updatedSlot.endTime = value;
+            } else if (field === "endTime") {
+                updatedSlot.startTime = value;
+            }
+        }
+
+        newSlots[index] = updatedSlot;
         onUpdate(newSlots);
     };
 
     return (
         <div className="mt-4 border-t pt-4 animate-fade-in">
             <div className="flex justify-between items-center mb-2">
-                <Label className="font-bold text-blue-600 dark:text-blue-400">Availability Slots (Part-Time Only)</Label>
-                <Button size="xs" color="gray" onClick={addSlot}><HiPlus className="mr-1" /> Add</Button>
+                <Label className="font-bold text-blue-600 dark:text-blue-400">
+                    Availability Slots (Part-Time Only)
+                </Label>
+
+                <Button size="xs" color="gray" onClick={addSlot}>
+                    <HiPlus className="mr-1" />
+                    Add
+                </Button>
             </div>
-            <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                {availability.map((slot, idx) => (
-                    <div key={idx} className="flex gap-2 items-center bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-gray-200 dark:border-gray-600">
-                        <Select 
-                            value={slot.day} 
-                            onChange={(e) => updateSlot(idx, 'day', e.target.value)}
-                            className="flex-1"
-                            sizing="sm"
+
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                {availability.map((slot, idx) => {
+                    const startIndex = timeOptions.indexOf(slot.startTime);
+                    const endIndex = timeOptions.indexOf(slot.endTime);
+
+                    return (
+                        <div
+                            key={idx}
+                            className="flex flex-wrap gap-2 items-center bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-gray-200 dark:border-gray-600"
                         >
-                            {days.map(d => <option key={d} value={d}>{d}</option>)}
-                        </Select>
-                        <TextInput 
-                            value={slot.time} 
-                            onChange={(e) => updateSlot(idx, 'time', e.target.value)}
-                            placeholder="e.g. 7:30AM - 5:00PM"
-                            className="flex-1"
-                            sizing="sm"
-                        />
-                        <Button color="failure" size="xs" onClick={() => removeSlot(idx)}><HiOutlineTrash /></Button>
-                    </div>
-                ))}
-                {availability.length === 0 && <p className="text-xs text-gray-500 italic">No availability set.</p>}
+                            {/* Day */}
+                            <Select
+                                value={slot.day}
+                                onChange={(e) =>
+                                    updateSlot(idx, "day", e.target.value)
+                                }
+                                className="flex-1 min-w-22"
+                                sizing="sm"
+                            >
+                                {days.map((d) => (
+                                    <option key={d} value={d}>
+                                        {d}
+                                    </option>
+                                ))}
+                            </Select>
+
+                            {/* Start Time */}
+                            <Select
+                                value={slot.startTime}
+                                onChange={(e) =>
+                                    updateSlot(idx, "startTime", e.target.value)
+                                }
+                                className="flex-1 min-w-21"
+                                sizing="sm"
+                            >
+                                {timeOptions.map((time, i) => (
+                                    <option
+                                        key={`${time}-${i}`}
+                                        value={time}
+                                        disabled={i > endIndex}
+                                    >
+                                        {time}
+                                    </option>
+                                ))}
+                            </Select>
+
+                            <span className="text-sm text-gray-500">to</span>
+
+                            {/* End Time */}
+                            <Select
+                                value={slot.endTime}
+                                onChange={(e) =>
+                                    updateSlot(idx, "endTime", e.target.value)
+                                }
+                                className="flex-1 min-w-21"
+                                sizing="sm"
+                            >
+                                {timeOptions.map((time, i) => (
+                                    <option
+                                        key={`${time}-${i}`}
+                                        value={time}
+                                        disabled={i < startIndex}
+                                    >
+                                        {time}
+                                    </option>
+                                ))}
+                            </Select>
+
+                            {/* Remove */}
+                            <Button
+                                color="failure"
+                                size="xs"
+                                onClick={() => removeSlot(idx)}
+                            >
+                                <HiOutlineTrash />
+                            </Button>
+                        </div>
+                    );
+                })}
+
+                {availability.length === 0 && (
+                    <p className="text-xs text-gray-500 italic">
+                        No availability set.
+                    </p>
+                )}
             </div>
         </div>
     );
 };
 
 export default function TeacherManager() {
+    const typeOptions = ["FT", "PTFL", "PT"];
+
     const [loading, setLoading] = useState(true);
     const [tableLoading, setTableLoading] = useState(false); // table-specific loading for search/pagination
     const [teachers, setTeachers] = useState([]);
@@ -110,7 +249,10 @@ export default function TeacherManager() {
 
     // form useStates
     const [pscsId, setPscsId] = useState("");
-    const [name, setName] = useState("");
+    const [fname, setFname] = useState("");
+    const [sname, setSname] = useState("");
+    const [mi, setMi] = useState("");
+    const [suffix, setSuffix] = useState("");
     const [code, setCode] = useState("");
     const [spec, setSpec] = useState("");
     const [type, setType] = useState("FT");
@@ -129,10 +271,19 @@ export default function TeacherManager() {
     const startItem = ((currentPage - 1) * itemsPerPage) + 1;
     const endItem = Math.min(currentPage * itemsPerPage, rowCount);
 
-    const STATUS_MESSAGES = {
+    const [importStats, setImportStats] = useState({
+        imported: 0,
+        failed: 0,
+        total: 0
+    });
+
+    const [toastMessage, setToastMessage] = useState("");
+
+    const STATUS_MESSAGES: Record<string, string> = {
         "200": "Teacher updated successfully.",
         "201": "Teacher added successfully.",
         "204": "Teacher removed successfully.",
+        "207": "Partial import completed.",
         "400": "Invalid input provided.",
         "409": "Conflict: Code or ID already exists.",
         "500": "Server error. Please try again."
@@ -144,7 +295,9 @@ export default function TeacherManager() {
         if (!teacher) return;
 
         setPscsId(teacher.pscs_id);
-        setName(teacher.name);
+        setFname(teacher.fname);
+        setSname(teacher.sname);
+        setMi(teacher.mi);
         setCode(teacher.teacher_code);
         setSpec(teacher.specialization);
         setType(teacher.employment_type);
@@ -154,7 +307,9 @@ export default function TeacherManager() {
 
     function discardEntry() {
         setPscsId("");
-        setName("");
+        setFname("");
+        setSname("");
+        setMi("");
         setCode("");
         setSpec("");
         setType("FT");
@@ -181,11 +336,11 @@ export default function TeacherManager() {
     const onPageChange = (page: number) => setCurrentPage(page);
 
     async function submitTeacher() {
-        if (!pscsId || !name || !code) return;
+        if (!pscsId || !fname || !sname || !code) return;
         setLoading(true);
         // Clear availability if Full-Time before saving
         const finalAvailability = (type === "FT" || type === "PTFL") ? [] : availability;
-        const stat = await insertTeacher(pscsId, name, code, spec, type, finalAvailability);
+        const stat = await insertTeacher(pscsId, fname, sname, mi, suffix, code, spec, type, finalAvailability);
         setStatusCode(stat);
         setLoading(false);
         setShowToast(true);
@@ -197,10 +352,11 @@ export default function TeacherManager() {
     }
 
     async function updateEntry() {
+        if (!pscsId || !fname || !sname || !code) return;
         setLoading(true);
         // Clear availability if Full-Time before saving
         const finalAvailability = (type === "FT" || type === "FTPT") ? [] : availability;
-        const stat = await updateTeacher(pscsId, name, code, spec, type, finalAvailability);
+        const stat = await updateTeacher(pscsId, fname, sname, mi, suffix, code, spec, type, finalAvailability);
         setStatusCode(stat);
         setLoading(false);
         setShowToast(true);
@@ -230,38 +386,78 @@ export default function TeacherManager() {
             const data = await getAllTeachersData();
             if (!data || data.length === 0) return "404";
 
-            const ExcelJS = (await import('exceljs')).default;
-            const { saveAs } = await import('file-saver');
+            const ExcelJS = (await import("exceljs")).default;
+            const { saveAs } = await import("file-saver");
 
             const workbook = new ExcelJS.Workbook();
-            const worksheet = workbook.addWorksheet('Teachers List');
+            const worksheet = workbook.addWorksheet("Teachers List");
 
             worksheet.columns = [
-                { header: 'PSCS ID', key: 'pscs_id', width: 15 },
-                { header: 'Full Name', key: 'name', width: 35 },
-                { header: 'Code', key: 'teacher_code', width: 10 },
-                { header: 'Specialization', key: 'specialization', width: 20 },
-                { header: 'Employment Type', key: 'employment_type', width: 20 },
-                { header: 'Availability', key: 'availability_str', width: 50 }
+                { header: "PSCS ID", key: "pscs_id", width: 15 },
+                { header: "Surname", key: "sname", width: 15 },
+                { header: "First Name", key: "fname", width: 20 },
+                { header: "Mi", key: "mi", width: 5 },
+                { header: "Suffix", key: "suffix", width: 10 },
+                { header: "Code", key: "teacher_code", width: 10 },
+                { header: "Specialization", key: "specialization", width: 20 },
+                { header: "Employment Type", key: "employment_type", width: 20 },
+                { header: 'Availability (Day: Time | Day: Time)', key: 'availability_str', width: 50 }
             ];
 
             const headerRow = worksheet.getRow(1);
-            headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
-            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2C3E50' } };
 
-            const rows = data.map(t => ({
+            headerRow.font = {
+                bold: true,
+                color: { argb: "FFFFFF" }
+            };
+
+            headerRow.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "2C3E50" }
+            };
+
+            const rows = data.map((t) => ({
                 ...t,
-                availability_str: (t.employment_type === "PT" || t.employment_type === "PTFL") 
-                    ? (t.availability || []).map((s: any) => `${s.day}: ${s.time}`).join(' | ')
-                    : "NO SELECTION"
+                availability_str:
+                    t.employment_type === "PT"
+                        ? (t.availability || [])
+                            .map(
+                                (s: any) =>
+                                    `${s.day}: ${s.startTime} - ${s.endTime}`
+                            )
+                            .join(" | ")
+                        : "[Mon - Fri] 7:00 AM - 8:00 PM"
             }));
 
             worksheet.addRows(rows);
-            worksheet.autoFilter = 'A1:F1';
+
+            // Dropdown validation
+
+            for (let i = 2; i <= 100; i++) {
+                worksheet.getCell(`H${i}`).dataValidation = {
+                    type: "list",
+                    allowBlank: true,
+                    formulae: [`"${typeOptions.join(",")}"`],
+                    showErrorMessage: true,
+                    errorTitle: "Invalid Teacher Type",
+                    error: "Please select a type from the dropdown list."
+                };
+            }
+
+            worksheet.autoFilter = "A1:H1";
 
             const buffer = await workbook.xlsx.writeBuffer();
-            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            saveAs(blob, `Teachers_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+            const blob = new Blob([buffer], {
+                type:
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            });
+
+            saveAs(
+                blob,
+                `Teachers_Export_${new Date().toISOString().split("T")[0]}.xlsx`
+            );
 
             return "200";
         } catch (error) {
@@ -280,7 +476,10 @@ export default function TeacherManager() {
 
             worksheet.columns = [
                 { header: 'PSCS ID', key: 'id', width: 15 },
-                { header: 'Full Name', key: 'name', width: 35 },
+                { header: 'Surname', key: 'sname', width: 15 },
+                { header: 'First Name', key: 'fname', width: 20 },
+                { header: 'Mi', key: 'mi', width: 5 },
+                { header: 'Suffix', key: 'suffix', width: 10 },
                 { header: 'Code', key: 'code', width: 10 },
                 { header: 'Specialization', key: 'spec', width: 20 },
                 { header: 'Employment Type', key: 'type', width: 20 },
@@ -291,32 +490,43 @@ export default function TeacherManager() {
             headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
             headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '16A34A' } };
 
+            // Dropdown validation for Employment Type column (H)
+            const typeOption = ["FT", "PTFL", "PT"];
+
+            for (let i = 2; i <= 100; i++) {
+                worksheet.getCell(`H${i}`).dataValidation = {
+                    type: "list",
+                    allowBlank: true,
+                    formulae: [`"${typeOption.join(",")}"`],
+                    showErrorMessage: true,
+                    errorTitle: "Invalid Teacher Type",
+                    error: "Please select a type from the dropdown list."
+                };
+            }
+
             worksheet.addRow({ 
                 id: '########',
-                name: 'Ivan Winzle S. Diocampo',
+                sname: 'Diocampo',
+                fname: 'Ivan Winzle',
+                mi: 'S',
+                suffix: '',
                 code: 'IWD',
                 spec: 'Information Technology',
                 type: 'PT', 
-                availability: 'Monday: 5:00 PM - 8:00 PM | Saturday: 7:30 AM - 5:00 PM' 
+                availability: 'Monday: 5:00 PM - 8:00 PM | Saturday: 7:30 AM - 5:00 PM'
             });
 
             worksheet.addRow({
                 id: '########',
-                name: 'James Murfhy C. Reurreccion',
+                sname: 'Reurreccion',
+                fname: 'James Murfhy',
+                mi: 'C',
+                suffix: '',
                 code: 'JMR',
                 spec: 'Business and Management',
                 type: 'FT',
-                availability: 'NO SELECTION'
+                availability: '[Mon - Fri] 7:00 AM - 8:00 PM'
             });
-
-            const typeOptions = ['FT', 'PTFL', 'PT', ''];
-            for (let i = 2; i <= 100; i++) {
-                worksheet.getCell(`E${i}`).dataValidation = {
-                    type: 'list',
-                    allowBlank: true,
-                    formulae: [`"${typeOptions.join(',')}"`]
-                };
-            }
 
             const buffer = await workbook.xlsx.writeBuffer();
             const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -333,36 +543,105 @@ export default function TeacherManager() {
         if (!file) return;
 
         setLoading(true);
+
         try {
-            const ExcelJS = (await import('exceljs')).default;
+            const ExcelJS = (await import("exceljs")).default;
+
             const workbook = new ExcelJS.Workbook();
             await workbook.xlsx.load(await file.arrayBuffer());
+
             const worksheet = workbook.getWorksheet(1);
-            
+
+            if (!worksheet) {
+                setStatusCode("400");
+                return;
+            }
+
             const teachersToImport: any[] = [];
-            worksheet?.eachRow((row, rowNumber) => {
-                if (rowNumber > 1) {
-                    const id = row.getCell(1).value?.toString().trim();
-                    const name = row.getCell(2).value?.toString().trim();
-                    const code = row.getCell(3).value?.toString().trim();
-                    const spec = row.getCell(4).value?.toString().trim() || "";
-                    const type = row.getCell(5).value?.toString().trim() || "FT";
-                    const availStr = row.getCell(6).value?.toString().trim() || "";
 
-                    // Skip rows starting with # (Template format)
-                    if (id && id.startsWith('#')) return;
+            worksheet.eachRow((row, rowNumber) => {
+                // Skip header row
+                if (rowNumber === 1) return;
 
-                    if (id && name && code) {
-                        let availability = [];
-                        if (type === "PT" || type === "PTFL") {
-                            availability = availStr.split('|').filter(s => s.includes(':')).map(s => {
-                                const [day, ...timeParts] = s.trim().split(':');
-                                return { day: day.trim(), time: timeParts.join(':').trim() };
-                            });
-                        }
-                        teachersToImport.push({ id, name, code, spec, type, availability });
-                    }
+                const id = row.getCell(1).value?.toString().trim() || "";
+                const sname = row.getCell(2).value?.toString().trim() || "";
+                const fname = row.getCell(3).value?.toString().trim() || "";
+                const mi = row.getCell(4).value?.toString().trim() || "";
+                const suffix = row.getCell(5).value?.toString().trim() || "";
+                const code = row.getCell(6).value?.toString().trim() || "";
+                const spec = row.getCell(7).value?.toString().trim() || "";
+                const type = row.getCell(8).value?.toString().trim() || "FT";
+                const availStr = row.getCell(9).value?.toString().trim() || "";
+
+                // Skip empty rows
+                if (
+                    !id &&
+                    !sname &&
+                    !fname &&
+                    !code
+                ) {
+                    return;
                 }
+
+                // Skip template/example rows
+                if (id.startsWith("#")) return;
+
+                // Required fields
+                if (!id || !fname || !sname || !code) {
+                    return;
+                }
+
+                // Parse availability
+                let availability: any[] = [];
+
+                if (type === "PT" || type === "PTFL") {
+                    availability = availStr
+                        .split("|")
+                        .map(s => s.trim())
+                        .filter(Boolean)
+                        .map(slot => {
+                            /**
+                             * Expected format:
+                             * Monday: 7:00 AM - 5:00 PM
+                             */
+                            const firstColon = slot.indexOf(":");
+
+                            if (firstColon === -1) return null;
+
+                            const day = slot.substring(0, firstColon).trim();
+
+                            const timePart = slot
+                                .substring(firstColon + 1)
+                                .trim();
+
+                            const [startTime, endTime] = timePart
+                                .split("-")
+                                .map(t => t.trim());
+
+                            if (!day || !startTime || !endTime) {
+                                return null;
+                            }
+
+                            return {
+                                day,
+                                startTime,
+                                endTime
+                            };
+                        })
+                        .filter(Boolean);
+                }
+
+                teachersToImport.push({
+                    id,
+                    sname,
+                    fname,
+                    mi,
+                    suffix,
+                    code,
+                    spec,
+                    type,
+                    availability
+                });
             });
 
             if (teachersToImport.length === 0) {
@@ -371,21 +650,69 @@ export default function TeacherManager() {
             }
 
             let successCount = 0;
+            let failedCount = 0;
+
             for (const t of teachersToImport) {
-                const res = await insertTeacher(t.id, t.name, t.code, t.spec, t.type, t.availability);
-                if (res === "201") successCount++;
+                try {
+                    const res = await insertTeacher(
+                        t.id,
+                        t.fname,
+                        t.sname,
+                        t.mi,
+                        t.suffix,
+                        t.code,
+                        t.spec,
+                        t.type,
+                        t.availability
+                    );
+
+                    if (res === "201") {
+                        successCount++;
+                    } else {
+                        failedCount++;
+                    }
+                } catch (err) {
+                    failedCount++;
+                    console.error(err);
+                }
             }
 
-            setStatusCode(successCount > 0 ? "201" : "409");
+            setImportStats({
+                imported: successCount,
+                failed: failedCount,
+                total: teachersToImport.length
+            });
+
+            if (successCount > 0 && failedCount === 0) {
+                setStatusCode("201");
+                setToastMessage(
+                    `Successfully imported ${successCount} teacher(s).`
+                );
+            } else if (successCount > 0 && failedCount > 0) {
+                setStatusCode("207");
+                setToastMessage(
+                    `Imported ${successCount} teacher(s), failed ${failedCount}.`
+                );
+            } else {
+                setStatusCode("409");
+                setToastMessage(
+                    `Failed to import ${failedCount} teacher(s).`
+                );
+            }
+
             await loadInitialData();
             await loadRowCount();
+
         } catch (error) {
             console.error(error);
             setStatusCode("500");
         } finally {
             setLoading(false);
             setShowToast(true);
-            if (e.target) e.target.value = "";
+
+            if (e.target) {
+                e.target.value = "";
+            }
         }
     }
 
@@ -430,7 +757,13 @@ export default function TeacherManager() {
     return (
         <div className="p-8 h-full w-full overflow-x-auto font-sans">
             <div className={`${loading? "":"hidden"} fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm`}>
-                <Spinner size="xl" />
+                {/* The Spinner Container */}
+                <div className="flex flex-col items-center gap-4">
+                    <Spinner size="xl" />
+                    <p className="text-white font-semibold text-lg drop-shadow-md">
+                        Syncing Teachers...
+                    </p>
+                </div>
             </div>
 
             <div className="flex items-center justify-between">
@@ -494,18 +827,19 @@ export default function TeacherManager() {
                             teachers.map((t) => (
                                 <TableRow key={t.pscs_id}>
                                     <TableCell className="font-bold">{t.pscs_id}</TableCell>
-                                    <TableCell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">{t.name}</TableCell>
+                                    <TableCell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
+                                        {t.fname + (t.mi === "" ? "" : " " + t.mi + ".") + " " + t.sname + (t.suffix === "" ? "" : " " + t.suffix)}</TableCell>
                                     <TableCell>{t.teacher_code}</TableCell>
                                     <TableCell>{t.specialization}</TableCell>
                                     <TableCell>{t.employment_type}</TableCell>
                                     <TableCell>
                                         <div className="text-xs space-y-1">
-                                            {(t.employment_type === "PT" || t.employment_type === "PTFL") ? (
+                                            {(t.employment_type === "PT") ? (
                                                 (t.availability || []).map((s, i) => (
-                                                    <div key={i} className="whitespace-nowrap bg-blue-50 dark:bg-blue-900/20 px-1 rounded">{s.day}: {s.time}</div>
+                                                    <div key={i} className="whitespace-nowrap bg-blue-50 dark:bg-blue-900/20 px-1 rounded">{s.day}: {s.startTime + " - " + s.endTime}</div>
                                                 ))
                                             ) : (
-                                                <span className="text-gray-400 italic">NO SELECTION</span>
+                                                <span className="text-gray-400 italic">[Mon - Fri] 7:00 AM - 8:00 PM</span>
                                             )}
                                             {(t.employment_type === "PT") && (t.availability || []).length === 0 && (
                                                 <span className="text-yellow-500 italic font-medium">Pending Entry</span>
@@ -539,16 +873,32 @@ export default function TeacherManager() {
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <Label>PSCS ID</Label>
-                                <TextInput value={pscsId} onChange={e => { setPscsId(e.target.value); setActiveChanges(true); }} placeholder="0001" />
+                                <TextInput value={pscsId} onChange={e => { setPscsId(pscsSanitization(e.target.value)); setActiveChanges(true); }} placeholder="0001" />
                             </div>
                             <div>
                                 <Label>Teacher Code</Label>
-                                <TextInput value={code} onChange={e => { setCode(sanitizeVeryShortName(e.target.value)); setActiveChanges(true); }} placeholder="ABC" />
+                                <TextInput value={code} onChange={e => { setCode(sanitizeTeacherCode(e.target.value)); setActiveChanges(true); }} placeholder="JFD" />
                             </div>
                         </div>
-                        <div>
-                            <Label>Full Name</Label>
-                            <TextInput value={name} onChange={e => { setName(sanitizeMediumName(e.target.value)); setActiveChanges(true); }} placeholder="John Doe" />
+                        <div className={"grid grid-cols-4 gap-4"}>
+                            <div className={"col-span-3"}>
+                                <Label>First Name</Label>
+                                <TextInput value={fname} onChange={e => { setFname(sanitizeTeacherName(e.target.value)); setActiveChanges(true); }} placeholder="John" />
+                            </div>
+                            <div className={"col-span-1"}>
+                                <Label>M.I.</Label>
+                                <TextInput value={mi} onChange={e => { setMi(sanitizeMiName(e.target.value)); setActiveChanges(true); }} placeholder="F" />
+                            </div>
+                        </div>
+                        <div className={"grid grid-cols-4 gap-4"}>
+                            <div className={"col-span-3"}>
+                                <Label>Last Name</Label>
+                                <TextInput value={sname} onChange={e => { setSname(sanitizeTeacherName(e.target.value)); setActiveChanges(true); }} placeholder="Doe" />
+                            </div>
+                            <div>
+                                <Label>Suffix</Label>
+                                <TextInput value={suffix} onChange={e => { setSuffix(sanitizeSuffix(e.target.value)); setActiveChanges(true); }} placeholder="Jr" />
+                            </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
@@ -576,7 +926,7 @@ export default function TeacherManager() {
 
                 {/* Edit Modal */}
                 <Modal show={editModal} onClose={() => setEditModal(false)} size="md">
-                    <ModalHeader>Editing: {name}</ModalHeader>
+                    <ModalHeader>Editing: {fname + (mi === "" ? "" : " " + mi + ".") + " " + sname + (suffix === "" ? "" : " " + suffix)}</ModalHeader>
                     <ModalBody className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div>
@@ -585,12 +935,28 @@ export default function TeacherManager() {
                             </div>
                             <div>
                                 <Label>Teacher Code</Label>
-                                <TextInput value={code} onChange={e => { setCode(sanitizeVeryShortName(e.target.value)); setActiveChanges(true); }} />
+                                <TextInput value={code} onChange={e => { setCode(sanitizeTeacherCode(e.target.value)); setActiveChanges(true); }} />
                             </div>
                         </div>
-                        <div>
-                            <Label>Full Name</Label>
-                            <TextInput value={name} onChange={e => { setName(sanitizeMediumName(e.target.value)); setActiveChanges(true); }} />
+                        <div className={"grid grid-cols-4 gap-4"}>
+                            <div className={"col-span-3"}>
+                                <Label>First Name</Label>
+                                <TextInput value={fname} onChange={e => { setFname(sanitizeTeacherName(e.target.value)); setActiveChanges(true); }} />
+                            </div>
+                            <div>
+                                <Label>M.I.</Label>
+                                <TextInput value={mi} placeholder={"A"} onChange={e => { setMi(sanitizeMiName(e.target.value)); setActiveChanges(true); }} />
+                            </div>
+                        </div>
+                        <div className={"grid grid-cols-4 gap-4"}>
+                            <div className={"col-span-3"}>
+                                <Label>Last Name</Label>
+                                <TextInput value={sname} onChange={e => { setSname(sanitizeTeacherName(e.target.value)); setActiveChanges(true); }} />
+                            </div>
+                            <div>
+                                <Label>Suffix</Label>
+                                <TextInput value={suffix} placeholder={"Jr"} onChange={e => { setSuffix(sanitizeSuffix(e.target.value)); setActiveChanges(true); }} />
+                            </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
@@ -609,7 +975,7 @@ export default function TeacherManager() {
                         <AvailabilityManager availability={availability} onUpdate={(v) => { setAvailability(v); setActiveChanges(true); }} employmentType={type} />
                     </ModalBody>
                     <ModalFooter>
-                        <Button color="failure" onClick={() => setOpenWarningModal(true)}><HiOutlineTrash className="size-5" /></Button>
+                        <Button color="red" onClick={() => setOpenWarningModal(true)}><HiOutlineTrash className="size-5" /></Button>
                         <div className="flex-1 flex justify-end space-x-2">
                             <Button color="alternative" onClick={activeChanges ? () => setOpenWarningModal(true) : discardEntry}>
                                 {activeChanges ? "Discard" : "Cancel"}
@@ -638,7 +1004,7 @@ export default function TeacherManager() {
                             {statusCode.startsWith('2') ? <HiCheck className="h-5 w-5" /> : <HiExclamation className="h-5 w-5" />}
                         </div>
                         <div className="ml-3 flex-1">
-                            <div className="text-sm font-normal">{STATUS_MESSAGES[statusCode] || "Operation complete"}</div>
+                            <div className="text-sm font-normal">{toastMessage || STATUS_MESSAGES[statusCode] || "Operation complete"}</div>
                             <Progress progress={progress} size="sm" className="mt-2" color={statusCode.startsWith('2') ? "green" : "red"} />
                         </div>
                         <ToastToggle onDismiss={() => {

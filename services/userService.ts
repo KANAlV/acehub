@@ -627,11 +627,14 @@ export async function fetchTeachersLoadCount(scheduleId: string, search = "", ty
 }
 
 
-export async function insertTeacher(id: string, name: string, code: string, spec: string, type: string, availability: any[]) {
+export async function insertTeacher(id: string, fname: string, sname: string, mi: string, suffix: string, code: string, spec: string, type: string, availability: any[]) {
     try {
         await sql`SELECT create_teacher(
             ${id}, 
-            ${name}, 
+            ${fname},
+            ${sname},
+            ${mi},
+            ${suffix},
             ${code}, 
             ${spec}, 
             ${type}, 
@@ -641,15 +644,24 @@ export async function insertTeacher(id: string, name: string, code: string, spec
         return "201";
     } catch (error) {
         console.error(`[DB_ERROR]: Failed to create teacher:`, error);
+
+        // Duplicate key
+        if (error.code === "23505") {
+            return "409";
+        }
+
         return "500";
     }
 }
 
-export async function updateTeacher(id: string, name: string, code: string, spec: string, type: string, availability: any[]) {
+export async function updateTeacher(id: string, fname: string, sname: string, mi: string, suffix: string, code: string, spec: string, type: string, availability: any[]) {
     try {
         await sql`SELECT update_teacher(
-            ${id}, 
-            ${name}, 
+            ${id},
+            ${fname},
+            ${sname},
+            ${mi},
+            ${suffix},
             ${code}, 
             ${spec}, 
             ${type}, 
