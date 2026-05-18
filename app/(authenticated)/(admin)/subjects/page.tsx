@@ -509,7 +509,7 @@ export default function SubjectsManager() {
             </div>
 
             <div className="flex items-center justify-between">
-                <h1 className="mb-4 font-bold text-2xl">Manage Subjects:</h1>
+                <h1 className="mb-4 font-bold text-2xl">Manage Subjects</h1>
                 <div className="flex space-x-3">
                     <Dropdown color="alternative" label="Actions" dismissOnClick={false}>
                         <DropdownItem onClick={() => downloadImportTemplate()}>Get Import Template</DropdownItem>
@@ -584,7 +584,7 @@ export default function SubjectsManager() {
                 <ModalBody className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <Label htmlFor="curVersion">Curriculum Version (Optional)</Label>
+                            <Label htmlFor="curVersion">Curriculum Version</Label>
                             <TextInput id="curVersion" placeholder="e.g. BSIT-24-01" value={curriculumnVersionVal} onChange={(e) => { setCurriculumnVersionVal(e.target.value); setActiveChanges(true); }} />
                         </div>
                         <div>
@@ -608,7 +608,7 @@ export default function SubjectsManager() {
                                 <option value="4">4th Year</option>
                             </Select>
                         </div>
-                        <div>
+                        <div hidden={yearVal === "11" || yearVal === "12"}>
                             <Label htmlFor="term">Term/Semester</Label>
                             <Select id="term"
                                     value={termVal}
@@ -689,7 +689,7 @@ export default function SubjectsManager() {
                                 <option value="4">4th Year</option>
                             </Select>
                         </div>
-                        <div>
+                        <div hidden={yearVal === "11" || yearVal === "12"}>
                             <Label>Term/Semester</Label>
                             <Select value={termVal}
                                     disabled={yearVal === "11" || yearVal === "12"}

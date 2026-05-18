@@ -35,7 +35,7 @@ import {VscSave} from "react-icons/vsc";
 import {
     pscsSanitization,
     sanitizeMediumName,
-    sanitizeMiName, sanitizeSuffix, sanitizeTeacherCode,
+    sanitizeMiName, sanitizeSuffix, sanitizeTeacherCode, sanitizeTeacherId,
     sanitizeTeacherName,
     sanitizeVeryShortName
 } from "@/lib/validation.ts";
@@ -249,6 +249,7 @@ export default function TeacherManager() {
 
     // form useStates
     const [pscsId, setPscsId] = useState("");
+    const [teacherId, setTeacherId] = useState("");
     const [fname, setFname] = useState("");
     const [sname, setSname] = useState("");
     const [mi, setMi] = useState("");
@@ -295,6 +296,7 @@ export default function TeacherManager() {
         if (!teacher) return;
 
         setPscsId(teacher.pscs_id);
+        setTeacherId(teacher.teacher_id);
         setFname(teacher.fname);
         setSname(teacher.sname);
         setMi(teacher.mi);
@@ -307,6 +309,7 @@ export default function TeacherManager() {
 
     function discardEntry() {
         setPscsId("");
+        setTeacherId("");
         setFname("");
         setSname("");
         setMi("");
@@ -340,7 +343,7 @@ export default function TeacherManager() {
         setLoading(true);
         // Clear availability if Full-Time before saving
         const finalAvailability = (type === "FT" || type === "PTFL") ? [] : availability;
-        const stat = await insertTeacher(pscsId, fname, sname, mi, suffix, code, spec, type, finalAvailability);
+        const stat = await insertTeacher(pscsId, teacherId, fname, sname, mi, suffix, code, spec, type, finalAvailability);
         setStatusCode(stat);
         setLoading(false);
         setShowToast(true);
@@ -356,7 +359,7 @@ export default function TeacherManager() {
         setLoading(true);
         // Clear availability if Full-Time before saving
         const finalAvailability = (type === "FT" || type === "FTPT") ? [] : availability;
-        const stat = await updateTeacher(pscsId, fname, sname, mi, suffix, code, spec, type, finalAvailability);
+        const stat = await updateTeacher(pscsId, teacherId, fname, sname, mi, suffix, code, spec, type, finalAvailability);
         setStatusCode(stat);
         setLoading(false);
         setShowToast(true);
@@ -394,6 +397,7 @@ export default function TeacherManager() {
 
             worksheet.columns = [
                 { header: "PSCS ID", key: "pscs_id", width: 15 },
+                { header: "TEACHER ID", key: "teacher_id", width: 15 },
                 { header: "Surname", key: "sname", width: 15 },
                 { header: "First Name", key: "fname", width: 20 },
                 { header: "Mi", key: "mi", width: 5 },
@@ -435,7 +439,7 @@ export default function TeacherManager() {
             // Dropdown validation
 
             for (let i = 2; i <= 100; i++) {
-                worksheet.getCell(`H${i}`).dataValidation = {
+                worksheet.getCell(`I${i}`).dataValidation = {
                     type: "list",
                     allowBlank: true,
                     formulae: [`"${typeOptions.join(",")}"`],
@@ -445,7 +449,7 @@ export default function TeacherManager() {
                 };
             }
 
-            worksheet.autoFilter = "A1:H1";
+            worksheet.autoFilter = "A1:I1";
 
             const buffer = await workbook.xlsx.writeBuffer();
 
@@ -476,6 +480,7 @@ export default function TeacherManager() {
 
             worksheet.columns = [
                 { header: 'PSCS ID', key: 'id', width: 15 },
+                { header: 'TEACHER ID', key: 'teacher_id', width: 15 },
                 { header: 'Surname', key: 'sname', width: 15 },
                 { header: 'First Name', key: 'fname', width: 20 },
                 { header: 'Mi', key: 'mi', width: 5 },
@@ -494,7 +499,7 @@ export default function TeacherManager() {
             const typeOption = ["FT", "PTFL", "PT"];
 
             for (let i = 2; i <= 100; i++) {
-                worksheet.getCell(`H${i}`).dataValidation = {
+                worksheet.getCell(`I${i}`).dataValidation = {
                     type: "list",
                     allowBlank: true,
                     formulae: [`"${typeOption.join(",")}"`],
@@ -506,6 +511,7 @@ export default function TeacherManager() {
 
             worksheet.addRow({ 
                 id: '########',
+                teacher_id: '########',
                 sname: 'Diocampo',
                 fname: 'Ivan Winzle',
                 mi: 'S',
@@ -518,6 +524,7 @@ export default function TeacherManager() {
 
             worksheet.addRow({
                 id: '########',
+                teacher_id: '########',
                 sname: 'Reurreccion',
                 fname: 'James Murfhy',
                 mi: 'C',
@@ -527,6 +534,8 @@ export default function TeacherManager() {
                 type: 'FT',
                 availability: '[Mon - Fri] 7:00 AM - 8:00 PM'
             });
+
+            worksheet.autoFilter = "A1:I1";
 
             const buffer = await workbook.xlsx.writeBuffer();
             const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -564,14 +573,15 @@ export default function TeacherManager() {
                 if (rowNumber === 1) return;
 
                 const id = row.getCell(1).value?.toString().trim() || "";
-                const sname = row.getCell(2).value?.toString().trim() || "";
-                const fname = row.getCell(3).value?.toString().trim() || "";
-                const mi = row.getCell(4).value?.toString().trim() || "";
-                const suffix = row.getCell(5).value?.toString().trim() || "";
-                const code = row.getCell(6).value?.toString().trim() || "";
-                const spec = row.getCell(7).value?.toString().trim() || "";
-                const type = row.getCell(8).value?.toString().trim() || "FT";
-                const availStr = row.getCell(9).value?.toString().trim() || "";
+                const teacher_id = row.getCell(2).value?.toString().trim() || "";
+                const sname = row.getCell(3).value?.toString().trim() || "";
+                const fname = row.getCell(4).value?.toString().trim() || "";
+                const mi = row.getCell(5).value?.toString().trim() || "";
+                const suffix = row.getCell(6).value?.toString().trim() || "";
+                const code = row.getCell(7).value?.toString().trim() || "";
+                const spec = row.getCell(8).value?.toString().trim() || "";
+                const type = row.getCell(9).value?.toString().trim() || "FT";
+                const availStr = row.getCell(10).value?.toString().trim() || "";
 
                 // Skip empty rows
                 if (
@@ -633,6 +643,7 @@ export default function TeacherManager() {
 
                 teachersToImport.push({
                     id,
+                    teacher_id,
                     sname,
                     fname,
                     mi,
@@ -656,6 +667,7 @@ export default function TeacherManager() {
                 try {
                     const res = await insertTeacher(
                         t.id,
+                        t.teacher_id,
                         t.fname,
                         t.sname,
                         t.mi,
@@ -767,7 +779,7 @@ export default function TeacherManager() {
             </div>
 
             <div className="flex items-center justify-between">
-                <h1 className="mb-4 font-bold text-2xl">Manage Teachers:</h1>
+                <h1 className="mb-4 font-bold text-2xl">Manage Teachers</h1>
                 <div className="flex space-x-3">
                     <Dropdown color={"alternative"} label={"Actions"} dismissOnClick={false}>
                         <DropdownItem onClick={() => downloadImportTemplate()}>Get Import Template</DropdownItem>
@@ -826,7 +838,7 @@ export default function TeacherManager() {
                         {teachers.length > 0 ? (
                             teachers.map((t) => (
                                 <TableRow key={t.pscs_id}>
-                                    <TableCell className="font-bold">{t.pscs_id}</TableCell>
+                                    <TableCell className="font-bold">{t.teacher_id}</TableCell>
                                     <TableCell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
                                         {t.fname + (t.mi === "" ? "" : " " + t.mi + ".") + " " + t.sname + (t.suffix === "" ? "" : " " + t.suffix)}</TableCell>
                                     <TableCell>{t.teacher_code}</TableCell>
@@ -876,8 +888,8 @@ export default function TeacherManager() {
                                 <TextInput value={pscsId} onChange={e => { setPscsId(pscsSanitization(e.target.value)); setActiveChanges(true); }} placeholder="0001" />
                             </div>
                             <div>
-                                <Label>Teacher Code</Label>
-                                <TextInput value={code} onChange={e => { setCode(sanitizeTeacherCode(e.target.value)); setActiveChanges(true); }} placeholder="JFD" />
+                                <Label>Teacher ID</Label>
+                                <TextInput value={teacherId} onChange={e => { setTeacherId(sanitizeTeacherId(e.target.value)); setActiveChanges(true); }} placeholder="A1B2C3" />
                             </div>
                         </div>
                         <div className={"grid grid-cols-4 gap-4"}>
@@ -899,6 +911,10 @@ export default function TeacherManager() {
                                 <Label>Suffix</Label>
                                 <TextInput value={suffix} onChange={e => { setSuffix(sanitizeSuffix(e.target.value)); setActiveChanges(true); }} placeholder="Jr" />
                             </div>
+                        </div>
+                        <div>
+                            <Label>Teacher Code</Label>
+                            <TextInput value={code} onChange={e => { setCode(sanitizeTeacherCode(e.target.value)); setActiveChanges(true); }} placeholder="JFD" />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
@@ -926,12 +942,13 @@ export default function TeacherManager() {
 
                 {/* Edit Modal */}
                 <Modal show={editModal} onClose={() => setEditModal(false)} size="md">
-                    <ModalHeader>Editing: {fname + (mi === "" ? "" : " " + mi + ".") + " " + sname + (suffix === "" ? "" : " " + suffix)}</ModalHeader>
+                    <ModalHeader>Editing: {teacherId}</ModalHeader>
                     <ModalBody className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <Label>PSCS ID (Read-only)</Label>
-                                <TextInput value={pscsId} readOnly disabled />
+                                <Label>PSCS ID</Label>
+                                <div className={"py-1.5 font-bold"}>{pscsId}</div>
+                                <TextInput value={pscsId} readOnly disabled hidden/>
                             </div>
                             <div>
                                 <Label>Teacher Code</Label>

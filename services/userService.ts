@@ -63,7 +63,7 @@ export async function setDisplay(id: string) {
         return { success: true };
     } catch (error) {
         console.error("[DB_ERROR]: Failed to set dashboard_display:", error);
-        return { error: "Failed to update settings" };
+        return { error: "Failed to update configuration" };
     }
 }
 
@@ -89,7 +89,7 @@ export async function fetchSystemSettings() {
             [row.key]: row.value
         }), {});
     } catch (error) {
-        console.error("[DB_ERROR]: Failed to fetch settings:", error);
+        console.error("[DB_ERROR]: Failed to fetch configuration:", error);
         return {};
     }
 }
@@ -97,7 +97,7 @@ export async function fetchSystemSettings() {
 export async function updateSystemSetting(key: string, value: any) {
     try {
         await sql`SELECT upsert_system_setting(${key}, ${value as any}::jsonb)`;
-        revalidatePath('/settings');
+        revalidatePath('/configuration');
         return "200";
     } catch (error) {
         console.error(`[DB_ERROR]: Failed to update setting ${key}:`, error);
@@ -117,7 +117,7 @@ export async function fetchPresets() {
 export async function savePreset(name: string, data: any) {
     try {
         await sql`SELECT upsert_settings_preset(${name}, ${data as any}::jsonb)`;
-        revalidatePath('/settings');
+        revalidatePath('/configuration');
         return "201";
     } catch (error) {
         console.error("[DB_ERROR]: Failed to save preset:", error);
@@ -128,7 +128,7 @@ export async function savePreset(name: string, data: any) {
 export async function deletePreset(name: string) {
     try {
         await sql`SELECT delete_settings_preset(${name})`;
-        revalidatePath('/settings');
+        revalidatePath('/configuration');
         return "204";
     } catch (error) {
         console.error("[DB_ERROR]: Failed to delete preset:", error);
@@ -150,7 +150,7 @@ export async function fetchBreakPeriods() {
 export async function insertBreakPeriod(day: string, start: string, end: string, desc: string) {
     try {
         await sql`SELECT create_break_period(${day}, ${start}, ${end}, ${desc})`;
-        revalidatePath('/settings');
+        revalidatePath('/configuration');
         return "201";
     } catch (error) {
         console.error("[DB_ERROR]: Failed to insert break:", error);
@@ -161,7 +161,7 @@ export async function insertBreakPeriod(day: string, start: string, end: string,
 export async function updateBreakPeriod(id: number, day: string, start: string, end: string, desc: string) {
     try {
         await sql`SELECT update_break_period(${id}, ${day}, ${start}, ${end}, ${desc})`;
-        revalidatePath('/settings');
+        revalidatePath('/configuration');
         return "200";
     } catch (error) {
         console.error("[DB_ERROR]: Failed to update break:", error);
@@ -172,7 +172,7 @@ export async function updateBreakPeriod(id: number, day: string, start: string, 
 export async function deleteBreakPeriod(id: number) {
     try {
         await sql`SELECT delete_break_period(${id})`;
-        revalidatePath('/settings');
+        revalidatePath('/configuration');
         return "204";
     } catch (error) {
         console.error("[DB_ERROR]: Failed to delete break:", error);
@@ -201,7 +201,7 @@ export async function truncateTables(selectedTables: {
                 ${selectedTables.users}
             )
         `;
-        revalidatePath('/settings');
+        revalidatePath('/configuration');
         return result;
     } catch (error) {
         console.error("[DB_ERROR]: Failed to truncate tables:", error);
@@ -276,7 +276,7 @@ export async function fetchAuthorizedAccounts() {
 export async function insertUser(username: string, email: string, role: string) {
     try {
         await sql`SELECT create_user(${username}, ${email}, ${role})`;
-        revalidatePath('/settings');
+        revalidatePath('/configuration');
         return "201";
     } catch (error) {
         console.error("[DB_ERROR]: Failed to create user:", error);
@@ -287,7 +287,7 @@ export async function insertUser(username: string, email: string, role: string) 
 export async function updateAccountRole(id: string, role: string) {
     try {
         await sql`SELECT update_user_role(${id}::uuid, ${role})`;
-        revalidatePath('/settings');
+        revalidatePath('/configuration');
         return "200";
     } catch (error) {
         console.error("[DB_ERROR]: Failed to update role:", error);
@@ -298,7 +298,7 @@ export async function updateAccountRole(id: string, role: string) {
 export async function deleteUser(id: string) {
     try {
         await sql`SELECT delete_user(${id}::uuid)`;
-        revalidatePath('/settings');
+        revalidatePath('/configuration');
         return "204";
     } catch (error) {
         console.error("[DB_ERROR]: Failed to delete user:", error);
@@ -626,11 +626,39 @@ export async function fetchTeachersLoadCount(scheduleId: string, search = "", ty
     }
 }
 
-
-export async function insertTeacher(id: string, fname: string, sname: string, mi: string, suffix: string, code: string, spec: string, type: string, availability: any[]) {
+export async function insertTeacher(
+    id: string,
+    teacher_id: string,
+    fname: string,
+    sname: string,
+    mi: string,
+    suffix: string,
+    code: string,
+    spec: string,
+    type: string,
+    availability: any[]
+) {
     try {
+
+        const teachers = await sql`
+            SELECT * FROM get_all_teachers()
+        `;
+
+        const duplicate = teachers.find(
+            (teacher: any) =>
+                teacher.pscs_id === id ||
+                teacher.teacher_id === teacher_id ||
+                (teacher.fname + teacher.mi + teacher.sname + teacher.suffix) === (fname + mi + sname + suffix) ||
+                teacher.code === code
+        );
+
+        if (duplicate) {
+            return "409";
+        }
+
         await sql`SELECT create_teacher(
-            ${id}, 
+            ${id},
+            ${teacher_id},
             ${fname},
             ${sname},
             ${mi},
@@ -640,22 +668,47 @@ export async function insertTeacher(id: string, fname: string, sname: string, mi
             ${type}, 
             ${availability as any}::jsonb
         )`;
+
         revalidatePath('/teachers');
+
         return "201";
+
     } catch (error) {
         console.error(`[DB_ERROR]: Failed to create teacher:`, error);
-
-        // Duplicate key
-        if (error.code === "23505") {
-            return "409";
-        }
-
         return "500";
     }
 }
 
-export async function updateTeacher(id: string, fname: string, sname: string, mi: string, suffix: string, code: string, spec: string, type: string, availability: any[]) {
+export async function updateTeacher(
+    id: string,
+    teacher_id: string,
+    fname: string,
+    sname: string,
+    mi: string,
+    suffix: string,
+    code: string,
+    spec: string,
+    type: string,
+    availability: any[]
+) {
     try {
+
+        // Get all teachers
+        const teachers = await sql`
+            SELECT * FROM get_all_teachers()
+        `;
+
+        // Check duplicates excluding current teacher
+        const duplicate = teachers.find(
+            (teacher: any) =>
+                (teacher.fname + teacher.mi + teacher.sname + teacher.suffix) === (fname + mi + sname + suffix) || teacher.code === code
+        );
+
+        if (duplicate) {
+            return "409";
+        }
+
+        // Update teacher
         await sql`SELECT update_teacher(
             ${id},
             ${fname},
@@ -667,8 +720,11 @@ export async function updateTeacher(id: string, fname: string, sname: string, mi
             ${type}, 
             ${availability as any}::jsonb
         )`;
+
         revalidatePath('/teachers');
+
         return "200";
+
     } catch (error) {
         console.error(`[DB_ERROR]: Failed to update teacher:`, error);
         return "500";

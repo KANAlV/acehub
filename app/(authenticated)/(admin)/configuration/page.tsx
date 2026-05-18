@@ -776,6 +776,8 @@ export default function Settings() {
                         <Label>Initial Role</Label>
                         <Select value={newAccount.role} onChange={e => setNewAccount({...newAccount, role: e.target.value})}>
                             <option value="Viewer">Viewer</option>
+                            <option value="Academic Assistant">Academic Assistant</option>
+                            <option value="Registrar">Registrar</option>
                             <option value="Administrator">Administrator</option>
                             <option value="SuperAdmin">SuperAdmin</option>
                         </Select>

@@ -519,7 +519,7 @@ export default function RoomManager() {
             </div>
 
             <div className={"flex items-center justify-between"}>
-                <h1 className={"mb-4 font-bold text-2xl"}>Manage Rooms:</h1>
+                <h1 className={"mb-4 font-bold text-2xl"}>Manage Rooms</h1>
                 <div className={"flex space-x-3"}>
                     <Dropdown color={"alternative"} label={"Actions"} dismissOnClick={false}>
                         <DropdownItem onClick={() => downloadImportTemplate()}>Get Import Template</DropdownItem>

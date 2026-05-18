@@ -9,11 +9,18 @@ export async function POST(request: Request) {
 
         // Use lowercase to avoid case-sensitivity issues
         const userEmail = email?.toLowerCase().trim();
-        const allowedDomain = "@alabang.sti.edu.ph";
+        const allowedDomains = [
+            "@alabang.sti.edu",
+            "@alabang.sti.edu.ph"
+        ];
 
-        if (!userEmail || !userEmail.endsWith(allowedDomain)) {
+        const isValid = allowedDomains.some(domain =>
+            userEmail.toLowerCase().endsWith(domain.toLowerCase())
+        );
+
+        if (!isValid) {
             return NextResponse.json(
-                { error: `Access Denied: Please use an ${allowedDomain} account.` },
+                { error: `Access Denied: Please use an @alabang.sti.edu(.ph) account.` },
                 { status: 403 }
             );
         }

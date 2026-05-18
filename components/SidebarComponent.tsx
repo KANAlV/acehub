@@ -32,7 +32,7 @@ export function SidebarComponent({ username, role }: { username: string, role: s
     }
 
     if (role !== "Administrator" && role !== "SuperAdmin") {
-        if(pathname.includes("/settings")) {
+        if(pathname.includes("/configuration")) {
             window.location.href = "/unauthorized";
         }
     }
@@ -112,7 +112,7 @@ export function SidebarComponent({ username, role }: { username: string, role: s
                                      as={Link} href="/rooms" className={"hover:bg-gray-500/14"} icon={HiLibrary} onClick={() => setIsOpen(false)}>
                             Rooms
                         </SidebarItem>
-                        <SidebarItem hidden={role !== "Administrator"}
+                        <SidebarItem hidden={role !== "Registrar"}
                                      as={Link} href="/courses" className={"hover:bg-gray-500/14"} icon={HiUserGroup} onClick={() => setIsOpen(false)}>
                             Courses
                         </SidebarItem>
@@ -134,12 +134,12 @@ export function SidebarComponent({ username, role }: { username: string, role: s
                         </SidebarItem>
                     </SidebarItemGroup>
                     <SidebarItemGroup>
-                        <SidebarItem hidden={role !== "Administrator"}
+                        <SidebarItem hidden={role == "Viewer"}
                                      as={Link} href="#" className={"hover:bg-gray-500/14"} icon={HiQuestionMarkCircle}>
                             Help (*)
                         </SidebarItem>
                         <SidebarItem hidden={role !== "Administrator" && role !== "SuperAdmin"}
-                                     as={Link} href="/settings" className={"hover:bg-gray-500/14"} icon={IoMdSettings}>
+                                     as={Link} href="/configuration" className={"hover:bg-gray-500/14"} icon={IoMdSettings}>
                             Configuration
                         </SidebarItem>
                     </SidebarItemGroup>

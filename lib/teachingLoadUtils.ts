@@ -1,6 +1,6 @@
 import { fetchSystemSettings } from '@/services/userService';
 
-// Helper function to get max units based on employment type and overload settings
+// Helper function to get max units based on employment type and overload configuration
 export async function getMaxUnitsWithOverload(employmentType: string): Promise<{ maxUnits: number; overloadMax: number }> {
     try {
         const settings = await fetchSystemSettings();
@@ -17,7 +17,7 @@ export async function getMaxUnitsWithOverload(employmentType: string): Promise<{
         
         return { maxUnits, overloadMax };
     } catch (error) {
-        console.error("Error fetching settings for max units:", error);
+        console.error("Error fetching configuration for max units:", error);
         return { maxUnits: 24, overloadMax: 6 };
     }
 }

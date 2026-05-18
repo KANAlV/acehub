@@ -41,6 +41,12 @@ export function sanitizeTeacherCode(input: string): string {
         .slice(0, 5); // 2. Enforce length
 }
 
+export function sanitizeTeacherId(input: string): string {
+    return input
+        .replace(/[^a-zA-Z0-9]/g, '') // 1. Remove bad characters
+        .slice(0, 15); // 2. Enforce length
+}
+
 export function sanitizeSuffix(input: string): string {
     return input
         .replace(ALPHA_REGEX, '') // 1. Remove bad characters
