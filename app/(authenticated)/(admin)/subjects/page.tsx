@@ -330,11 +330,37 @@ export default function SubjectsManager() {
     }
 
     async function handleExportToExcel() {
+        setLoading(true);
         try {
+            let allSubjects = [];
+            let page = 1;
+            let hasMoreData = true;
+
+            // Loop through all pages to collect the entire database matching the search
+            while (hasMoreData) {
+                const pageData = await fetchSubjects(debouncedSearch, page);
+
+                if (pageData && pageData.length > 0) {
+                    allSubjects = [...allSubjects, ...pageData];
+                    page++;
+                } else {
+                    hasMoreData = false; // Stop when an empty page is returned
+                }
+
+                // Safety fallback: stop if it exceeds an unrealistic amount of pages (e.g., 500 pages)
+                if (page > 500) break;
+            }
+
+            if (allSubjects.length === 0) {
+                setStatusCode("400");
+                setShowToast(true);
+                return;
+            }
+
             const ExcelJS = (await import('exceljs')).default;
             const { saveAs } = await import('file-saver');
             const workbook = new ExcelJS.Workbook();
-            const worksheet = workbook.addWorksheet('Subjects Inventory');
+            const worksheet = workbook.addWorksheet('Full Subjects Inventory');
 
             worksheet.columns = [
                 { header: 'Curriculum Version', key: 'curVersion', width: 20 },
@@ -351,7 +377,7 @@ export default function SubjectsManager() {
             headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
             headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2C3E50' } };
 
-            const exportData = subjects.map(s => ({
+            const exportData = allSubjects.map(s => ({
                 curVersion: s.curriculumn_version || '',
                 code: s.course_code,
                 name: s.course_name,
@@ -365,12 +391,16 @@ export default function SubjectsManager() {
             worksheet.addRows(exportData);
 
             const buffer = await workbook.xlsx.writeBuffer();
-            saveAs(new Blob([buffer]), `Subjects_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+            saveAs(new Blob([buffer]), `Subjects_Full_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
 
-            return "200";
+            setStatusCode("200");
+            setShowToast(true);
         } catch (error) {
             console.error("[EXPORT_ERROR]:", error);
-            return "500";
+            setStatusCode("500");
+            setShowToast(true);
+        } finally {
+            setLoading(false);
         }
     }
 
