@@ -112,7 +112,7 @@ export function SidebarComponent({ username, role }: { username: string, role: s
                                      as={Link} href="/rooms" className={"hover:bg-gray-500/14"} icon={HiLibrary} onClick={() => setIsOpen(false)}>
                             Rooms
                         </SidebarItem>
-                        <SidebarItem hidden={role !== "Registrar"}
+                        <SidebarItem hidden={!["Registrar", "Administrator"].includes(role)}
                                      as={Link} href="/courses" className={"hover:bg-gray-500/14"} icon={HiUserGroup} onClick={() => setIsOpen(false)}>
                             Courses
                         </SidebarItem>

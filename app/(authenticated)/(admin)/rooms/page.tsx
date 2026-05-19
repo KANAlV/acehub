@@ -22,10 +22,23 @@ import {
     ToastToggle
 } from "flowbite-react";
 import React, {useEffect, useRef, useState} from "react";
-import {HiCheck, HiExclamation, HiOutlineExclamationCircle, HiOutlineTrash} from "react-icons/hi";
-import {deleteRoom, fetchRooms, fetchRoomsCount, getAllRoomsData, insertRoom, updateRoom} from "@/services/userService.ts";
+import {HiCheck, HiExclamation, HiOutlineExclamationCircle, HiOutlineTrash, HiTrash} from "react-icons/hi";
+import {
+    deleteRoom,
+    fetchDropdownValues,
+    fetchRooms,
+    fetchRoomsCount,
+    getAllRoomsData,
+    insertRoom,
+    updateRoom
+} from "@/services/userService.ts";
 import {VscSave} from "react-icons/vsc";
 import {sanitizeName} from "@/lib/validation.ts";
+
+type DropdownValue = {
+    value: string;
+    value_for: string;
+};
 
 export default function RoomManager() {
     const [loading, setLoading] = useState(true); // spinner state
@@ -74,6 +87,23 @@ export default function RoomManager() {
         "409": "Conflict: This name is already taken.",
         "500": "Server error. Please try again later."
     };
+
+    const [importSummary, setImportSummary] = useState<null | {
+        total: number;
+        success: number;
+        conflicts: number;
+    }>(null);
+
+    const [dropdownValues, setDropdownValues] = useState<DropdownValue[]>([]);
+
+    useEffect(() => {
+        const loadDropdownValues = async () => {
+            const values = await fetchDropdownValues("laboratory");
+            setDropdownValues(values);
+        };
+
+        loadDropdownValues();
+    }, []);
 
     /** UI Functions **/
     function editModalValue(id: number) {
@@ -236,7 +266,6 @@ export default function RoomManager() {
             const worksheet = workbook.addWorksheet('Rooms Inventory');
 
             worksheet.columns = [
-                { header: 'ID', key: 'room_id', width: 10 },
                 { header: 'Room Name', key: 'room_name', width: 35 },
                 { header: 'Type', key: 'room_type', width: 20 },
                 { header: 'Created At', key: 'created_at', width: 25 }
@@ -253,7 +282,26 @@ export default function RoomManager() {
             worksheet.addRows(rooms);
             worksheet.getColumn('created_at').numFmt = 'yyyy-mm-dd hh:mm';
 
-            worksheet.autoFilter = 'A1:D1';
+            const typeOptions = Array.from(
+                new Set([
+                    'Lecture',
+                    ...dropdownValues.map((ddValues) => ddValues.value)
+                ])
+            );
+
+            // Apply validation to the first 100 rows in the 'Type' column (Column B)
+            for (let i = 2; i <= 100; i++) {
+                worksheet.getCell(`B${i}`).dataValidation = {
+                    type: 'list',
+                    allowBlank: true,
+                    formulae: [`"${typeOptions.join(',')}"`],
+                    showErrorMessage: true,
+                    errorTitle: 'Invalid Room Type',
+                    error: 'Please select a type from the dropdown list.'
+                };
+            }
+
+            worksheet.autoFilter = 'A1:C1';
 
             const buffer = await workbook.xlsx.writeBuffer();
             const blob = new Blob([buffer], {
@@ -300,15 +348,12 @@ export default function RoomManager() {
 
             // 5. Add Data Validation (The Dropdown Menu in Excel)
             // This ensures the user picks from your specific list
-            const typeOptions = [
-                'Lecture',
-                'Computer Lab',
-                'Culinary Lab',
-                'Mock Bar',
-                'Mock Hotel',
-                'Gym',
-                'AVR'
-            ];
+            const typeOptions = Array.from(
+                new Set([
+                    'Lecture',
+                    ...dropdownValues.map((ddValues) => ddValues.value)
+                ])
+            );
 
             // Apply validation to the first 100 rows in the 'Type' column (Column B)
             for (let i = 2; i <= 100; i++) {
@@ -321,6 +366,8 @@ export default function RoomManager() {
                     error: 'Please select a type from the dropdown list.'
                 };
             }
+
+            worksheet.autoFilter = 'A1:C1';
 
             // 6. Generate and Save
             const buffer = await workbook.xlsx.writeBuffer();
@@ -376,8 +423,8 @@ export default function RoomManager() {
                 return;
             }
 
-            let hasConflict = false;
             let successCount = 0;
+            let conflictCount = 0;
 
             for (const room of rows) {
                 const res = await insertRoom(room.name, room.type);
@@ -386,18 +433,26 @@ export default function RoomManager() {
                     setStatusCode("500");
                     setLoading(false);
                     setShowToast(true);
-                    return; // Kill the process on server error
+                    return;
                 }
 
                 if (res === "409") {
-                    hasConflict = true;
+                    conflictCount++;
                 } else {
                     successCount++;
                 }
             }
 
-            // Logic: If we added at least one thing, call it a success (201)
-            // If we added nothing because everything was a duplicate, show 409
+            setImportSummary({
+                total: rows.length,
+                success: successCount,
+                conflicts: conflictCount
+            });
+
+            setStatusCode(successCount > 0 ? "201" : "409");
+            setLoading(false);
+            setShowToast(true);
+
             setStatusCode(successCount > 0 ? "201" : "409");
             setLoading(false);
             setShowToast(true);
@@ -571,20 +626,21 @@ export default function RoomManager() {
                         )}
                     </TableBody>
                 </Table>
-            </div>
 
-            {/* Pagination */}
-            <div className={"mt-6 justify-self-center"}>
-                <h1 className="text-center">
-                    {rowCount > 0
-                        ? `Showing ${startItem} to ${endItem} of ${rowCount} Entries`
-                        : ""
-                    }
-                </h1>
-                <div className={`${totalPageCount > 1? "flex":"hidden"} overflow-x-auto sm:justify-center`}>
-                    <Pagination currentPage={currentPage} totalPages={totalPageCount == 0? 1:totalPageCount} onPageChange={onPageChange} showIcons />
+                {/* Pagination */}
+                <div className={"mt-6 justify-self-center"}>
+                    <h1 className="text-center">
+                        {rowCount > 0
+                            ? `Showing ${startItem} to ${endItem} of ${rowCount} Entries`
+                            : ""
+                        }
+                    </h1>
+                    <div className={`${totalPageCount > 1? "flex":"hidden"} overflow-x-auto sm:justify-center`}>
+                        <Pagination currentPage={currentPage} totalPages={totalPageCount == 0? 1:totalPageCount} onPageChange={onPageChange} showIcons />
+                    </div>
                 </div>
             </div>
+
 
             {/* --- Modals --- */}
             {/*  Add Modal  */}
@@ -613,7 +669,7 @@ export default function RoomManager() {
                             </div>
                             <Select
                                 id="roomType"
-                                className="w-40"
+                                className="w-52"
                                 value={roomTypeVal || "Lecture"}
                                 onChange={(e) => {
                                     setRoomTypeVal(e.target.value);
@@ -622,12 +678,18 @@ export default function RoomManager() {
                             >
                                 <option>{roomTypeVal}</option>
                                 {roomTypeVal != "Lecture"? (<option>Lecture</option>):null}
-                                {roomTypeVal != "Computer Lab"? (<option>Computer Lab</option>):null}
-                                {roomTypeVal != "Culinary Lab"? (<option>Culinary Lab</option>):null}
-                                {roomTypeVal != "Mock Bar"? (<option>Mock Bar</option>):null}
-                                {roomTypeVal != "Mock Hotel"? (<option>Mock Hotel</option>):null}
-                                {roomTypeVal != "Gym"? (<option>Gym</option>):null}
-                                {roomTypeVal != "AVR"? (<option>AVR</option>):null}
+
+                                {dropdownValues
+                                    .filter((ddValues) => ddValues.value !== roomTypeVal)
+                                    .map((ddValues) => (
+                                        <option
+                                            key={ddValues.value + ddValues.value_for}
+                                            value={ddValues.value}
+                                        >
+                                            {ddValues.value}
+                                        </option>
+                                    ))
+                                }
                             </Select>
                         </div>
                     </div>
@@ -672,7 +734,7 @@ export default function RoomManager() {
                                 <Label htmlFor="roomType">Room Type</Label>
                             </div>
                             <Select id="roomType"
-                                    className={"w-40"}
+                                    className={"w-52"}
                                     value={roomTypeVal}
                                     onChange={(e) => {
                                         setRoomTypeVal(e.target.value)
@@ -681,12 +743,18 @@ export default function RoomManager() {
                                     }>
                                 <option>{roomTypeVal}</option>
                                 {roomTypeVal != "Lecture"? (<option>Lecture</option>):null}
-                                {roomTypeVal != "Computer Lab"? (<option>Computer Lab</option>):null}
-                                {roomTypeVal != "Culinary Lab"? (<option>Culinary Lab</option>):null}
-                                {roomTypeVal != "Mock Bar"? (<option>Mock Bar</option>):null}
-                                {roomTypeVal != "Mock Hotel"? (<option>Mock Hotel</option>):null}
-                                {roomTypeVal != "Gym"? (<option>Gym</option>):null}
-                                {roomTypeVal != "AVR"? (<option>AVR</option>):null}
+
+                                {dropdownValues
+                                    .filter((ddValues) => ddValues.value !== roomTypeVal)
+                                    .map((ddValues) => (
+                                        <option
+                                            key={ddValues.value + ddValues.value_for}
+                                            value={ddValues.value}
+                                        >
+                                            {ddValues.value}
+                                        </option>
+                                    ))
+                                }
                             </Select>
                         </div>
                     </div>
@@ -783,7 +851,24 @@ export default function RoomManager() {
 
                     </div>
                     <div className="ml-3 text-sm font-normal">
-                        {STATUS_MESSAGES[statusCode] || "An unknown error occurred."}
+                        {importSummary ? (
+                            <div>
+                                <div className="font-semibold mb-1">
+                                    Import Completed
+                                </div>
+                                <div>
+                                    Total: {importSummary.total}
+                                </div>
+                                <div className="text-green-600">
+                                    Imported: {importSummary.success}
+                                </div>
+                                <div className="text-yellow-600">
+                                    Duplicates: {importSummary.conflicts}
+                                </div>
+                            </div>
+                        ) : (
+                            STATUS_MESSAGES[statusCode] || "An unknown error occurred."
+                        )}
                     </div>
                     <ToastToggle onDismiss={() => {
                         console.log("[UI_ACTION]: User manually dismissed the toast.");

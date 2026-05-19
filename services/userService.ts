@@ -534,6 +534,30 @@ export async function deleteProgram(id: string) {
 /** --- Subjects --- **/
 export async function insertSubject(curriculumn_version: string | null, course_code: string, course_name: string, field_of_specialization: string, lecture: number, lab: number, lab_type: string, year_term: string) {
     try {
+        /** -----------------------------------
+         * CHECK IF SPECIALIZATION EXISTS
+         * ----------------------------------- */
+        const existingSpec = await sql`
+            SELECT 1
+            FROM dropdown_values
+            WHERE LOWER(value) = LOWER(${field_of_specialization})
+            AND "for" = 'specialization'
+            LIMIT 1
+        `;
+
+        /** -----------------------------------
+         * INSERT IF NOT EXISTS
+         * ----------------------------------- */
+        if (existingSpec.length === 0) {
+            await saveDropdownValue(
+                field_of_specialization,
+                "specialization"
+            );
+        }
+
+        /** -----------------------------------
+         * INSERT SUBJECT
+         * ----------------------------------- */
         await sql`SELECT create_subject(
             ${curriculumn_version}::text, 
             ${course_code}::text, 
@@ -761,7 +785,25 @@ export async function updateTeacher(
         // Check duplicates excluding current teacher
         const duplicate = teachers.find(
             (teacher: any) =>
-                (teacher.fname + teacher.mi + teacher.sname + teacher.suffix) === (fname + mi + sname + suffix) || teacher.code === code
+                teacher.pscs_id !== id &&
+                (
+                    (
+                        (teacher.fname || "").trim().toLowerCase() ===
+                        (fname || "").trim().toLowerCase() &&
+
+                        (teacher.mi || "").trim().toLowerCase() ===
+                        (mi || "").trim().toLowerCase() &&
+
+                        (teacher.sname || "").trim().toLowerCase() ===
+                        (sname || "").trim().toLowerCase() &&
+
+                        (teacher.suffix || "").trim().toLowerCase() ===
+                        (suffix || "").trim().toLowerCase()
+                    ) ||
+
+                    (teacher.teacher_code || "").trim().toLowerCase() ===
+                    (code || "").trim().toLowerCase()
+                )
         );
 
         if (duplicate) {
@@ -773,8 +815,8 @@ export async function updateTeacher(
             ${id},
             ${fname},
             ${sname},
-            ${mi},
-            ${suffix},
+            ${mi ?? ""},
+            ${suffix ?? ""},
             ${code}, 
             ${spec}, 
             ${type}, 

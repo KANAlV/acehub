@@ -17,11 +17,16 @@ import {
     updateSubject,
     deleteSubject,
     fetchSubjects,
-    fetchSubjectCount
+    fetchSubjectCount, fetchDropdownValues, fetchAllDropdownValues
 } from "@/services/userService.ts";
 import {HiCheck, HiExclamation, HiOutlineExclamationCircle, HiOutlineTrash} from "react-icons/hi";
 import {limitNumericValueShort, sanitizeLongName} from "@/lib/validation.ts";
 import {VscSave} from "react-icons/vsc";
+
+type DropdownValue = {
+    value: string;
+    value_for: string;
+};
 
 export default function SubjectsManager() {
     const [loading, setLoading] = useState(true);
@@ -78,6 +83,17 @@ export default function SubjectsManager() {
         "412": "Both Lecture and Lab cannot be zero.",
         "500": "Server error. Please try again later."
     };
+
+    const [dropdownValues, setDropdownValues] = useState<DropdownValue[]>([]);
+
+    useEffect(() => {
+        const loadDropdownValues = async () => {
+            const values = await fetchAllDropdownValues();
+            setDropdownValues(values);
+        };
+
+        loadDropdownValues();
+    }, []);
 
     /** UI Functions **/
     function editModalValue(id: string) {
@@ -681,22 +697,25 @@ export default function SubjectsManager() {
                         )}
                     </TableBody>
                 </Table>
-            </div>
 
-            {/** Pagination **/}
-            <div className="mt-6 justify-self-center">
-                <h1 className="text-center text-sm text-gray-500">
-                    {rowCount > 0 ? `Showing ${startItem} to ${endItem} of ${rowCount} Subjects` : ""}
-                </h1>
-                <div className={`${totalPageCount > 1 ? "flex" : "hidden"} sm:justify-center mt-2`}>
-                    <Pagination currentPage={currentPage} totalPages={totalPageCount || 1} onPageChange={onPageChange} showIcons />
+                {/** Pagination **/}
+                <div className="mt-6 justify-self-center">
+                    <h1 className="text-center text-sm text-gray-500">
+                        {rowCount > 0 ? `Showing ${startItem} to ${endItem} of ${rowCount} Subjects` : ""}
+                    </h1>
+                    <div className={`${totalPageCount > 1 ? "flex" : "hidden"} sm:justify-center mt-2`}>
+                        <Pagination currentPage={currentPage} totalPages={totalPageCount || 1} onPageChange={onPageChange} showIcons />
+                    </div>
                 </div>
             </div>
 
             {/** Toast **/}
             <Toast className={`fixed block z-60 bottom-10 right-10 transition-opacity duration-500 ${showToast ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                 <div className="flex items-center">
-                    <div className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${["200", "201", "204"].includes(statusCode) ? "bg-green-100 text-green-500" : "bg-red-100 text-red-500"}`}>
+                    <div className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg 
+                    ${["200", "201", "204"].includes(statusCode) && "bg-green-100 text-green-500"}
+                    ${["400", "409"].includes(statusCode) && ("bg-yellow-100 text-yellow-500 dark:bg-yellow-800 dark:text-yellow-200")}
+                    ${["412", "422", "500"].includes(statusCode) && ("bg-red-100 text-red-500 dark:bg-red-800 dark:text-red-200")}]}`}>
                         {["200", "201", "204"].includes(statusCode) ? <HiCheck className="h-5 w-5" /> : <HiExclamation className="h-5 w-5" />}
                     </div>
                     <div className="ml-3 text-sm font-normal">{STATUS_MESSAGES[statusCode] || "Unknown error."}</div>
@@ -757,11 +776,26 @@ export default function SubjectsManager() {
                     </div>
                     <div>
                         <Label htmlFor="spec">Field of Specialization</Label>
-                        <TextInput id="spec"
-                                   maxLength={100}
-                                   placeholder="e.g. Software Engineering"
-                                   value={specializationVal}
-                                   onChange={(e) => { setSpecializationVal(e.target.value); setActiveChanges(true); }} />
+                        <Select
+                            id="labType"
+                            value={specializationVal}
+                            onChange={(e) => {
+                                setSpecializationVal(e.target.value);
+                                setActiveChanges(true);
+                            }}
+                        >
+                            {dropdownValues
+                                .filter((ddValues) => ddValues.value_for === "specialization")
+                                .map((ddValues) => (
+                                    <option
+                                        key={ddValues.value + ddValues.value_for}
+                                        value={ddValues.value}
+                                    >
+                                        {ddValues.value}
+                                    </option>
+                                ))
+                            }
+                        </Select>
                     </div>
                     <div className="grid grid-cols-3 gap-4">
                         <div>
@@ -808,12 +842,17 @@ export default function SubjectsManager() {
                                     }}
                             >
                                 <option value="">--- none ---</option>
-                                <option value="Computer Lab">Computer Lab</option>
-                                <option value="Culinary Lab">Culinary Lab</option>
-                                <option value="Mock Bar">Mock Bar</option>
-                                <option value="Mock Hotel">Mock Hotel</option>
-                                <option value="Gym">Gym</option>
-                                <option value="AVR">AVR</option>
+                                {dropdownValues
+                                    .filter((ddValues) => ddValues.value_for === "laboratory")
+                                    .map((ddValues) => (
+                                        <option
+                                            key={ddValues.value + ddValues.value_for}
+                                            value={ddValues.value}
+                                        >
+                                            {ddValues.value}
+                                        </option>
+                                    ))
+                                }
                             </Select>
                         </div>
                     </div>
@@ -869,12 +908,27 @@ export default function SubjectsManager() {
                     </div>
 
                     <div>
-                        <Label>Field of Specialization</Label>
-                        <TextInput
-                            maxLength={100} // New Constraint
+                        <Select
+                            id="labType"
                             value={specializationVal}
-                            onChange={(e) => { setSpecializationVal(e.target.value); setActiveChanges(true); }}
-                        />
+                            onChange={(e) => {
+                                setSpecializationVal(e.target.value);
+                                setActiveChanges(true);
+                            }}
+                        >
+                            {dropdownValues
+                                .filter((ddValues) => ddValues.value_for === "specialization")
+                                .map((ddValues) => (
+                                    <option
+                                        key={ddValues.value + ddValues.value_for}
+                                        value={ddValues.value}
+                                        hidden={ddValues.value == specializationVal}
+                                    >
+                                        {ddValues.value}
+                                    </option>
+                                ))
+                            }
+                        </Select>
                     </div>
 
                     <div className="grid grid-cols-3 gap-4">
@@ -931,12 +985,17 @@ export default function SubjectsManager() {
                                 }}
                             >
                                 <option value="">--- none ---</option>
-                                <option value="Computer Lab">Computer Lab</option>
-                                <option value="Culinary Lab">Culinary Lab</option>
-                                <option value="Mock Bar">Mock Bar</option>
-                                <option value="Mock Hotel">Mock Hotel</option>
-                                <option value="Gym">Gym</option>
-                                <option value="AVR">AVR</option>
+                                {dropdownValues
+                                    .filter((ddValues) => ddValues.value_for === "laboratory")
+                                    .map((ddValues) => (
+                                        <option
+                                            key={ddValues.value + ddValues.value_for}
+                                            value={ddValues.value}
+                                        >
+                                            {ddValues.value}
+                                        </option>
+                                    ))
+                                }
                             </Select>
                         </div>
                     </div>

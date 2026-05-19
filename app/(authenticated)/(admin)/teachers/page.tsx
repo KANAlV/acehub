@@ -22,14 +22,14 @@ import {
     ToastToggle
 } from "flowbite-react";
 import React, {useEffect, useRef, useState} from "react";
-import {HiCheck, HiExclamation, HiOutlineTrash, HiPlus} from "react-icons/hi";
+import {HiCheck, HiExclamation, HiOutlineTrash, HiPlus, HiTrash} from "react-icons/hi";
 import {
     fetchTeachers,
     fetchTeachersCount,
     insertTeacher,
     updateTeacher,
     deleteTeacher,
-    getAllTeachersData
+    getAllTeachersData, fetchDropdownValues
 } from "@/services/userService.ts";
 import {VscSave} from "react-icons/vsc";
 import {
@@ -226,6 +226,11 @@ const AvailabilityManager = ({
     );
 };
 
+type DropdownValue = {
+    value: string;
+    value_for: string;
+};
+
 export default function TeacherManager() {
     const typeOptions = ["FT", "PTFL", "PT"];
 
@@ -272,23 +277,41 @@ export default function TeacherManager() {
     const startItem = ((currentPage - 1) * itemsPerPage) + 1;
     const endItem = Math.min(currentPage * itemsPerPage, rowCount);
 
+    const [toastMessage, setToastMessage] = useState("");
+
+    const STATUS_MESSAGES: Record<string, string> = {
+        "200": "Update successful.",
+        "201": "Teacher created successfully.",
+        "204": "Teacher deleted successfully.",
+        "207": "Import completed with partial success.",
+        "400": "Invalid data provided.",
+        "404": "Teacher not found.",
+        "409": "Conflict: Duplicate entry detected.",
+        "500": "Server error. Please try again later."
+    };
+
     const [importStats, setImportStats] = useState({
         imported: 0,
         failed: 0,
         total: 0
     });
 
-    const [toastMessage, setToastMessage] = useState("");
+    const [importSummary, setImportSummary] = useState<null | {
+        total: number;
+        success: number;
+        conflicts: number;
+    }>(null);
 
-    const STATUS_MESSAGES: Record<string, string> = {
-        "200": "Teacher updated successfully.",
-        "201": "Teacher added successfully.",
-        "204": "Teacher removed successfully.",
-        "207": "Partial import completed.",
-        "400": "Invalid input provided.",
-        "409": "Conflict: Code or ID already exists.",
-        "500": "Server error. Please try again."
-    };
+    const [dropdownValues, setDropdownValues] = useState<DropdownValue[]>([]);
+
+    useEffect(() => {
+        const loadDropdownValues = async () => {
+            const values = await fetchDropdownValues("specialization");
+            setDropdownValues(values);
+        };
+
+        loadDropdownValues();
+    }, []);
 
     /** UI Functions **/
     function editModalValue(id: string) {
@@ -563,13 +586,53 @@ export default function TeacherManager() {
 
             if (!worksheet) {
                 setStatusCode("400");
+                setToastMessage("Invalid file: worksheet not found.");
+                setShowToast(true);
+                setLoading(false);
                 return;
             }
 
+            /** -----------------------------
+             *  1. HEADER VALIDATION
+             * ----------------------------- */
+            const expectedHeaders = [
+                "PSCS ID",
+                "TEACHER ID",
+                "Surname",
+                "First Name",
+                "Mi",
+                "Suffix",
+                "Code",
+                "Specialization",
+                "Employment Type",
+                "Availability (Day: Time | Day: Time)"
+            ];
+
+            const actualHeaders = Array.from({ length: 10 }, (_, i) =>
+                worksheet.getRow(1).getCell(i + 1).value?.toString().trim()
+            );
+
+            const isValidHeader = expectedHeaders.every(
+                (h, i) => h === actualHeaders[i]
+            );
+
+            if (!isValidHeader) {
+                setStatusCode("400");
+                setToastMessage("Invalid file format: headers do not match template.");
+                setShowToast(true);
+                setLoading(false);
+                return;
+            }
+
+            /** -----------------------------
+             *  2. PROCESS ROWS
+             * ----------------------------- */
             const teachersToImport: any[] = [];
 
+            let invalidRows = 0;
+            let skippedRows = 0;
+
             worksheet.eachRow((row, rowNumber) => {
-                // Skip header row
                 if (rowNumber === 1) return;
 
                 const id = row.getCell(1).value?.toString().trim() || "";
@@ -583,25 +646,35 @@ export default function TeacherManager() {
                 const type = row.getCell(9).value?.toString().trim() || "FT";
                 const availStr = row.getCell(10).value?.toString().trim() || "";
 
-                // Skip empty rows
-                if (
-                    !id &&
-                    !sname &&
-                    !fname &&
-                    !code
-                ) {
+                /** skip empty rows */
+                if (!id && !fname && !sname && !code) {
+                    skippedRows++;
                     return;
                 }
 
-                // Skip template/example rows
-                if (id.startsWith("#")) return;
-
-                // Required fields
-                if (!id || !fname || !sname || !code) {
+                /** skip template rows */
+                if (id.startsWith("#")) {
+                    skippedRows++;
                     return;
                 }
 
-                // Parse availability
+                /** HARD VALIDATION */
+                const isInvalid =
+                    !id ||
+                    !teacher_id ||
+                    !fname ||
+                    !sname ||
+                    !code ||
+                    !["FT", "PT", "PTFL"].includes(type);
+
+                if (isInvalid) {
+                    invalidRows++;
+                    return;
+                }
+
+                /** -----------------------------
+                 *  3. PARSE AVAILABILITY
+                 * ----------------------------- */
                 let availability: any[] = [];
 
                 if (type === "PT" || type === "PTFL") {
@@ -610,33 +683,16 @@ export default function TeacherManager() {
                         .map(s => s.trim())
                         .filter(Boolean)
                         .map(slot => {
-                            /**
-                             * Expected format:
-                             * Monday: 7:00 AM - 5:00 PM
-                             */
                             const firstColon = slot.indexOf(":");
-
                             if (firstColon === -1) return null;
 
                             const day = slot.substring(0, firstColon).trim();
+                            const timePart = slot.substring(firstColon + 1).trim();
+                            const [startTime, endTime] = timePart.split("-").map(t => t.trim());
 
-                            const timePart = slot
-                                .substring(firstColon + 1)
-                                .trim();
+                            if (!day || !startTime || !endTime) return null;
 
-                            const [startTime, endTime] = timePart
-                                .split("-")
-                                .map(t => t.trim());
-
-                            if (!day || !startTime || !endTime) {
-                                return null;
-                            }
-
-                            return {
-                                day,
-                                startTime,
-                                endTime
-                            };
+                            return { day, startTime, endTime };
                         })
                         .filter(Boolean);
                 }
@@ -655,11 +711,20 @@ export default function TeacherManager() {
                 });
             });
 
+            /** -----------------------------
+             *  4. NO VALID DATA CHECK
+             * ----------------------------- */
             if (teachersToImport.length === 0) {
                 setStatusCode("400");
+                setToastMessage("No valid rows found in the file.");
+                setShowToast(true);
+                setLoading(false);
                 return;
             }
 
+            /** -----------------------------
+             *  5. INSERT DATA
+             * ----------------------------- */
             let successCount = 0;
             let failedCount = 0;
 
@@ -689,35 +754,40 @@ export default function TeacherManager() {
                 }
             }
 
+            /** -----------------------------
+             *  6. TOAST STATS (IMPORTANT)
+             * ----------------------------- */
             setImportStats({
                 imported: successCount,
-                failed: failedCount,
-                total: teachersToImport.length
+                failed: invalidRows + failedCount,
+                total: teachersToImport.length + invalidRows + skippedRows
             });
 
-            if (successCount > 0 && failedCount === 0) {
+            if (successCount > 0 && failedCount === 0 && invalidRows === 0) {
                 setStatusCode("201");
-                setToastMessage(
-                    `Successfully imported ${successCount} teacher(s).`
-                );
-            } else if (successCount > 0 && failedCount > 0) {
+                setToastMessage(`Successfully imported ${successCount} teacher(s).`);
+            } else if (successCount > 0) {
                 setStatusCode("207");
                 setToastMessage(
-                    `Imported ${successCount} teacher(s), failed ${failedCount}.`
+                    `Imported ${successCount}, failed ${failedCount + invalidRows}.`
                 );
             } else {
                 setStatusCode("409");
                 setToastMessage(
-                    `Failed to import ${failedCount} teacher(s).`
+                    `Import failed. ${failedCount + invalidRows} invalid row(s).`
                 );
             }
 
+            /** -----------------------------
+             *  7. REFRESH UI
+             * ----------------------------- */
             await loadInitialData();
             await loadRowCount();
 
         } catch (error) {
             console.error(error);
             setStatusCode("500");
+            setToastMessage("Unexpected error while importing file.");
         } finally {
             setLoading(false);
             setShowToast(true);
@@ -756,7 +826,7 @@ export default function TeacherManager() {
             setProgress(100);
             const interval = setInterval(() => setProgress(p => Math.max(0, p - 2)), 100);
             const timer = setTimeout(() => setShowToast(false), 5000);
-            return () => { clearInterval(interval); clearTimeout(timer); };
+            return () => { clearInterval(interval); clearTimeout(timer); setToastMessage("");};
         }
     }, [showToast]);
 
@@ -919,15 +989,36 @@ export default function TeacherManager() {
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <Label>Specialization</Label>
-                                <TextInput value={spec} onChange={e => { setSpec(e.target.value); setActiveChanges(true); }} placeholder="IT / GE" />
-                            </div>
-                            <div>
-                                <Label>Emp. Type</Label>
-                                <Select value={type} onChange={e => { setType(e.target.value); setActiveChanges(true); }}>
-                                    <option>FT</option>
-                                    <option>PTFL</option>
-                                    <option>PT</option>
+                                <Select
+                                    id="roomType"
+                                    className="w-52"
+                                    value={spec}
+                                    onChange={(e) => {
+                                        setSpec(e.target.value);
+                                        setActiveChanges(true);
+                                    }}
+                                >
+                                    {dropdownValues.map((ddValues) => (
+                                            <option
+                                                key={ddValues.value + ddValues.value_for}
+                                                value={ddValues.value}
+                                            >
+                                                {ddValues.value}
+                                            </option>
+                                        ))
+                                    }
                                 </Select>
+                            </div>
+                            <div className={"flex justify-end"}>
+                                <div className={"w-28"}>
+                                    <Label>Emp. Type</Label>
+                                    <Select value={type}
+                                            onChange={e => { setType(e.target.value); setActiveChanges(true); }}>
+                                        <option>FT</option>
+                                        <option>PTFL</option>
+                                        <option>PT</option>
+                                    </Select>
+                                </div>
                             </div>
                         </div>
                         <AvailabilityManager availability={availability} onUpdate={setAvailability} employmentType={type} />
@@ -978,15 +1069,38 @@ export default function TeacherManager() {
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <Label>Specialization</Label>
-                                <TextInput value={spec} onChange={e => { setSpec(e.target.value); setActiveChanges(true); }} />
-                            </div>
-                            <div>
-                                <Label>Emp. Type</Label>
-                                <Select value={type} onChange={e => { setType(e.target.value); setActiveChanges(true); }}>
-                                    <option>FT</option>
-                                    <option>PTFL</option>
-                                    <option>PT</option>
+                                <Select
+                                    id="roomType"
+                                    className="w-52"
+                                    value={spec}
+                                    onChange={(e) => {
+                                        setSpec(e.target.value);
+                                        setActiveChanges(true);
+                                    }}
+                                >
+                                    {dropdownValues
+                                        .map((ddValues) => (
+                                            <option
+                                                key={ddValues.value + ddValues.value_for}
+                                                value={ddValues.value}
+                                                hidden={ddValues.value == spec}
+                                            >
+                                                {ddValues.value}
+                                            </option>
+                                        ))
+                                    }
                                 </Select>
+                            </div>
+                            <div className={"flex justify-end"}>
+                                <div className={"w-28"}>
+                                    <Label>Emp. Type</Label>
+                                    <Select value={type}
+                                            onChange={e => { setType(e.target.value); setActiveChanges(true); }}>
+                                        <option>FT</option>
+                                        <option>PTFL</option>
+                                        <option>PT</option>
+                                    </Select>
+                                </div>
                             </div>
                         </div>
                         <AvailabilityManager availability={availability} onUpdate={(v) => { setAvailability(v); setActiveChanges(true); }} employmentType={type} />
@@ -994,7 +1108,7 @@ export default function TeacherManager() {
                     <ModalFooter>
                         <Button color="red" onClick={() => setOpenWarningModal(true)}><HiOutlineTrash className="size-5" /></Button>
                         <div className="flex-1 flex justify-end space-x-2">
-                            <Button color="alternative" onClick={activeChanges ? () => setOpenWarningModal(true) : discardEntry}>
+                            <Button color="alternative" onClick={discardEntry}>
                                 {activeChanges ? "Discard" : "Cancel"}
                             </Button>
                             <Button onClick={updateEntry}>Update</Button>
@@ -1015,20 +1129,55 @@ export default function TeacherManager() {
                 </Modal>
 
                 {/* Toast */}
-                <Toast className={`fixed z-50 bottom-10 right-10 transition-all ${showToast ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                    <div className="flex items-start">
-                        <div className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${statusCode.startsWith('2') ? 'bg-green-100 text-green-500' : 'bg-red-100 text-red-500'}`}>
-                            {statusCode.startsWith('2') ? <HiCheck className="h-5 w-5" /> : <HiExclamation className="h-5 w-5" />}
+                <Toast className={`fixed block z-60 bottom-10 right-10 transition-opacity duration-500 
+                ${showToast ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+
+                    <div className={"flex items-center"}>
+                        {/* Icon */}
+                        <div
+                            className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg
+                                ${
+                                    statusCode.startsWith("2")
+                                        ? "bg-green-100 text-green-500 dark:bg-green-800 dark:text-green-200"
+                                        : statusCode === "207"
+                                            ? "bg-blue-100 text-blue-500 dark:bg-blue-800 dark:text-blue-200"
+                                            : statusCode.startsWith("5")
+                                                ? "bg-red-100 text-red-500 dark:bg-red-800 dark:text-red-500"
+                                                : "bg-red-100 text-red-500 dark:bg-red-800 dark:text-red-200"
+                                }
+                            `}
+                        >
+                            {statusCode.startsWith("2") ? (
+                                <HiCheck className="h-5 w-5" />
+                            ) : (
+                                <HiExclamation className="h-5 w-5" />
+                            )}
                         </div>
-                        <div className="ml-3 flex-1">
-                            <div className="text-sm font-normal">{toastMessage || STATUS_MESSAGES[statusCode] || "Operation complete"}</div>
-                            <Progress progress={progress} size="sm" className="mt-2" color={statusCode.startsWith('2') ? "green" : "red"} />
+
+                        {/* Message */}
+                        <div className="ml-3 text-sm font-normal">
+                            <div>
+                                {toastMessage || STATUS_MESSAGES[statusCode] || "An unknown error occurred."}
+                            </div>
+
+                            {/* 👇 THIS is the part you wanted (import success/fail shown inside toast) */}
+                            {importStats.total > 0 && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                    Imported: {importStats.imported} • Failed: {importStats.failed} • Total: {importStats.total}
+                                </div>
+                            )}
                         </div>
-                        <ToastToggle onDismiss={() => {
-                            setShowToast(false);
-                            setProgress(0);
-                        }} />
+
+                        <ToastToggle
+                            onDismiss={() => {
+                                setShowToast(false);
+                                setProgress(0);
+                            }}
+                        />
                     </div>
+
+                    {/* Progress bar (same style as RoomManager) */}
+                    <Progress size="sm" className="mt-2 mb-0 pb-0" progress={progress} />
                 </Toast>
 
                 <input

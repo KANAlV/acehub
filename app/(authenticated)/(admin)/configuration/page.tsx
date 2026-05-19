@@ -478,6 +478,8 @@ export default function Settings() {
                                             <TableCell>
                                                 <Select value={account.role} onChange={(e) => handleUpdateRole(account.id, e.target.value)}>
                                                     <option value="Viewer">Viewer</option>
+                                                    <option value="Registrar">Registrar</option>
+                                                    <option value="Academic Assistant">Academic Assistant</option>
                                                     <option value="Administrator">Administrator</option>
                                                     <option value="SuperAdmin">SuperAdmin</option>
                                                 </Select>
@@ -721,7 +723,8 @@ export default function Settings() {
                                 <div className="flex justify-between mb-6">
                                     <h3 className="text-lg font-bold">Laboratory Types</h3>
 
-                                    <Button onClick={() => setShowAddLaboratoryTypeModal(true)}>
+                                    <Button onClick={() => setShowAddLaboratoryTypeModal(true)}
+                                            className={"cursor-pointer"}>
                                         <HiOutlinePlus className="mr-2" />
                                         Add Value
                                     </Button>
@@ -739,10 +742,12 @@ export default function Settings() {
                                             dropdownValues
                                                 .filter((ddValues) => ddValues.value_for === "laboratory")
                                                 .map((ddValues) => (
-                                                    <TableRow key={ddValues.value + ddValues.value_for}>
+                                                    <TableRow key={ddValues.value + ddValues.value_for}
+                                                              className={"hover:bg-gray-500/20"}>
                                                         <TableCell>{ddValues.value}</TableCell>
                                                         <TableCell className={"flex justify-end"}>
                                                             <Button color={"red"}
+                                                                    className={"cursor-pointer"}
                                                                     onClick={() => (
                                                                         setShowDeleteDropdownModal(true),
                                                                         setNewDropdownValue(ddValues.value),
@@ -768,7 +773,8 @@ export default function Settings() {
                                 <div className="flex justify-between mb-6">
                                     <h3 className="text-lg font-bold">Specializations</h3>
 
-                                    <Button onClick={() => setShowAddSpecializationTypeModal(true)}>
+                                    <Button onClick={() => setShowAddSpecializationTypeModal(true)}
+                                            className={"cursor-pointer"}>
                                         <HiOutlinePlus className="mr-2" />
                                         Add Value
                                     </Button>
@@ -786,10 +792,12 @@ export default function Settings() {
                                             dropdownValues
                                                 .filter((ddValues) => ddValues.value_for === "specialization")
                                                 .map((ddValues) => (
-                                                    <TableRow key={ddValues.value + ddValues.value_for}>
+                                                    <TableRow key={ddValues.value + ddValues.value_for}
+                                                              className={"hover:bg-gray-500/20"}>
                                                         <TableCell>{ddValues.value}</TableCell>
                                                         <TableCell className={"flex justify-end"}>
                                                             <Button color={"red"}
+                                                                    className={"cursor-pointer"}
                                                                     onClick={() => (
                                                                         setShowDeleteDropdownModal(true),
                                                                         setNewDropdownValue(ddValues.value),
