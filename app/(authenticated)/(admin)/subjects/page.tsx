@@ -554,15 +554,15 @@ export default function SubjectsManager() {
                         )}
                     </TableBody>
                 </Table>
-            </div>
 
-            {/** Pagination **/}
-            <div className="mt-6 justify-self-center">
-                <h1 className="text-center text-sm text-gray-500">
-                    {rowCount > 0 ? `Showing ${startItem} to ${endItem} of ${rowCount} Subjects` : ""}
-                </h1>
-                <div className={`${totalPageCount > 1 ? "flex" : "hidden"} sm:justify-center mt-2`}>
-                    <Pagination currentPage={currentPage} totalPages={totalPageCount || 1} onPageChange={onPageChange} showIcons />
+                {/** Pagination **/}
+                <div className="mt-6 justify-self-center">
+                    <h1 className="text-center text-sm text-gray-500">
+                        {rowCount > 0 ? `Showing ${startItem} to ${endItem} of ${rowCount} Subjects` : ""}
+                    </h1>
+                    <div className={`${totalPageCount > 1 ? "flex" : "hidden"} sm:justify-center mt-2`}>
+                        <Pagination currentPage={currentPage} totalPages={totalPageCount || 1} onPageChange={onPageChange} showIcons />
+                    </div>
                 </div>
             </div>
 
