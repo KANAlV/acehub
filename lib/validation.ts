@@ -7,6 +7,8 @@ export const NON_NUMERIC_REGEX = /[^0-9.]/g;
 
 export const ALPHA_REGEX = /[^a-zA-Z\-]/g;
 
+export const ALPHA_SPACE_REGEX = /[^a-zA-Z\- ]/g;
+
 export const MAX_LENGTH_VERY_SHORT = 8;
 
 export const MAX_LENGTH_SHORT = 10; // Updated to match your requirement
@@ -53,6 +55,12 @@ export function sanitizeSuffix(input: string): string {
         .slice(0, MAX_LENGTH_VERY_SHORT); // 2. Enforce length
 }
 
+export function sanitizeDropdownValue(input: string): string {
+    return input
+        .replace(ALPHA_SPACE_REGEX, '') // 1. Remove bad characters
+        .slice(0, MAX_LENGTH); // 2. Enforce length
+}
+
 export function sanitizeName(input: string): string {
     return input
         .replace(ALLOWED_CHARS_REGEX, '') // 1. Remove bad characters
@@ -61,7 +69,7 @@ export function sanitizeName(input: string): string {
 
 export function sanitizeTeacherName(input: string): string {
     return input
-        .replace(ALPHA_REGEX, '') // 1. Remove bad characters
+        .replace(ALPHA_SPACE_REGEX, '') // 1. Remove bad characters
         .slice(0, MAX_MED_SHORT_LENGTH); // 2. Enforce length
 }
 

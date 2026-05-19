@@ -343,7 +343,7 @@ export default function TeacherManager() {
         setLoading(true);
         // Clear availability if Full-Time before saving
         const finalAvailability = (type === "FT" || type === "PTFL") ? [] : availability;
-        const stat = await insertTeacher(pscsId, teacherId, fname, sname, mi, suffix, code, spec, type, finalAvailability);
+        const stat = await insertTeacher(pscsId, teacherId, fname.trim(), sname.trim(), mi.trim(), suffix.trim(), code.trim(), spec, type, finalAvailability);
         setStatusCode(stat);
         setLoading(false);
         setShowToast(true);
@@ -359,7 +359,7 @@ export default function TeacherManager() {
         setLoading(true);
         // Clear availability if Full-Time before saving
         const finalAvailability = (type === "FT" || type === "FTPT") ? [] : availability;
-        const stat = await updateTeacher(pscsId, teacherId, fname, sname, mi, suffix, code, spec, type, finalAvailability);
+        const stat = await updateTeacher(pscsId, teacherId, fname.trim(), sname.trim(), mi.trim(), suffix.trim(), code.trim(), spec, type, finalAvailability);
         setStatusCode(stat);
         setLoading(false);
         setShowToast(true);

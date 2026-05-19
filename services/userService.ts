@@ -105,6 +105,66 @@ export async function updateSystemSetting(key: string, value: any) {
     }
 }
 
+type DropdownValue = {
+    value: string;
+    value_for: string;
+};
+
+export async function fetchAllDropdownValues(): Promise<DropdownValue[]> {
+    try {
+        const result = await sql<DropdownValue[]>`
+            SELECT * FROM get_dropdown_values()
+        `;
+
+        return result as DropdownValue[];
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch dropdown values:", error);
+        return [];
+    }
+}
+
+export async function fetchDropdownValues(forValue: string): Promise<DropdownValue[]> {
+    try {
+        const result = await sql<DropdownValue[]>`
+            SELECT * FROM get_dropdown_values(${forValue})
+        `;
+
+        return result as DropdownValue[];
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch dropdown values:", error);
+        return [];
+    }
+}
+export async function saveDropdownValue(value: string, forValue: string) {
+    try {
+        await sql`SELECT create_dropdown_value(${value}, ${forValue})`;
+
+        revalidatePath('/configuration');
+
+        return "201";
+
+    } catch (error: any) {
+        console.error("[DB_ERROR]: Failed to save dropdown value:", error);
+
+        if (error.code === "23505") {
+            return "409";
+        }
+
+        return "500";
+    }
+}
+
+export async function deleteDropdownValue(value: string, forValue: string) {
+    try {
+        await sql`SELECT delete_dropdown_value(${value}, ${forValue})`;
+        revalidatePath('/configuration');
+        return "204";
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to delete preset:", error);
+        return "500";
+    }
+}
+
 export async function fetchPresets() {
     try {
         return await sql`SELECT * FROM get_settings_presets()`;

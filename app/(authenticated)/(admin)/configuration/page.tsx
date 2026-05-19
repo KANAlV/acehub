@@ -15,23 +15,28 @@ import {
 } from "flowbite-react";
 import {
     HiPlus, HiTrash, HiSave, HiClock, HiUserGroup, HiAcademicCap, HiCog,
-    HiDownload, HiUpload, HiCheck, HiExclamation
+    HiDownload, HiUpload, HiCheck, HiExclamation, HiOutlinePlus
 } from "react-icons/hi";
 import {
     deleteBreakPeriod, deletePreset, fetchAuthorizedAccounts, fetchBreakPeriods,
     fetchPresets, fetchSystemSettings, insertBreakPeriod, savePreset,
     updateAccountRole, updateBreakPeriod, updateSystemSetting,
-    insertUser, deleteUser, getCurrentUser, pgDump, truncateTables
+    insertUser, deleteUser, getCurrentUser, pgDump, truncateTables, fetchDropdownValues, fetchAllDropdownValues,
+    saveDropdownValue, deleteDropdownValue
 } from "@/services/userService.ts";
 import {BsDatabaseDash, BsDatabaseDown} from "react-icons/bs";
 import {FaDatabase} from "react-icons/fa";
 import {
     numericValueOnly,
-    isStrictPositiveNumber
+    isStrictPositiveNumber, sanitizeDropdownValue
 } from "@/lib/validation";
 import { clampNumericValue, MAX_FACULTY_LOAD, MAX_PREP_LIMIT, MAX_OVERLOADING, MAX_STUDENTS } from "@/lib/validation";
+import {IoMdArrowDropdownCircle} from "react-icons/io";
 
-
+type DropdownValue = {
+    value: string;
+    value_for: string;
+};
 
 export default function Settings() {
     const [loading, setLoading] = useState(true);
@@ -50,14 +55,20 @@ export default function Settings() {
     const [authorizedAccounts, setAuthorizedAccounts] = useState<any[]>([]);
     const [presets, setPresets] = useState<any[]>([]);
     const [activePresetId, setActivePresetId] = useState<string>('current');
+    const [dropdownValues, setDropdownValues] = useState<DropdownValue[]>([]);
+    const [newDropdownValue, setNewDropdownValue] = useState("")
+    const [newDropdownValueFor, setNewDropdownValueFor] = useState("")
 
     // Modal State
+    const [showAddLaboratoryTypeModal, setShowAddLaboratoryTypeModal] = useState(false);
+    const [showAddSpecializationTypeModal, setShowAddSpecializationTypeModal] = useState(false);
     const [showAddBreakModal, setShowAddBreakModal] = useState(false);
     const [editingBreak, setEditingBreak] = useState<any>(null);
     const [newBreak, setNewBreak] = useState({ dayOfWeek: "", startTime: "", endTime: "", description: "" });
 
     const [showAddAccountModal, setShowAddAccountModal] = useState(false);
     const [newAccount, setNewAccount] = useState({ username: "", email: "", role: "Faculty" });
+    const [showDeleteDropdownModal, setShowDeleteDropdownModal] = useState(false);
 
     // Truncate Table Modal
     const [showTruncateModal, setShowTruncateModal] = useState(false);
@@ -100,11 +111,12 @@ export default function Settings() {
     const loadAllData = async () => {
         setLoading(true);
         try {
-            const [settings, breaks, accounts, availablePresets] = await Promise.all([
+            const [settings, breaks, accounts, availablePresets, ddValues] = await Promise.all([
                 fetchSystemSettings(),
                 fetchBreakPeriods(),
                 fetchAuthorizedAccounts(),
-                fetchPresets()
+                fetchPresets(),
+                fetchAllDropdownValues()
             ]);
 
             if (settings.facultyLoad) setFacultyLoad(settings.facultyLoad);
@@ -112,6 +124,7 @@ export default function Settings() {
             if (settings.prepLimits) setPrepLimits(settings.prepLimits);
             if (settings.overloadMax) setOverloadMax(settings.overloadMax);
             if (settings.activePresetId) setActivePresetId(settings.activePresetId);
+            if (ddValues) setDropdownValues(ddValues);
 
             setBreakPeriods(breaks);
             setAuthorizedAccounts(accounts);
@@ -143,7 +156,7 @@ export default function Settings() {
     useEffect(() => {
         if (showToast) {
             const interval = setInterval(() => setProgress(p => Math.max(0, p - 2)), 50);
-            const timer = setTimeout(() => setShowToast(false), 2500);
+            const timer = setTimeout(() => setShowToast(false), 5000);
             return () => { clearInterval(interval); clearTimeout(timer); };
         }
     }, [showToast]);
@@ -253,6 +266,54 @@ export default function Settings() {
         await updateSystemSetting('activePresetId', preset.preset_name);
         triggerNotification("200");
     };
+
+    const capitalize = (text: string) => {
+        return text.charAt(0).toUpperCase() + text.slice(1);
+    }
+    const clearDropdownValues = () => {
+        setNewDropdownValue("");
+        setNewDropdownValueFor("");
+    }
+
+    const handleSaveDropdownValue = async (forValue: string) => {
+        if (newDropdownValue.trim().length === 0) {
+            triggerNotification("400");
+            return;
+        }
+
+        setLoading(true)
+        const res = await saveDropdownValue(newDropdownValue.trim(), forValue);
+        if (res === "500") {
+            triggerNotification("500");
+            setLoading(false);
+        }
+
+        if (res === "409") {
+            clearDropdownValues();
+            setShowAddLaboratoryTypeModal(false);
+            setShowAddSpecializationTypeModal(false);
+            await loadAllData()
+            setLoading(false);
+            triggerNotification("409");
+        }
+
+        if (res === "201") {
+            clearDropdownValues();
+            setShowAddLaboratoryTypeModal(false);
+            setShowAddSpecializationTypeModal(false);
+            await loadAllData()
+            setLoading(false);
+            triggerNotification("201");
+        }
+    }
+
+    const handleDeleteDDValue = async (value: string, value_for: string) => {
+        const res = await deleteDropdownValue(value, value_for);
+        if (res === "204") loadAllData();
+        setShowDeleteDropdownModal(false);
+        triggerNotification(res);
+        clearDropdownValues();
+    }
 
     const handleDeletePresetAction = async (name: string) => {
         const res = await deletePreset(name);
@@ -649,6 +710,108 @@ export default function Settings() {
                         </Card>
                     </TabItem>
 
+                    {/* Dropdown Values */}
+                    <TabItem
+                        title={"Dropdown Values"}
+                        icon={IoMdArrowDropdownCircle}
+                    >
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-6">
+                            {/* Laboratory Types */}
+                            <div className="border-none shadow-sm p-4 bg-gray-500/20 rounded-xl">
+                                <div className="flex justify-between mb-6">
+                                    <h3 className="text-lg font-bold">Laboratory Types</h3>
+
+                                    <Button onClick={() => setShowAddLaboratoryTypeModal(true)}>
+                                        <HiOutlinePlus className="mr-2" />
+                                        Add Value
+                                    </Button>
+                                </div>
+
+                                <Table>
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableHeadCell>Value</TableHeadCell>
+                                            <TableHeadCell><span className="sr-only">Actions</span></TableHeadCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {dropdownValues.filter((ddValues) => ddValues.value_for === "laboratory").length > 0 ? (
+                                            dropdownValues
+                                                .filter((ddValues) => ddValues.value_for === "laboratory")
+                                                .map((ddValues) => (
+                                                    <TableRow key={ddValues.value + ddValues.value_for}>
+                                                        <TableCell>{ddValues.value}</TableCell>
+                                                        <TableCell className={"flex justify-end"}>
+                                                            <Button color={"red"}
+                                                                    onClick={() => (
+                                                                        setShowDeleteDropdownModal(true),
+                                                                        setNewDropdownValue(ddValues.value),
+                                                                        setNewDropdownValueFor(ddValues.value_for))}>
+                                                                <HiTrash/>
+                                                            </Button>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))
+                                        ) : (
+                                            <TableRow>
+                                                <TableCell colSpan={2} className="text-center text-gray-500">
+                                                    No entries found.
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+
+                            {/* Specializations */}
+                            <div className="border-none shadow-sm p-4 bg-gray-500/20 rounded-xl">
+                                <div className="flex justify-between mb-6">
+                                    <h3 className="text-lg font-bold">Specializations</h3>
+
+                                    <Button onClick={() => setShowAddSpecializationTypeModal(true)}>
+                                        <HiOutlinePlus className="mr-2" />
+                                        Add Value
+                                    </Button>
+                                </div>
+
+                                <Table>
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableHeadCell>Value</TableHeadCell>
+                                            <TableHeadCell><span className="sr-only">Actions</span></TableHeadCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {dropdownValues.filter((ddValues) => ddValues.value_for === "specialization").length > 0 ? (
+                                            dropdownValues
+                                                .filter((ddValues) => ddValues.value_for === "specialization")
+                                                .map((ddValues) => (
+                                                    <TableRow key={ddValues.value + ddValues.value_for}>
+                                                        <TableCell>{ddValues.value}</TableCell>
+                                                        <TableCell className={"flex justify-end"}>
+                                                            <Button color={"red"}
+                                                                    onClick={() => (
+                                                                        setShowDeleteDropdownModal(true),
+                                                                        setNewDropdownValue(ddValues.value),
+                                                                        setNewDropdownValueFor(ddValues.value_for))}>
+                                                                <HiTrash/>
+                                                            </Button>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))
+                                        ) : (
+                                            <TableRow>
+                                                <TableCell colSpan={2} className="text-center text-gray-500">
+                                                    No entries found.
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </div>
+                    </TabItem>
+
                     {/* Presets */}
                     <TabItem title="Presets" icon={HiDownload}>
                         <Card className="mt-6 border-none shadow-sm">
@@ -887,6 +1050,44 @@ export default function Settings() {
                 <ModalFooter className="justify-end">
                     <Button color="gray" onClick={() => setShowTruncateModal(false)}>Cancel</Button>
                     <Button onClick={handleTruncateTables}>Truncate</Button>
+                </ModalFooter>
+            </Modal>
+
+            {/* Add laboratory types */}
+            <Modal show={showAddLaboratoryTypeModal} onClose={() => setShowAddLaboratoryTypeModal(false)}>
+                <ModalHeader>Add Laboratory Type</ModalHeader>
+                <ModalBody>
+                    <Label>Laboratory Type</Label>
+                    <TextInput value={newDropdownValue} onChange={e => setNewDropdownValue(sanitizeDropdownValue(e.target.value))} placeholder="Computer Laboratory" />
+                </ModalBody>
+                <ModalFooter className="justify-end">
+                    <Button color="gray" onClick={() => (setShowAddLaboratoryTypeModal(false), clearDropdownValues())}>Cancel</Button>
+                    <Button onClick={() => handleSaveDropdownValue("laboratory")}>Save</Button>
+                </ModalFooter>
+            </Modal>
+
+            {/* Add specializations */}
+            <Modal show={showAddSpecializationTypeModal} onClose={() => setShowAddSpecializationTypeModal(false)}>
+                <ModalHeader>Add Specializations</ModalHeader>
+                <ModalBody>
+                    <Label>Specialization</Label>
+                    <TextInput value={newDropdownValue} onChange={e => setNewDropdownValue(sanitizeDropdownValue(e.target.value))} placeholder="Information Technology" />
+                </ModalBody>
+                <ModalFooter className="justify-end">
+                    <Button color="gray" onClick={() => (setShowAddSpecializationTypeModal(false), clearDropdownValues())}>Cancel</Button>
+                    <Button onClick={() => handleSaveDropdownValue("specialization")}>Save</Button>
+                </ModalFooter>
+            </Modal>
+
+            {/* Dropdown delete Modal */}
+            <Modal show={showDeleteDropdownModal} onClose={() => setShowDeleteDropdownModal(false)}>
+                <ModalHeader>Delete Dropdown Value</ModalHeader>
+                <ModalBody>
+                    <Label>Are You sure you want to delete <b>"{newDropdownValue}"</b> for <b>"{capitalize(newDropdownValueFor)}"</b>?</Label>
+                </ModalBody>
+                <ModalFooter className="justify-end">
+                    <Button color="gray" onClick={() => (setShowDeleteDropdownModal(false), clearDropdownValues())}>Cancel</Button>
+                    <Button color={"red"} onClick={() => handleDeleteDDValue(newDropdownValue, newDropdownValueFor)}>Delete</Button>
                 </ModalFooter>
             </Modal>
 
