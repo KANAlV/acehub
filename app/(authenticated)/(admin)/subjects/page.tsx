@@ -427,7 +427,7 @@ export default function SubjectsManager() {
             setShowToast(true);
             return;
         }
-        // ------------------------------------------------------------------------------
+
 
         const lec = parseFloat(lectureVal);
         const lab = parseFloat(labVal);
