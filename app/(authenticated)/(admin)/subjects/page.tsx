@@ -145,7 +145,6 @@ export default function SubjectsManager() {
         setLectureVal(limitNumericValueShort(e));
     }
 
-    /** Import/Export **/
     async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0];
         if (!file || !e.target) return;
@@ -159,38 +158,69 @@ export default function SubjectsManager() {
 
             const worksheet = workbook.getWorksheet(1);
             const rows: any[] = [];
+            let duplicateFound = false;
 
-            // Header Validation
-            const firstHeader = worksheet?.getRow(1).getCell(1).value?.toString();
-            if (firstHeader !== 'Curriculum Version') {
-                setStatusCode("400");
-                setLoading(false);
-                setShowToast(true);
-                return;
-            }
+            // Fetch existing codes/versions for duplicate prevention
+            const seenInFile = new Set<string>();
+            const seenInExistingData = new Set(
+                subjects.map(s => `${s.course_code.trim().toUpperCase()}|${(s.curriculumn_version || "").trim().toUpperCase()}`)
+            );
 
             worksheet?.eachRow((row, rowNumber) => {
-                if (rowNumber > 1) {
-                    const curVersion = row.getCell(1).value?.toString().trim() || null;
+                if (rowNumber > 1) { // Skip Header
+                    const curVersion = row.getCell(1).value?.toString().trim() || "";
                     const code = row.getCell(2).value?.toString().trim() || "";
                     const name = row.getCell(3).value?.toString().trim() || "";
+
+                    // --- GHOST PROTECTION: SKIP THE EXAMPLE ROW ---
+                    // Even if the user deletes "[EXAMPLE]", the system detects the sample name or code
+                    if (
+                        curVersion.toUpperCase().includes("[EXAMPLE]") ||
+                        name.toUpperCase().includes("SAMPLE:") ||
+                        code.toUpperCase() === "IT101"
+                    ) {
+                        return;
+                    }
+
                     const spec = row.getCell(4).value?.toString().trim() || "";
                     const lec = parseFloat(row.getCell(5).value?.toString() || "0");
                     const lab = parseFloat(row.getCell(6).value?.toString() || "0");
                     const labType = row.getCell(7).value?.toString().trim() || "";
-                    const yearTerm = row.getCell(8).value?.toString().trim() || "1-1";
 
-                    if (lec === 0 && lab === 0) return;
-                    if (lab > 0 && (!labType || labType === "--- none ---")) return;
-
-                    if (code && name) {
-                        rows.push({ curVersion, code, name, spec, lec, lab, labType: labType === "--- none ---" ? "" : labType, yearTerm });
+                    // --- DATE CORRUPTION PROTECTION ---
+                    let yearTerm = row.getCell(8).value?.toString().trim() || "1-1";
+                    const yearTermRegex = /^(\d{1,2}-\d{1}|\d{2})$/;
+                    if (!yearTermRegex.test(yearTerm)) {
+                        return; // Skip invalid formats
                     }
+
+                    if (!code || !name) return;
+                    if (lec === 0 && lab === 0) return;
+
+                    // --- DUPLICATE CHECK ---
+                    const compositeKey = `${code.toUpperCase()}|${curVersion.toUpperCase()}`;
+                    if (seenInFile.has(compositeKey) || seenInExistingData.has(compositeKey)) {
+                        duplicateFound = true;
+                        return;
+                    }
+
+                    seenInFile.add(compositeKey);
+                    rows.push({
+                        curVersion: curVersion || null,
+                        code,
+                        name,
+                        spec,
+                        lec,
+                        lab,
+                        labType: labType === "--- none ---" ? "" : labType,
+                        yearTerm
+                    });
                 }
             });
 
+            // Process Results
             if (rows.length === 0) {
-                setStatusCode("400");
+                setStatusCode(duplicateFound ? "409" : "400");
                 setLoading(false);
                 setShowToast(true);
                 return;
@@ -225,10 +255,11 @@ export default function SubjectsManager() {
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Subject Import Template');
 
+            // 1. Define Columns
             worksheet.columns = [
-                { header: 'Curriculum Version', key: 'curVersion', width: 20 },
+                { header: 'Curriculum Version', key: 'curVersion', width: 25 },
                 { header: 'Course Code', key: 'code', width: 20 },
-                { header: 'Course Name', key: 'name', width: 40 },
+                { header: 'Course Name', key: 'name', width: 45 },
                 { header: 'Field of Specialization', key: 'spec', width: 30 },
                 { header: 'Lecture', key: 'lec', width: 10 },
                 { header: 'Lab', key: 'lab', width: 10 },
@@ -236,21 +267,43 @@ export default function SubjectsManager() {
                 { header: 'Year-Term', key: 'yearTerm', width: 15 }
             ];
 
+            // 2. Style Headers (Row 1)
             const headerRow = worksheet.getRow(1);
-            headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
+            headerRow.font = { bold: true, color: { argb: 'FFFFFF' }, italic: false }; // Ensure no italics
             headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '16A34A' } };
 
-            worksheet.addRow({
-                curVersion: 'BSIT-24-01',
-                code: 'INTE1049',
-                name: 'Professional Issues in Information Systems and Technology',
-                spec: 'Information Technology',
-                lec: 2,
-                lab: 1.5,
-                labType: 'Computer Lab',
-                yearTerm: '4-1'
-            });
+            // 3. FORCE COLUMN H TO TEXT FORMAT (@)
+            // We do this for the entire range to stop "3-1" from becoming a date
+            worksheet.getColumn('H').numFmt = '@';
 
+            // 4. ADD EXAMPLE DATA TO ROW 2
+            const exampleRow = worksheet.getRow(2);
+            exampleRow.values = [
+                '[EXAMPLE] BSIT-2024-V1',
+                'IT101',
+                'SAMPLE: Introduction to Computing (Change This)',
+                'Information Technology',
+                3,
+                0,
+                '--- none ---',
+                '1-1'
+            ];
+
+            // Apply Grey/Italic style ONLY to Row 2
+            exampleRow.eachCell((cell) => {
+                cell.font = { italic: true, color: { argb: '9EA7AD' } };
+            });
+            exampleRow.commit();
+
+            // 5. RESET STYLE FOR FUTURE ROWS (Row 3 onwards)
+            // This prevents your typing from being grey and italic
+            for (let i = 3; i <= 500; i++) {
+                const row = worksheet.getRow(i);
+                row.font = { italic: false, color: { argb: '000000' } }; // Black, normal text
+                worksheet.getCell(`H${i}`).numFmt = '@'; // Double-down on text format for Year-Term
+            }
+
+            // 6. Setup Dropdowns
             const typeOptions = ['Computer Lab', 'Culinary Lab', 'Mock Bar', 'Mock Hotel', 'Gym', 'AVR'];
             for (let i = 2; i <= 100; i++) {
                 worksheet.getCell(`G${i}`).dataValidation = {
@@ -260,21 +313,54 @@ export default function SubjectsManager() {
                 };
             }
 
+            // 7. Download with clean filename
             const buffer = await workbook.xlsx.writeBuffer();
-            saveAs(new Blob([buffer]), `Subject_Import_Template.xlsx`);
+            const fileBlob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+            saveAs(fileBlob, `Subject_Import_Template.xlsx`);
+
             return "200";
+
         } catch (error) {
             console.error("[TEMPLATE_ERROR]:", error);
+            setStatusCode("500");
+            setShowToast(true);
             return "500";
         }
     }
 
     async function handleExportToExcel() {
+        setLoading(true);
         try {
+            let allSubjects = [];
+            let page = 1;
+            let hasMoreData = true;
+
+            // Loop through all pages to collect the entire database matching the search
+            while (hasMoreData) {
+                const pageData = await fetchSubjects(debouncedSearch, page);
+
+                if (pageData && pageData.length > 0) {
+                    allSubjects = [...allSubjects, ...pageData];
+                    page++;
+                } else {
+                    hasMoreData = false; // Stop when an empty page is returned
+                }
+
+                // Safety fallback: stop if it exceeds an unrealistic amount of pages (e.g., 500 pages)
+                if (page > 500) break;
+            }
+
+            if (allSubjects.length === 0) {
+                setStatusCode("400");
+                setShowToast(true);
+                return;
+            }
+
             const ExcelJS = (await import('exceljs')).default;
             const { saveAs } = await import('file-saver');
             const workbook = new ExcelJS.Workbook();
-            const worksheet = workbook.addWorksheet('Subjects Inventory');
+            const worksheet = workbook.addWorksheet('Full Subjects Inventory');
 
             worksheet.columns = [
                 { header: 'Curriculum Version', key: 'curVersion', width: 20 },
@@ -291,7 +377,7 @@ export default function SubjectsManager() {
             headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
             headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2C3E50' } };
 
-            const exportData = subjects.map(s => ({
+            const exportData = allSubjects.map(s => ({
                 curVersion: s.curriculumn_version || '',
                 code: s.course_code,
                 name: s.course_name,
@@ -305,12 +391,16 @@ export default function SubjectsManager() {
             worksheet.addRows(exportData);
 
             const buffer = await workbook.xlsx.writeBuffer();
-            saveAs(new Blob([buffer]), `Subjects_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+            saveAs(new Blob([buffer]), `Subjects_Full_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
 
-            return "200";
+            setStatusCode("200");
+            setShowToast(true);
         } catch (error) {
             console.error("[EXPORT_ERROR]:", error);
-            return "500";
+            setStatusCode("500");
+            setShowToast(true);
+        } finally {
+            setLoading(false);
         }
     }
 
@@ -321,6 +411,23 @@ export default function SubjectsManager() {
             setShowToast(true);
             return;
         }
+
+        // --- NEW VALIDATION: Check for Duplicate (Course Code + Curriculum Version) ---
+        const normalizedCurriculum = curriculumnVersionVal?.trim() || null;
+        const normalizedCourseCode = courseCodeVal.trim().toUpperCase();
+
+        const isDuplicate = subjects.some(subject => {
+            const subjectCurriculum = subject.curriculumn_version?.trim() || null;
+            const subjectCode = subject.course_code?.trim().toUpperCase();
+            return subjectCode === normalizedCourseCode && subjectCurriculum === normalizedCurriculum;
+        });
+
+        if (isDuplicate) {
+            setStatusCode("409"); // Mapped to: "Subject already exists in this curriculum version."
+            setShowToast(true);
+            return;
+        }
+
 
         const lec = parseFloat(lectureVal);
         const lab = parseFloat(labVal);
@@ -368,6 +475,26 @@ export default function SubjectsManager() {
             setShowToast(true);
             return;
         }
+
+        // --- NEW VALIDATION: Check for Duplicate upon Edit (Excluding self) ---
+        const normalizedCurriculum = curriculumnVersionVal?.trim() || null;
+        const normalizedCourseCode = courseCodeVal.trim().toUpperCase();
+
+        const isDuplicate = subjects.some(subject => {
+            // Exclude the current record being edited from the duplicate check
+            if (subject.id === idVal) return false;
+
+            const subjectCurriculum = subject.curriculumn_version?.trim() || null;
+            const subjectCode = subject.course_code?.trim().toUpperCase();
+            return subjectCode === normalizedCourseCode && subjectCurriculum === normalizedCurriculum;
+        });
+
+        if (isDuplicate) {
+            setStatusCode("409"); // Mapped to: "Subject already exists in this curriculum version."
+            setShowToast(true);
+            return;
+        }
+        // ----------------------------------------------------------------------
 
         const lec = parseFloat(lectureVal);
         const lab = parseFloat(labVal);
@@ -554,15 +681,15 @@ export default function SubjectsManager() {
                         )}
                     </TableBody>
                 </Table>
+            </div>
 
-                {/** Pagination **/}
-                <div className="mt-6 justify-self-center">
-                    <h1 className="text-center text-sm text-gray-500">
-                        {rowCount > 0 ? `Showing ${startItem} to ${endItem} of ${rowCount} Subjects` : ""}
-                    </h1>
-                    <div className={`${totalPageCount > 1 ? "flex" : "hidden"} sm:justify-center mt-2`}>
-                        <Pagination currentPage={currentPage} totalPages={totalPageCount || 1} onPageChange={onPageChange} showIcons />
-                    </div>
+            {/** Pagination **/}
+            <div className="mt-6 justify-self-center">
+                <h1 className="text-center text-sm text-gray-500">
+                    {rowCount > 0 ? `Showing ${startItem} to ${endItem} of ${rowCount} Subjects` : ""}
+                </h1>
+                <div className={`${totalPageCount > 1 ? "flex" : "hidden"} sm:justify-center mt-2`}>
+                    <Pagination currentPage={currentPage} totalPages={totalPageCount || 1} onPageChange={onPageChange} showIcons />
                 </div>
             </div>
 
@@ -585,11 +712,20 @@ export default function SubjectsManager() {
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <Label htmlFor="curVersion">Curriculum Version</Label>
-                            <TextInput id="curVersion" placeholder="e.g. BSIT-24-01" value={curriculumnVersionVal} onChange={(e) => { setCurriculumnVersionVal(e.target.value); setActiveChanges(true); }} />
+                            <TextInput id="curVersion"
+                                       maxLength={15}
+                                       placeholder="e.g. BSIT-24-01"
+                                       value={curriculumnVersionVal}
+                                       onChange={(e) => { setCurriculumnVersionVal(e.target.value); setActiveChanges(true); }} />
                         </div>
                         <div>
                             <Label htmlFor="courseCode">Course Code</Label>
-                            <TextInput id="courseCode" placeholder="e.g. INTE1025" value={courseCodeVal} onChange={(e) => { setCourseCodeVal(e.target.value); setActiveChanges(true); }} required />
+                            <TextInput id="courseCode"
+                                       maxLength={15}
+                                       placeholder="e.g. INTE1025"
+                                       value={courseCodeVal}
+                                       onChange={(e) => { setCourseCodeVal(e.target.value.toUpperCase()); setActiveChanges(true); }}
+                                       required />
                         </div>
                     </div>
                     <div>
@@ -608,7 +744,7 @@ export default function SubjectsManager() {
                                 <option value="4">4th Year</option>
                             </Select>
                         </div>
-                        <div hidden={yearVal === "11" || yearVal === "12"}>
+                        <div>
                             <Label htmlFor="term">Term/Semester</Label>
                             <Select id="term"
                                     value={termVal}
@@ -621,26 +757,46 @@ export default function SubjectsManager() {
                     </div>
                     <div>
                         <Label htmlFor="spec">Field of Specialization</Label>
-                        <TextInput id="spec" placeholder="e.g. Software Engineering" value={specializationVal} onChange={(e) => { setSpecializationVal(e.target.value); setActiveChanges(true); }} />
+                        <TextInput id="spec"
+                                   maxLength={100}
+                                   placeholder="e.g. Software Engineering"
+                                   value={specializationVal}
+                                   onChange={(e) => { setSpecializationVal(e.target.value); setActiveChanges(true); }} />
                     </div>
                     <div className="grid grid-cols-3 gap-4">
                         <div>
                             <Label htmlFor="lec">Lecture Units</Label>
                             <TextInput id="lec"
+                                       type="number"
+                                       max={99}
                                        step={"0.1"}
                                        value={lectureVal}
                                        onFocus={(e) => e.target.value === "0" ? setLectureVal("") : e.target.value}
                                        onBlur={(e) => e.target.value === "" ? setLectureVal("0") : e.target.value}
-                                       onChange={(e) => { limitLectureUnits(e.target.value); setActiveChanges(true); }} />
+                                       onChange={(e) => {
+                                           const val = e.target.value;
+                                           if (val.length <= 3) { // Limits length including decimals
+                                               setLectureVal(val);
+                                               setActiveChanges(true);
+                                           }
+                                       }} />
                         </div>
                         <div>
                             <Label htmlFor="lab">Lab Units</Label>
                             <TextInput id="lab"
+                                       type="number"
+                                       max={99}
                                        step={"0.1"}
                                        value={labVal}
                                        onFocus={(e) => e.target.value === "0" ? setLabVal("") : e.target.value}
                                        onBlur={(e) => e.target.value === "" ? setLabVal("0") : e.target.value}
-                                       onChange={(e) => { limitLabUnits(e.target.value); setActiveChanges(true); }} />
+                                       onChange={(e) => {
+                                           const val = e.target.value;
+                                           if (val.length <= 3) { // Limits length including decimals
+                                               setLabVal(val);
+                                               setActiveChanges(true);
+                                           }
+                                       }}  />
                         </div>
                         <div>
                             <Label htmlFor="labType">Lab Type {parseFloat(labVal) > 0 && <span className="text-red-500">*</span>}</Label>
@@ -673,10 +829,17 @@ export default function SubjectsManager() {
                 <ModalHeader>Editing Subject: {courseCodeVal}</ModalHeader>
                 <ModalBody className="space-y-4">
                     <p className="text-sm text-gray-500 italic">Curriculum: {curriculumnVersionVal || "N/A"}</p>
+
                     <div>
                         <Label>Course Name</Label>
-                        <TextInput ref={EditModalCourseNameInput} value={courseNameVal} onChange={(e) => { limitCourseNameVal(e.target.value); setActiveChanges(true); }} />
+                        <TextInput
+                            ref={EditModalCourseNameInput}
+                            maxLength={100} // New Constraint
+                            value={courseNameVal}
+                            onChange={(e) => { limitCourseNameVal(e.target.value); setActiveChanges(true); }}
+                        />
                     </div>
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <Label>Year Level</Label>
@@ -689,45 +852,83 @@ export default function SubjectsManager() {
                                 <option value="4">4th Year</option>
                             </Select>
                         </div>
-                        <div hidden={yearVal === "11" || yearVal === "12"}>
-                            <Label>Term/Semester</Label>
-                            <Select value={termVal}
-                                    disabled={yearVal === "11" || yearVal === "12"}
-                                    onChange={(e) => { setTermVal(e.target.value); setActiveChanges(true); }}>
-                                <option value="1">1st Semester</option>
-                                <option value="2">2nd Semester</option>
-                            </Select>
-                        </div>
+
+                        {/** Logic: Invisible if SHS (Grade 11/12) **/}
+                        {yearVal !== "11" && yearVal !== "12" && (
+                            <div>
+                                <Label>Term/Semester</Label>
+                                <Select
+                                    value={termVal}
+                                    onChange={(e) => { setTermVal(e.target.value); setActiveChanges(true); }}
+                                >
+                                    <option value="1">1st Semester</option>
+                                    <option value="2">2nd Semester</option>
+                                </Select>
+                            </div>
+                        )}
                     </div>
+
                     <div>
                         <Label>Field of Specialization</Label>
-                        <TextInput value={specializationVal} onChange={(e) => { setSpecializationVal(e.target.value); setActiveChanges(true); }} />
+                        <TextInput
+                            maxLength={100} // New Constraint
+                            value={specializationVal}
+                            onChange={(e) => { setSpecializationVal(e.target.value); setActiveChanges(true); }}
+                        />
                     </div>
+
                     <div className="grid grid-cols-3 gap-4">
                         <div>
                             <Label>Lecture Units</Label>
-                            <TextInput value={lectureVal}
-                                       step={"0.1"}
-                                       onFocus={(e) => e.target.value === "0" ? setLectureVal("") : e.target.value}
-                                       onBlur={(e) => e.target.value === "" ? setLectureVal("0") : e.target.value}
-                                       onChange={(e) => { limitLectureUnits(e.target.value); setActiveChanges(true); }} />
+                            <TextInput
+                                type="number"
+                                max={99}
+                                placeholder="0"
+                                value={lectureVal}
+                                step={"0.1"}
+                                // Prevents typing letters like 'e', '+', '-'
+                                onKeyDown={(e) => ["e", "E", "+", "-"].includes(e.key) && e.preventDefault()}
+                                onFocus={(e) => e.target.value === "0" ? setLectureVal("") : e.target.value}
+                                onBlur={(e) => e.target.value === "" ? setLectureVal("0") : e.target.value}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    // Constraint: Only allow up to 3 characters total (e.g., "3.5", "100")
+                                    if (val.length <= 3) {
+                                        limitLectureUnits(val);
+                                        setActiveChanges(true);
+                                    }
+                                }} />
                         </div>
                         <div>
                             <Label>Lab Units</Label>
-                            <TextInput value={labVal}
-                                       step={"0.1"}
-                                       onFocus={(e) => e.target.value === "0" ? setLabVal("") : e.target.value}
-                                       onBlur={(e) => e.target.value === "" ? setLabVal("0") : e.target.value}
-                                       onChange={(e) => { limitLabUnits(e.target.value); setActiveChanges(true); }} />
+                            <TextInput
+                                type="number"
+                                max={99}
+                                placeholder="0"
+                                value={labVal}
+                                step={"0.1"}
+                                // Prevents typing letters like 'e', '+', '-'
+                                onKeyDown={(e) => ["e", "E", "+", "-"].includes(e.key) && e.preventDefault()}
+                                onFocus={(e) => e.target.value === "0" ? setLabVal("") : e.target.value}
+                                onBlur={(e) => e.target.value === "" ? setLabVal("0") : e.target.value}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    // Constraint: Only allow up to 3 characters total
+                                    if (val.length <= 3) {
+                                        limitLabUnits(val);
+                                        setActiveChanges(true);
+                                    }
+                                }} />
                         </div>
                         <div>
                             <Label htmlFor="labType">Lab Type {parseFloat(labVal) > 0 && <span className="text-red-500">*</span>}</Label>
-                            <Select id="labType"
-                                    value={labTypeVal}
-                                    onChange={(e) => {
-                                        setLabTypeVal(e.target.value === "--- none ---" ? "" : e.target.value);
-                                        setActiveChanges(true);
-                                    }}
+                            <Select
+                                id="labType"
+                                value={labTypeVal}
+                                onChange={(e) => {
+                                    setLabTypeVal(e.target.value === "--- none ---" ? "" : e.target.value);
+                                    setActiveChanges(true);
+                                }}
                             >
                                 <option value="">--- none ---</option>
                                 <option value="Computer Lab">Computer Lab</option>
@@ -740,11 +941,18 @@ export default function SubjectsManager() {
                         </div>
                     </div>
                 </ModalBody>
+
                 <ModalFooter className="flex justify-between">
-                    <Button outline color="dark" onClick={() => showWarning("red")}><HiOutlineTrash className="text-red-600 h-5 w-5"/></Button>
+                    <Button outline color="dark" onClick={() => showWarning("red")}>
+                        <HiOutlineTrash className="text-red-600 h-5 w-5"/>
+                    </Button>
                     <div className="flex space-x-2">
-                        <Button color="alternative" onClick={() => activeChanges ? showWarning("yellow") : discardEntry()}>Cancel</Button>
-                        <Button onClick={() => showWarning("default")}>Update</Button>
+                        <Button color="alternative" onClick={() => activeChanges ? showWarning("yellow") : discardEntry()}>
+                            Cancel
+                        </Button>
+                        <Button onClick={() => showWarning("default")}>
+                            Update
+                        </Button>
                     </div>
                 </ModalFooter>
             </Modal>
