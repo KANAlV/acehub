@@ -52,17 +52,22 @@ export default function RoomManager() {
     const [openWarningModal, setOpenWarningModal] = useState(false);
     const [warningType, setWarningType] = useState(""); // Track What warning will show
 
-    const [activeChanges, setActiveChanges] = useState(false); // Track if there are changes in edit to toggle between cancel and discard
-    const AddModalRoomNameInput = useRef<HTMLInputElement>(null); // for initialFocus of AddModal
-    const EditModalRoomNameInput = useRef<HTMLInputElement>(null); // for initialFocus of EditModal
+     const [activeChanges, setActiveChanges] = useState(false); // Track if there are changes in edit to toggle between cancel and discard
+     const AddModalRoomNameInput = useRef<HTMLInputElement>(null); // for initialFocus of AddModal
+     const EditModalRoomNameInput = useRef<HTMLInputElement>(null); // for initialFocus of EditModal
 
-    const [showToast, setShowToast] = useState(false);
-    const [progress, setProgress] = useState(100); // Toast progress bar
+     // form useStates
+     const [selectedRoom, setSelectedRoom] = useState(0); // Track the room being edited
+     const [roomNameVal, setRoomNameVal] = useState("");
+     const [roomTypeVal, setRoomTypeVal] = useState("Lecture");
 
-    // form useStates
-    const [selectedRoom, setSelectedRoom] = useState(0); // Track the room being edited
-    const [roomNameVal, setRoomNameVal] = useState("");
-    const [roomTypeVal, setRoomTypeVal] = useState("Lecture");
+     // Track original values for comparison
+     const [selectedRoomOld, setSelectedRoomOld] = useState(0);
+     const [roomNameValOld, setRoomNameValOld] = useState("");
+     const [roomTypeValOld, setRoomTypeValOld] = useState("Lecture");
+
+     const [showToast, setShowToast] = useState(false);
+     const [progress, setProgress] = useState(100); // Toast progress bar
 
     // Search
     const [search, setSearch] = useState("");
@@ -106,21 +111,27 @@ export default function RoomManager() {
     }, []);
 
     /** UI Functions **/
-    function editModalValue(id: number) {
-        const room = rooms.find(r => r.room_id == id);
+     function editModalValue(id: number) {
+         const room = rooms.find(r => r.room_id == id);
 
-        if (!room) {
-            console.error(`[UI_ERROR]: Could not find room with ID ${id} in local state.`);
-            return;
-        }
+         if (!room) {
+             console.error(`[UI_ERROR]: Could not find room with ID ${id} in local state.`);
+             return;
+         }
 
-        console.log(`[UI_ACTION]: Opening Edit Modal for Room: "${room.room_name}" (ID: ${id})`);
+         console.log(`[UI_ACTION]: Opening Edit Modal for Room: "${room.room_name}" (ID: ${id})`);
 
-        setSelectedRoom(room.room_id);
-        setRoomNameVal(room.room_name);
-        setRoomTypeVal(room.room_type);
-        setEditModal(true);
-    }
+         setSelectedRoom(room.room_id);
+         setRoomNameVal(room.room_name);
+         setRoomTypeVal(room.room_type);
+         
+         // Store original values for comparison
+         setSelectedRoomOld(room.room_id);
+         setRoomNameValOld(room.room_name);
+         setRoomTypeValOld(room.room_type);
+         
+         setEditModal(true);
+     }
 
     function showWarning(color: string) {
         console.log(`[UI_INTERRUPT]: Showing warning modal. Level: ${color}`);
@@ -128,16 +139,19 @@ export default function RoomManager() {
         setOpenWarningModal(true);
     }
 
-    function discardEntry() {
-        console.log("[UI_ACTION]: Discarding entry and closing all modals. Resetting form state.");
-        setSelectedRoom(0);
-        setRoomNameVal("");
-        setRoomTypeVal("Lecture");
-        setOpenWarningModal(false);
-        setEditModal(false);
-        setActiveChanges(false);
-        setAddModal(false);
-    }
+     function discardEntry() {
+         console.log("[UI_ACTION]: Discarding entry and closing all modals. Resetting form state.");
+         setSelectedRoom(0);
+         setRoomNameVal("");
+         setRoomTypeVal("Lecture");
+         setSelectedRoomOld(0);
+         setRoomNameValOld("");
+         setRoomTypeValOld("Lecture");
+         setOpenWarningModal(false);
+         setEditModal(false);
+         setActiveChanges(false);
+         setAddModal(false);
+     }
 
     /** Queries **/
     const loadInitialData = async () => {
@@ -531,21 +545,31 @@ export default function RoomManager() {
                 clearTimeout(timeout);
             };
         }
-    }, [showToast]);
+     }, [showToast]);
 
-    useEffect(() => { // Resetting Page to 1 When Searching
-        setCurrentPage(1);
-    }, [debouncedSearch]);
+     useEffect(() => { // Resetting Page to 1 When Searching
+         setCurrentPage(1);
+     }, [debouncedSearch]);
 
-    useEffect(() => { // Adds 1 sec delay to querying while typing
-        const handler = setTimeout(() => {
-            setDebouncedSearch(search);
-        }, 2000); // 1000ms = 1 seconds
+     useEffect(() => { // Adds 1 sec delay to querying while typing
+         const handler = setTimeout(() => {
+             setDebouncedSearch(search);
+         }, 2000); // 1000ms = 1 seconds
 
-        return () => {
-            clearTimeout(handler); // Cancel the timer if the user types
-        };
-    }, [search]);
+         return () => {
+             clearTimeout(handler); // Cancel the timer if the user types
+         };
+     }, [search]);
+
+     // Track changes by comparing current values with original values
+     useEffect(() => {
+         const hasChanges =
+             selectedRoom !== selectedRoomOld ||
+             roomNameVal !== roomNameValOld ||
+             roomTypeVal !== roomTypeValOld;
+
+         setActiveChanges(hasChanges);
+     }, [selectedRoom, roomNameVal, roomTypeVal, selectedRoomOld, roomNameValOld, roomTypeValOld]);
 
     /** Table Rows **/
     const RoomTableRow = ({ room }) => {
@@ -767,19 +791,19 @@ export default function RoomManager() {
                     <Button outline color={"dark"} className={"p-2"} onClick={() => showWarning("red")}>
                         <HiOutlineTrash color={"red"} className={"size-6"}/>
                     </Button>
-                    <div className={"flex w-full justify-end space-x-2"}>
-                        {activeChanges == true?(<>
-                            <Button color="alternative" onClick={() => showWarning("yellow")}>
-                                Discard
-                            </Button>
-                        </>):(<>
-                            <Button color="alternative" onClick={() => discardEntry()}>
-                                Cancel
-                            </Button>
-                        </>)}
+                     <div className={"flex w-full justify-end space-x-2"}>
+                         {activeChanges == true?(<>
+                             <Button color="alternative" onClick={() => showWarning("yellow")}>
+                                 Discard
+                             </Button>
+                         </>):(<>
+                             <Button color="alternative" onClick={() => discardEntry()}>
+                                 Cancel
+                             </Button>
+                         </>)}
 
-                        <Button onClick={() => showWarning("default")}>Save</Button>
-                    </div>
+                         <Button onClick={() => showWarning("default")} disabled={!activeChanges}>Save</Button>
+                     </div>
                 </ModalFooter>
             </Modal>
 
