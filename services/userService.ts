@@ -613,7 +613,7 @@ export async function insertSubject(curriculumn_version: string | null, course_c
             SELECT 1
             FROM dropdown_values
             WHERE LOWER(value) = LOWER(${field_of_specialization})
-            AND "for" = 'specialization'
+            AND "value_for" = 'specialization'
             LIMIT 1
         `;
 
