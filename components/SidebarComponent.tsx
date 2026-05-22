@@ -25,17 +25,39 @@ export function SidebarComponent({ username, role }: { username: string, role: s
     const pathname = usePathname();
     const { instance, accounts } = useMsal();
 
-    if (role !== "Administrator") {
-        if(pathname.includes("/schedules") || pathname.includes("/rooms") || pathname.includes("/courses") || pathname.includes("/teachers") || pathname.includes("/subjects")) {
+
+    /** --- Role Detection --- **/
+
+        if (role !== "Administrator") {
+            if( pathname.includes("/schedules") ||
+                pathname.includes("/rooms") ||
+                pathname.includes("/teachers") ||
+                pathname.includes("/subjects")) {
+                window.location.href = "/unauthorized";
+            }
+        }
+
+        if (role !== "Administrator" && role !== "SuperAdmin") {
+            if( pathname.includes("/configuration")) {
+                window.location.href = "/unauthorized";
+            }
+        }
+
+        if (role !== "Administrator" && role !== "Registrar") {
+            if( pathname.includes("/courses")) {
+                window.location.href = "/unauthorized";
+            }
+        }
+
+    if (role !== "Academic Assistant") {
+        if( pathname.includes("/booking")) {
             window.location.href = "/unauthorized";
         }
     }
 
-    if (role !== "Administrator" && role !== "SuperAdmin") {
-        if(pathname.includes("/configuration")) {
-            window.location.href = "/unauthorized";
-        }
-    }
+    /** --- /Role Detection --- **/
+
+
 
     const show = pathname === "/" || pathname === "/login" || pathname === "/auth-callback";
 
@@ -104,25 +126,29 @@ export function SidebarComponent({ username, role }: { username: string, role: s
                         <SidebarItem as={Link} href="/dashboard" className={"hover:bg-gray-500/14"} icon={HiChartPie} onClick={() => setIsOpen(false)}>
                             Dashboard
                         </SidebarItem>
+                        <SidebarItem hidden={role !== "Academic Assistant"}
+                                     as={Link} href="/booking" className={"hover:bg-gray-500/14"} icon={HiTable} onClick={() => setIsOpen(false)}>
+                            Booking
+                        </SidebarItem>
                         <SidebarItem hidden={role !== "Administrator"}
                                      as={Link} href="/schedules" className={"hover:bg-gray-500/14"} icon={HiTable} onClick={() => setIsOpen(false)}>
                             Schedules
-                        </SidebarItem>
-                        <SidebarItem hidden={role !== "Administrator"}
-                                     as={Link} href="/rooms" className={"hover:bg-gray-500/14"} icon={HiLibrary} onClick={() => setIsOpen(false)}>
-                            Rooms
                         </SidebarItem>
                         <SidebarItem hidden={!["Registrar", "Administrator"].includes(role)}
                                      as={Link} href="/courses" className={"hover:bg-gray-500/14"} icon={HiUserGroup} onClick={() => setIsOpen(false)}>
                             Courses
                         </SidebarItem>
                         <SidebarItem hidden={role !== "Administrator"}
-                                     as={Link} href="/teachers" className={"hover:bg-gray-500/14"} icon={HiAcademicCap} onClick={() => setIsOpen(false)}>
-                            Teachers
+                                     as={Link} href="/rooms" className={"hover:bg-gray-500/14"} icon={HiLibrary} onClick={() => setIsOpen(false)}>
+                            Rooms
                         </SidebarItem>
                         <SidebarItem hidden={role !== "Administrator"}
                                      as={Link} href="/subjects" className={"hover:bg-gray-500/14"} icon={HiBookOpen} onClick={() => setIsOpen(false)}>
                             Subjects
+                        </SidebarItem>
+                        <SidebarItem hidden={role !== "Administrator"}
+                                     as={Link} href="/teachers" className={"hover:bg-gray-500/14"} icon={HiAcademicCap} onClick={() => setIsOpen(false)}>
+                            Teachers
                         </SidebarItem>
                         <SidebarItem hidden={role !== "Administrator"}
                                      as={Link} href="/maintenance" className={"hover:bg-gray-500/14"} icon={HiClipboardCheck} onClick={() => setIsOpen(false)}>
@@ -138,7 +164,7 @@ export function SidebarComponent({ username, role }: { username: string, role: s
                                      as={Link} href="#" className={"hover:bg-gray-500/14"} icon={HiQuestionMarkCircle}>
                             Help (*)
                         </SidebarItem>
-                        <SidebarItem hidden={role !== "Administrator" && role !== "SuperAdmin"}
+                        <SidebarItem hidden={!["SuperAdmin", "Administrator"].includes(role)}
                                      as={Link} href="/configuration" className={"hover:bg-gray-500/14"} icon={IoMdSettings}>
                             Configuration
                         </SidebarItem>

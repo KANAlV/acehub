@@ -22,7 +22,7 @@ import {
     ToastToggle
 } from "flowbite-react";
 import React, {useEffect, useRef, useState} from "react";
-import {HiCheck, HiExclamation, HiOutlineTrash, HiPlus, HiTrash} from "react-icons/hi";
+import {HiCheck, HiExclamation, HiMail, HiOutlineTrash, HiPlus, HiTrash} from "react-icons/hi";
 import {
     fetchTeachers,
     fetchTeachersCount,
@@ -33,7 +33,7 @@ import {
 } from "@/services/userService.ts";
 import {VscSave} from "react-icons/vsc";
 import {
-    pscsSanitization,
+    pscsSanitization, sanitizeEmail,
     sanitizeMediumName,
     sanitizeMiName, sanitizeSuffix, sanitizeTeacherCode, sanitizeTeacherId,
     sanitizeTeacherName,
@@ -243,11 +243,8 @@ export default function TeacherManager() {
     const [editModal, setEditModal] = useState(false);
     const [addModal, setAddModal] = useState(false);
     const [openWarningModal, setOpenWarningModal] = useState(false);
-    const [warningType, setWarningType] = useState("");
 
     const [activeChanges, setActiveChanges] = useState(false);
-    const AddModalIdInput = useRef<HTMLInputElement>(null);
-    const EditModalIdInput = useRef<HTMLInputElement>(null);
 
     const [showToast, setShowToast] = useState(false);
     const [progress, setProgress] = useState(100);
@@ -260,9 +257,23 @@ export default function TeacherManager() {
     const [mi, setMi] = useState("");
     const [suffix, setSuffix] = useState("");
     const [code, setCode] = useState("");
+    const [email, setEmail] = useState("");
     const [spec, setSpec] = useState("");
     const [type, setType] = useState("FT");
     const [availability, setAvailability] = useState<any[]>([]);
+
+    //Form Update Validation
+    const [pscsIdOld, setPscsIdOld] = useState("");
+    const [teacherIdOld, setTeacherIdOld] = useState("");
+    const [fnameOld, setFnameOld] = useState("");
+    const [snameOld, setSnameOld] = useState("");
+    const [miOld, setMiOld] = useState("");
+    const [suffixOld, setSuffixOld] = useState("");
+    const [codeOld, setCodeOld] = useState("");
+    const [emailOld, setEmailOld] = useState("");
+    const [specOld, setSpecOld] = useState("");
+    const [typeOld, setTypeOld] = useState("FT");
+    const [availabilityOld, setAvailabilityOld] = useState<any[]>([]);
 
     // Search and Filter
     const [search, setSearch] = useState("");
@@ -296,12 +307,6 @@ export default function TeacherManager() {
         total: 0
     });
 
-    const [importSummary, setImportSummary] = useState<null | {
-        total: number;
-        success: number;
-        conflicts: number;
-    }>(null);
-
     const [dropdownValues, setDropdownValues] = useState<DropdownValue[]>([]);
 
     useEffect(() => {
@@ -313,6 +318,35 @@ export default function TeacherManager() {
         loadDropdownValues();
     }, []);
 
+    useEffect(() => {
+        const hasChanges =
+            pscsId !== pscsIdOld ||
+            teacherId !== teacherIdOld ||
+            fname !== fnameOld ||
+            sname !== snameOld ||
+            mi !== miOld ||
+            suffix !== suffixOld ||
+            email !== emailOld ||
+            code !== codeOld ||
+            spec !== specOld ||
+            type !== typeOld ||
+            availability !== availabilityOld;
+
+        setActiveChanges(hasChanges);
+    }, [
+        pscsId,
+        teacherId,
+        fname,
+        sname,
+        mi,
+        suffix,
+        email,
+        code,
+        spec,
+        type,
+        availability
+    ]);
+
     /** UI Functions **/
     function editModalValue(id: string) {
         const teacher = teachers.find(t => t.pscs_id === id);
@@ -323,11 +357,26 @@ export default function TeacherManager() {
         setFname(teacher.fname);
         setSname(teacher.sname);
         setMi(teacher.mi);
+        setSuffix(teacher.suffix);
+        setEmail(teacher.email || "");
         setCode(teacher.teacher_code);
         setSpec(teacher.specialization);
         setType(teacher.employment_type);
         setAvailability(teacher.availability || []);
         setEditModal(true);
+
+        //Comparison check set
+        setPscsIdOld(teacher.pscs_id);
+        setTeacherIdOld(teacher.teacher_id);
+        setFnameOld(teacher.fname);
+        setSnameOld(teacher.sname);
+        setMiOld(teacher.mi);
+        setSuffixOld(teacher.suffix);
+        setEmailOld(teacher.email);
+        setCodeOld(teacher.teacher_code);
+        setSpecOld(teacher.specialization);
+        setTypeOld(teacher.employment_type);
+        setAvailabilityOld(teacher.availability || []);
     }
 
     function discardEntry() {
@@ -336,10 +385,23 @@ export default function TeacherManager() {
         setFname("");
         setSname("");
         setMi("");
+        setSuffix("");
         setCode("");
+        setEmail("")
         setSpec("");
         setType("FT");
         setAvailability([]);
+        setPscsIdOld("");
+        setTeacherIdOld("");
+        setFnameOld("");
+        setSnameOld("");
+        setMiOld("");
+        setSuffixOld("");
+        setCodeOld("");
+        setEmailOld("")
+        setSpecOld("");
+        setTypeOld("FT");
+        setAvailabilityOld([]);
         setOpenWarningModal(false);
         setEditModal(false);
         setActiveChanges(false);
@@ -362,11 +424,11 @@ export default function TeacherManager() {
     const onPageChange = (page: number) => setCurrentPage(page);
 
     async function submitTeacher() {
-        if (!pscsId || !fname || !sname || !code) return;
+        if (!pscsId || !teacherId || !email || !fname || !sname || !code) return;
         setLoading(true);
         // Clear availability if Full-Time before saving
         const finalAvailability = (type === "FT" || type === "PTFL") ? [] : availability;
-        const stat = await insertTeacher(pscsId, teacherId, fname.trim(), sname.trim(), mi.trim(), suffix.trim(), code.trim(), spec, type, finalAvailability);
+        const stat = await insertTeacher(pscsId, teacherId, email.trim(), fname.trim(), sname.trim(), mi.trim(), suffix.trim(), code.trim(), spec, type, finalAvailability);
         setStatusCode(stat);
         setLoading(false);
         setShowToast(true);
@@ -378,11 +440,11 @@ export default function TeacherManager() {
     }
 
     async function updateEntry() {
-        if (!pscsId || !fname || !sname || !code) return;
+        if (!pscsId || !teacherId || !email || !fname || !sname || !code) return;
         setLoading(true);
         // Clear availability if Full-Time before saving
         const finalAvailability = (type === "FT" || type === "FTPT") ? [] : availability;
-        const stat = await updateTeacher(pscsId, teacherId, fname.trim(), sname.trim(), mi.trim(), suffix.trim(), code.trim(), spec, type, finalAvailability);
+        const stat = await updateTeacher(pscsId, teacherId, email.trim(), fname.trim(), sname.trim(), mi.trim(), suffix.trim(), code.trim(), spec, type, finalAvailability);
         setStatusCode(stat);
         setLoading(false);
         setShowToast(true);
@@ -733,6 +795,7 @@ export default function TeacherManager() {
                     const res = await insertTeacher(
                         t.id,
                         t.teacher_id,
+                        t.email,
                         t.fname,
                         t.sname,
                         t.mi,
@@ -954,37 +1017,43 @@ export default function TeacherManager() {
                     <ModalBody className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <Label>PSCS ID</Label>
-                                <TextInput value={pscsId} onChange={e => { setPscsId(pscsSanitization(e.target.value)); setActiveChanges(true); }} placeholder="0001" />
+                                <Label>PSCS ID *</Label>
+                                <TextInput value={pscsId} onChange={e => { setPscsId(pscsSanitization(e.target.value)) }} placeholder="0001" />
                             </div>
                             <div>
-                                <Label>Teacher ID</Label>
-                                <TextInput value={teacherId} onChange={e => { setTeacherId(sanitizeTeacherId(e.target.value)); setActiveChanges(true); }} placeholder="A1B2C3" />
+                                <Label>Teacher ID *</Label>
+                                <TextInput value={teacherId} onChange={e => { setTeacherId(sanitizeTeacherId(e.target.value)) }} placeholder="A1B2C3" />
                             </div>
                         </div>
                         <div className={"grid grid-cols-4 gap-4"}>
                             <div className={"col-span-3"}>
-                                <Label>First Name</Label>
-                                <TextInput value={fname} onChange={e => { setFname(sanitizeTeacherName(e.target.value)); setActiveChanges(true); }} placeholder="John" />
+                                <Label>First Name *</Label>
+                                <TextInput value={fname} onChange={e => { setFname(sanitizeTeacherName(e.target.value)) }} placeholder="John" />
                             </div>
                             <div className={"col-span-1"}>
                                 <Label>M.I.</Label>
-                                <TextInput value={mi} onChange={e => { setMi(sanitizeMiName(e.target.value)); setActiveChanges(true); }} placeholder="F" />
+                                <TextInput value={mi} onChange={e => { setMi(sanitizeMiName(e.target.value)) }} placeholder="F" />
                             </div>
                         </div>
                         <div className={"grid grid-cols-4 gap-4"}>
                             <div className={"col-span-3"}>
-                                <Label>Last Name</Label>
-                                <TextInput value={sname} onChange={e => { setSname(sanitizeTeacherName(e.target.value)); setActiveChanges(true); }} placeholder="Doe" />
+                                <Label>Last Name *</Label>
+                                <TextInput value={sname} onChange={e => { setSname(sanitizeTeacherName(e.target.value)) }} placeholder="Doe" />
                             </div>
                             <div>
                                 <Label>Suffix</Label>
-                                <TextInput value={suffix} onChange={e => { setSuffix(sanitizeSuffix(e.target.value)); setActiveChanges(true); }} placeholder="Jr" />
+                                <TextInput value={suffix} onChange={e => { setSuffix(sanitizeSuffix(e.target.value)) }} placeholder="Jr" />
                             </div>
                         </div>
-                        <div>
-                            <Label>Teacher Code</Label>
-                            <TextInput value={code} onChange={e => { setCode(sanitizeTeacherCode(e.target.value)); setActiveChanges(true); }} placeholder="JFD" />
+                        <div className={"grid grid-cols-4 gap-4"}>
+                            <div>
+                                <Label>Code *</Label>
+                                <TextInput value={code} onChange={e => { setCode(sanitizeTeacherCode(e.target.value)) }} placeholder="JFD" />
+                            </div>
+                            <div className={"col-span-3"}>
+                                <Label>Email *</Label>
+                                <TextInput icon={HiMail} value={email} onChange={e => { setEmail(sanitizeEmail(e.target.value)) }} placeholder="example@alabang.sti.edu"/>
+                            </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
@@ -995,7 +1064,6 @@ export default function TeacherManager() {
                                     value={spec}
                                     onChange={(e) => {
                                         setSpec(e.target.value);
-                                        setActiveChanges(true);
                                     }}
                                 >
                                     {dropdownValues.map((ddValues) => (
@@ -1013,7 +1081,7 @@ export default function TeacherManager() {
                                 <div className={"w-28"}>
                                     <Label>Emp. Type</Label>
                                     <Select value={type}
-                                            onChange={e => { setType(e.target.value); setActiveChanges(true); }}>
+                                            onChange={e => { setType(e.target.value) }}>
                                         <option>FT</option>
                                         <option>PTFL</option>
                                         <option>PT</option>
@@ -1027,7 +1095,9 @@ export default function TeacherManager() {
                         <Button color="alternative" onClick={activeChanges ? () => setOpenWarningModal(true) : discardEntry}>
                             {activeChanges ? "Discard" : "Cancel"}
                         </Button>
-                        <Button onClick={submitTeacher}>Save</Button>
+                        <Button onClick={submitTeacher}
+                                disabled={!pscsId || !teacherId || !email || !fname || !sname || !code}>
+                            Save</Button>
                     </ModalFooter>
                 </Modal>
 
@@ -1039,31 +1109,35 @@ export default function TeacherManager() {
                             <div>
                                 <Label>PSCS ID</Label>
                                 <div className={"py-1.5 font-bold"}>{pscsId}</div>
-                                <TextInput value={pscsId} readOnly disabled hidden/>
+                                <TextInput required value={pscsId} readOnly disabled hidden/>
                             </div>
                             <div>
-                                <Label>Teacher Code</Label>
-                                <TextInput value={code} onChange={e => { setCode(sanitizeTeacherCode(e.target.value)); setActiveChanges(true); }} />
+                                <Label>Teacher Code *</Label>
+                                <TextInput required value={code} onChange={e => { setCode(sanitizeTeacherCode(e.target.value)) }} />
                             </div>
+                        </div>
+                        <div>
+                            <Label>Email *</Label>
+                            <TextInput required value={email} onChange={e => { setEmail(sanitizeEmail(e.target.value)) }} placeholder="example@alabang.sti.edu"/>
                         </div>
                         <div className={"grid grid-cols-4 gap-4"}>
                             <div className={"col-span-3"}>
-                                <Label>First Name</Label>
-                                <TextInput value={fname} onChange={e => { setFname(sanitizeTeacherName(e.target.value)); setActiveChanges(true); }} />
+                                <Label>First Name *</Label>
+                                <TextInput required value={fname} onChange={e => { setFname(sanitizeTeacherName(e.target.value)) }} />
                             </div>
                             <div>
                                 <Label>M.I.</Label>
-                                <TextInput value={mi} placeholder={"A"} onChange={e => { setMi(sanitizeMiName(e.target.value)); setActiveChanges(true); }} />
+                                <TextInput value={mi} placeholder={"A"} onChange={e => { setMi(sanitizeMiName(e.target.value)) }} />
                             </div>
                         </div>
                         <div className={"grid grid-cols-4 gap-4"}>
                             <div className={"col-span-3"}>
-                                <Label>Last Name</Label>
-                                <TextInput value={sname} onChange={e => { setSname(sanitizeTeacherName(e.target.value)); setActiveChanges(true); }} />
+                                <Label>Last Name *</Label>
+                                <TextInput required value={sname} onChange={e => { setSname(sanitizeTeacherName(e.target.value)) }} />
                             </div>
                             <div>
                                 <Label>Suffix</Label>
-                                <TextInput value={suffix} placeholder={"Jr"} onChange={e => { setSuffix(sanitizeSuffix(e.target.value)); setActiveChanges(true); }} />
+                                <TextInput value={suffix} placeholder={"Jr"} onChange={e => { setSuffix(sanitizeSuffix(e.target.value)) }} />
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -1074,8 +1148,7 @@ export default function TeacherManager() {
                                     className="w-52"
                                     value={spec}
                                     onChange={(e) => {
-                                        setSpec(e.target.value);
-                                        setActiveChanges(true);
+                                        setSpec(e.target.value)
                                     }}
                                 >
                                     {dropdownValues
@@ -1095,7 +1168,7 @@ export default function TeacherManager() {
                                 <div className={"w-28"}>
                                     <Label>Emp. Type</Label>
                                     <Select value={type}
-                                            onChange={e => { setType(e.target.value); setActiveChanges(true); }}>
+                                            onChange={e => { setType(e.target.value) }}>
                                         <option>FT</option>
                                         <option>PTFL</option>
                                         <option>PT</option>
@@ -1103,7 +1176,7 @@ export default function TeacherManager() {
                                 </div>
                             </div>
                         </div>
-                        <AvailabilityManager availability={availability} onUpdate={(v) => { setAvailability(v); setActiveChanges(true); }} employmentType={type} />
+                        <AvailabilityManager availability={availability} onUpdate={(v) => { setAvailability(v) }} employmentType={type} />
                     </ModalBody>
                     <ModalFooter>
                         <Button color="red" onClick={() => setOpenWarningModal(true)}><HiOutlineTrash className="size-5" /></Button>
@@ -1111,7 +1184,7 @@ export default function TeacherManager() {
                             <Button color="alternative" onClick={discardEntry}>
                                 {activeChanges ? "Discard" : "Cancel"}
                             </Button>
-                            <Button onClick={updateEntry}>Update</Button>
+                            <Button disabled={!activeChanges} onClick={updateEntry}>Update</Button>
                         </div>
                     </ModalFooter>
                 </Modal>

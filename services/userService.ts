@@ -713,6 +713,7 @@ export async function fetchTeachersLoadCount(scheduleId: string, search = "", ty
 export async function insertTeacher(
     id: string,
     teacher_id: string,
+    email: string,
     fname: string,
     sname: string,
     mi: string,
@@ -743,6 +744,7 @@ export async function insertTeacher(
         await sql`SELECT create_teacher(
             ${id},
             ${teacher_id},
+            ${email},
             ${fname},
             ${sname},
             ${mi},
@@ -766,6 +768,7 @@ export async function insertTeacher(
 export async function updateTeacher(
     id: string,
     teacher_id: string,
+    email: string,
     fname: string,
     sname: string,
     mi: string,
@@ -813,6 +816,7 @@ export async function updateTeacher(
         // Update teacher
         await sql`SELECT update_teacher(
             ${id},
+            ${email},
             ${fname},
             ${sname},
             ${mi ?? ""},

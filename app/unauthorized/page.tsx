@@ -22,7 +22,7 @@ export default function Maintenance() {
                 </div>
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Access Denied</h1>
                 <p className="text-gray-600 dark:text-gray-400 mb-6">
-                    You don't have permission to access this page. Please contact your administrator if you believe this is an error.
+                    You don't have permission to access this page. Please contact MIS if you believe this is an error.
                 </p>
                 <div className="text-sm text-gray-500 dark:text-gray-500 italic mb-6">
                     Your current role may not have the required privileges for this content.

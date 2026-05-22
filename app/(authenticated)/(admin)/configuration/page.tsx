@@ -85,11 +85,7 @@ export default function Settings() {
     const [showSavePresetModal, setShowSavePresetModal] = useState(false);
     const [newPresetName, setNewPresetName] = useState("");
     const [isSuperUser, setIsSuperUser] = useState(false);
-
-    // Debug logging for isSuperUser state
-    useEffect(() => {
-        console.log('isSuperUser state changed:', isSuperUser);
-    }, [isSuperUser]);
+    const [userRole, setUserRole] = useState("");
 
     const STATUS_MESSAGES = {
         "200": "Operation completed successfully",
@@ -138,13 +134,13 @@ export default function Settings() {
 
     useEffect(() => { 
         loadAllData();
-        checkSuperUserStatus();
+        checkUserRole();
     }, []);
 
-    const checkSuperUserStatus = async () => {
+    const checkUserRole = async () => {
         const fetchedUser = await getCurrentUser();
         const role = await fetchedUser.role;
-        setIsSuperUser(role == "SuperAdmin");
+        setUserRole(role);
     };
 
     const triggerNotification = (code: string) => {
@@ -450,7 +446,7 @@ export default function Settings() {
     };
 
     const displayTabs = () => {
-        if(isSuperUser) {
+        if(userRole == "SuperAdmin") {
             return (
                 <Tabs aria-label="Settings categories" variant="underline">
                     <TabItem title="Users & Roles" icon={HiUserGroup}>
@@ -514,7 +510,7 @@ export default function Settings() {
                     </TabItem>
                 </Tabs>
             );
-        } else {
+        } else if (userRole == "Administrator") {
             return (
                 <Tabs aria-label="Settings categories" variant="underline">
                     {/* Break Periods */}
@@ -860,6 +856,10 @@ export default function Settings() {
                     </TabItem>
                 </Tabs>
             );
+        } else {
+            <div className={"w-full h-full flex items-center justify-center"}>
+                Fetching User Role...
+            </div>
         }
     }
     

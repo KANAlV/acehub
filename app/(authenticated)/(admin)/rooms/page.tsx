@@ -169,6 +169,8 @@ export default function RoomManager() {
             return;
         }
 
+        setImportSummary(null);
+
         setLoading(true);
 
         console.log(`[UI_ACTION]: Submitting new room: "${roomNameVal}" (${roomTypeVal})`);
@@ -193,6 +195,7 @@ export default function RoomManager() {
     }
 
     async function updateEntry() {
+        setImportSummary(null);
         const r_id = selectedRoom;
         const r_name = roomNameVal;
         const r_type = roomTypeVal;
@@ -220,6 +223,7 @@ export default function RoomManager() {
     }
 
     async function deleteRow() {
+        setImportSummary(null);
         const id = selectedRoom;
         setLoading(true);
 

@@ -5,6 +5,8 @@ export const ALLOWED_CHARS_REGEX = /[^a-zA-Z0-9_\-:\/\\\.()\[\] ]/g; // Added sp
 
 export const NON_NUMERIC_REGEX = /[^0-9.]/g;
 
+export const ALLOWED_EMAIL_REGEX = /[^a-zA-Z0-9._%+-@]/g;
+
 export const ALPHA_REGEX = /[^a-zA-Z\-]/g;
 
 export const ALPHA_SPACE_REGEX = /[^a-zA-Z\- ]/g;
@@ -67,6 +69,15 @@ export function sanitizeName(input: string): string {
         .slice(0, MAX_LENGTH); // 2. Enforce length
 }
 
+export function sanitizeEmail(input: string): string {
+    return input
+        .trim()
+        .replace(ALLOWED_EMAIL_REGEX, '') // Remove invalid chars
+        .replace(/\.{2,}/g, '.') // Prevent consecutive dots
+        .replace(/@{2,}/g, '@') // Prevent consecutive @
+        .slice(0, MAX_LENGTH_LONG);
+}
+
 export function sanitizeTeacherName(input: string): string {
     return input
         .replace(ALPHA_SPACE_REGEX, '') // 1. Remove bad characters
@@ -89,6 +100,7 @@ export function sanitizeMediumName(input: string): string {
 export function pscsSanitization(input: string): string {
     return input
         .replace(/[^0-9]/g, '')
+        .slice(0, MAX_MED_SHORT_LENGTH);
 }
 
 export function sanitizeLongName(input: string): string {
