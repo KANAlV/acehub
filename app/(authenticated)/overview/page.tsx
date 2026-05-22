@@ -272,7 +272,7 @@ export default function ScheduleTeachers() {
                             {teachers.length > 0 ? (
                                 teachers.map((t) => (
                                     <TableRow key={t.pscs_id} onClick={() => router.push("/overview/" + t.pscs_id)}>
-                                        <TableCell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">{t.fname + "" + t.sname + " " + t.mi + " " + t.suffix}</TableCell>
+                                        <TableCell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">{t.fname + " " + (t.mi? t.mi + " ":"") + t.sname + (t.suffix? " " + t.suffix : "")}</TableCell>
                                         <TableCell>{t.teacher_code}</TableCell>
                                         <TableCell>{t.specialization}</TableCell>
                                         <TableCell>{t.employment_type}</TableCell>

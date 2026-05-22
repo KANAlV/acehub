@@ -243,7 +243,7 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
                 const tea = getTeacher(s.teacherId);
                 const rom = getRoom(s.roomId);
                 let message = "";
-                if (type === "teacher") message = `Teacher ${tea?.name} already scheduled.`;
+                if (type === "teacher") message = `Teacher ${tea?.fname + " " + (tea.mi? tea.mi + ". " : "") + tea?.sname + (tea.suffix ? " " + tea.suffix : "")} already scheduled.`;
                 else if (type === "room") message = `Room ${rom?.room_name} occupied.`;
                 else if (type === "section") message = `Section ${s.sectionId} already scheduled.`;
                 setConflictInfo({ message, details: `${sub?.course_name || s.subjectId} (${formatTime(s.start)} - ${formatTime(s.end)})` });
@@ -402,7 +402,7 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
                                              }`} style={{ top, height }}>
                                             <button onClick={() => setSchedules(prev => prev.filter(x => x.id !== s.id))} className={`absolute top-0.5 right-0.5 text-[14px] leading-none ${!isActive ? 'hidden' : ''}`}>×</button>
                                             <div className="font-bold truncate">{sub?.course_name || s.subjectId}</div>
-                                            <div className="opacity-80 truncate">{tea?.name || 'No Teacher'}</div>
+                                            <div className="opacity-80 truncate">{tea?.fname + " " + (tea.mi? tea.mi + ". " : "") + tea?.sname + (tea.suffix ? " " + tea.suffix : "") || 'No Teacher'}</div>
                                             <div className="opacity-80 truncate">{rom?.room_name}</div>
                                             {isActive && <div onMouseDown={e => handleResizeMouseDown(e, s)} className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize" />}
                                         </div>
@@ -494,7 +494,7 @@ export default function ScheduleEditor({ params }: { params: Promise<{ id: strin
                                     <AutocompleteSelect 
                                         options={teachers.map(t => ({ 
                                             id: t.pscs_id, 
-                                            label: t.name, 
+                                            label: t.fname + " " + (t.mi? t.mi + ". " : "")  + t.sname + (t.suffix ? " " + t.suffix : ""),
                                             subLabel: `${t.pscs_id} | ${t.teacher_code}` 
                                         }))}
                                         value={selectedTeacher}

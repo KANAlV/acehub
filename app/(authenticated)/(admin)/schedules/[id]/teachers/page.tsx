@@ -108,7 +108,7 @@ export default function ScheduleTeachers({ params }: { params: Promise<{ id: str
             // Filter teachers based on search and type
             const filteredTeachers = teachersWithLoad.filter(teacher => {
                 const matchesSearch = !debouncedSearch ||
-                    teacher.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+                    (teacher.fname + " " + (teacher.mi? teacher.mi + " ":"") + teacher.sname + (teacher.suffix? " " + teacher.suffix : "")).toLowerCase().includes(debouncedSearch.toLowerCase()) ||
                     teacher.pscs_id.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
                     teacher.teacher_code.toLowerCase().includes(debouncedSearch.toLowerCase());
 
@@ -259,7 +259,7 @@ export default function ScheduleTeachers({ params }: { params: Promise<{ id: str
                                 teachers.map((t) => (
                                     <TableRow key={t.pscs_id} onClick={() => router.push("/schedules/" + scheduleId + "/teachers/" + t.pscs_id + "/")}>
                                         <TableCell className="font-bold">{t.pscs_id}</TableCell>
-                                        <TableCell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">{t.name}</TableCell>
+                                        <TableCell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">{t.fname} {t.mi? t.mi + ". ":""} {t.sname} {t.suffix}</TableCell>
                                         <TableCell>{t.teacher_code}</TableCell>
                                         <TableCell>{t.specialization}</TableCell>
                                         <TableCell>{t.employment_type}</TableCell>

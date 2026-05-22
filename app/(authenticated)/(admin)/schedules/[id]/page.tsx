@@ -491,7 +491,7 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                             const remainingUnits = maxUnits - teacherUnits;
 
                             // Debug logging (remove in production)
-                            console.log(`Teacher ${teacher.name}: units=${teacherUnits}, max=${maxUnits}, absolute=${absoluteMax}, type=${teacher.employment_type}, rate=${utilizationRate}%`);
+                            console.log(`Teacher ${teacher.fname + " " + (teacher.mi? teacher.mi+" ":"") + teacher.sname + (teacher.suffix? " " + teacher.suffix:"")}: units=${teacherUnits}, max=${maxUnits}, absolute=${absoluteMax}, type=${teacher.employment_type}, rate=${utilizationRate}%`);
 
                             // Determine status color based on actual capacity remaining
                             let statusColor = "green";
@@ -521,7 +521,7 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                                 >
                                     <div className="flex justify-between items-start mb-3">
                                         <div>
-                                            <h4 className="font-semibold text-sm hover:text-blue-600 transition-colors">{teacher.name}</h4>
+                                            <h4 className="font-semibold text-sm hover:text-blue-600 transition-colors">{teacher.fname + " " + (teacher.mi? teacher.mi+" ":"") + teacher.sname + (teacher.suffix? " " + teacher.suffix:"")}</h4>
                                             <p className="text-xs text-gray-500">{teacher.pscs_id}</p>
                                             <p className="text-xs text-gray-500">{teacher.teacher_code}</p>
                                         </div>

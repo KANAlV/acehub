@@ -220,7 +220,7 @@ export default function DashboardSummary() {
                                  onClick={() => role != "Administrator"? router.push(`./overview/${teacher.pscs_id}`) : router.push(`/schedules/${activeScheduleId}/teachers/${teacher.pscs_id}`) }>
                                 <div className="flex justify-between items-start mb-3">
                                     <div>
-                                        <h4 className="font-semibold text-sm">{teacher.name}</h4>
+                                        <h4 className="font-semibold text-sm">{teacher.fname} {teacher.mi ? teacher.mi + "." : ""} {teacher.sname} {teacher.suffix ? `, ${teacher.suffix}` : ""}</h4>
                                         <p className="text-xs text-gray-500">{teacher.pscs_id}</p>
                                     </div>
                                     <Badge color={statusColor} size="sm">{statusText}</Badge>

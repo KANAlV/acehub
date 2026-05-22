@@ -245,7 +245,7 @@ export default function TimetableViewer() {
                                                          (viewMode === "sections" && s.roomId !== selectedRoom && selectedRoom !== "all") || (viewMode === "rooms" && s.sectionId !== selectedSection && selectedSection !== "all") ? "bg-violet-500 text-white z-10" : "bg-blue-600 text-white z-10"
                                                  }`} style={{ top, height }}>
                                                 <div className="font-bold truncate">{sub?.course_name || s.subjectId}</div>
-                                                <div className="opacity-80 truncate">{tea?.name || 'No Teacher'}</div>
+                                                <div className="opacity-80 truncate">{tea?.fname + " " + (tea?.mi ? tea?.mi + "." : "") + tea?.sname + (tea?.suffix ? " " + tea?.suffix : "") || 'No Teacher'}</div>
                                                 <div className="opacity-80 truncate">{rom?.room_name}</div>
                                             </div>
                                         );
@@ -310,7 +310,7 @@ export default function TimetableViewer() {
                                     <AutocompleteSelect 
                                         options={teachers.map(t => ({ 
                                             id: t.pscs_id, 
-                                            label: t.name, 
+                                            label: t.fname + " " + (t.mi ? t.mi + "." : "") + t.sname + (t.suffix ? " " + t.suffix : ""),
                                             subLabel: `${t.teacher_code}`
                                         }))}
                                         value={selectedTeacher}

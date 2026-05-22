@@ -313,7 +313,7 @@ export default function SchedulesDashboard() {
             <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                 <div className="flex justify-between items-center mb-2">
                     <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-blue-600">{teacher.name}</span>
+                        <span className="font-bold text-sm text-blue-600">{(teacher.fname + " " + (teacher.mi? teacher.mi + " ":"") + teacher.sname + (teacher.suffix? " " + teacher.suffix : ""))}</span>
                         <span className="text-[10px] bg-gray-200 px-1 rounded uppercase">{teacher.pscs_id}</span>
                     </div>
                     <div className="flex gap-2">
@@ -629,7 +629,7 @@ export default function SchedulesDashboard() {
                                                 </TableCell>
                                                 <TableCell className="w-[45%] overflow-visible">
                                                     <AutocompleteSelect 
-                                                        options={allTeachers.map(t => ({ id: t.pscs_id, label: t.name, subLabel: t.pscs_id }))}
+                                                        options={allTeachers.map(t => ({ id: t.pscs_id, label: (t.fname + " " + (t.mi? t.mi + " ":"") + t.sname + (t.suffix? " " + t.suffix : "")), subLabel: t.pscs_id }))}
                                                         value={row.teacherId}
                                                         onChange={(val) => updateAssignment(row.id, 'teacherId', val)}
                                                         placeholder="Search Teacher..."
@@ -649,7 +649,7 @@ export default function SchedulesDashboard() {
                                     <p className="text-sm text-gray-500 italic">Override teacher availability for this session.</p>
                                     <div className="w-80">
                                         <AutocompleteSelect 
-                                            options={allTeachers.map(t => ({ id: t.pscs_id, label: t.name, subLabel: t.pscs_id }))}
+                                            options={allTeachers.map(t => ({ id: t.pscs_id, label: (t.fname + " " + (t.mi? t.mi + " ":"") + t.sname + (t.suffix? " " + t.suffix : "")), subLabel: t.pscs_id }))}
                                             value=""
                                             onChange={(val) => addOverrideTeacher(val)}
                                             placeholder="Add Teacher to Override List..."

@@ -497,7 +497,7 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
                         <HiArrowLeft/>
                     </Button>
                     <div>
-                        <h1 className="text-2xl font-bold">{teacher.name}</h1>
+                        <h1 className="text-2xl font-bold">{teacher.fname + " " + (teacher.mi? teacher.mi+" ":"") + teacher.sname + (teacher.suffix? " " + teacher.suffix:"")}</h1>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
                             Teacher Analysis • {scheduleName}
                         </p>
@@ -520,7 +520,7 @@ export default function TeacherAnalysis({ params }: { params: Promise<{ id: stri
                     <div className="space-y-3">
                         <div>
                             <Label className="text-xs text-gray-500">Full Name</Label>
-                            <p className="font-medium">{teacher.name}</p>
+                            <p className="font-medium">{teacher.fname} {teacher.mi? teacher.mi + " ":""} {teacher.sname} {teacher.suffix? teacher.suffix : ""}</p>
                         </div>
                         <div>
                             <Label className="text-xs text-gray-500">PSCS ID</Label>
