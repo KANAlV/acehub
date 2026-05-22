@@ -486,6 +486,7 @@ export default function TeacherManager() {
             worksheet.columns = [
                 { header: "PSCS ID", key: "pscs_id", width: 15 },
                 { header: "TEACHER ID", key: "teacher_id", width: 15 },
+                { header: "Email", key: "email", width: 15 },
                 { header: "Surname", key: "sname", width: 15 },
                 { header: "First Name", key: "fname", width: 20 },
                 { header: "Mi", key: "mi", width: 5 },
@@ -537,7 +538,7 @@ export default function TeacherManager() {
                 };
             }
 
-            worksheet.autoFilter = "A1:I1";
+            worksheet.autoFilter = "A1:J1";
 
             const buffer = await workbook.xlsx.writeBuffer();
 
@@ -569,6 +570,7 @@ export default function TeacherManager() {
             worksheet.columns = [
                 { header: 'PSCS ID', key: 'id', width: 15 },
                 { header: 'TEACHER ID', key: 'teacher_id', width: 15 },
+                { header: 'Email', key: 'email', width: 15 },
                 { header: 'Surname', key: 'sname', width: 15 },
                 { header: 'First Name', key: 'fname', width: 20 },
                 { header: 'Mi', key: 'mi', width: 5 },
@@ -600,6 +602,7 @@ export default function TeacherManager() {
             worksheet.addRow({ 
                 id: '########',
                 teacher_id: '########',
+                email: 'example@alabang.sti.edu.ph',
                 sname: 'Diocampo',
                 fname: 'Ivan Winzle',
                 mi: 'S',
@@ -612,7 +615,7 @@ export default function TeacherManager() {
 
             worksheet.addRow({
                 id: '########',
-                teacher_id: '########',
+                teacher_id: 'example@alabang.sti.edu.ph',
                 sname: 'Reurreccion',
                 fname: 'James Murfhy',
                 mi: 'C',
@@ -623,7 +626,7 @@ export default function TeacherManager() {
                 availability: '[Mon - Fri] 7:00 AM - 8:00 PM'
             });
 
-            worksheet.autoFilter = "A1:I1";
+            worksheet.autoFilter = "A1:J1";
 
             const buffer = await workbook.xlsx.writeBuffer();
             const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -663,6 +666,7 @@ export default function TeacherManager() {
             const expectedHeaders = [
                 "PSCS ID",
                 "TEACHER ID",
+                "Email",
                 "Surname",
                 "First Name",
                 "Mi",
@@ -673,7 +677,7 @@ export default function TeacherManager() {
                 "Availability (Day: Time | Day: Time)"
             ];
 
-            const actualHeaders = Array.from({ length: 10 }, (_, i) =>
+            const actualHeaders = Array.from({ length: 11 }, (_, i) =>
                 worksheet.getRow(1).getCell(i + 1).value?.toString().trim()
             );
 
@@ -702,14 +706,15 @@ export default function TeacherManager() {
 
                 const id = row.getCell(1).value?.toString().trim() || "";
                 const teacher_id = row.getCell(2).value?.toString().trim() || "";
-                const sname = row.getCell(3).value?.toString().trim() || "";
-                const fname = row.getCell(4).value?.toString().trim() || "";
-                const mi = row.getCell(5).value?.toString().trim() || "";
-                const suffix = row.getCell(6).value?.toString().trim() || "";
-                const code = row.getCell(7).value?.toString().trim() || "";
-                const spec = row.getCell(8).value?.toString().trim() || "";
-                const type = row.getCell(9).value?.toString().trim() || "FT";
-                const availStr = row.getCell(10).value?.toString().trim() || "";
+                const email = row.getCell(3).value?.toString().trim() || "";
+                const sname = row.getCell(4).value?.toString().trim() || "";
+                const fname = row.getCell(5).value?.toString().trim() || "";
+                const mi = row.getCell(6).value?.toString().trim() || "";
+                const suffix = row.getCell(7).value?.toString().trim() || "";
+                const code = row.getCell(8).value?.toString().trim() || "";
+                const spec = row.getCell(9).value?.toString().trim() || "";
+                const type = row.getCell(10).value?.toString().trim() || "FT";
+                const availStr = row.getCell(11).value?.toString().trim() || "";
 
                 /** skip empty rows */
                 if (!id && !fname && !sname && !code) {
@@ -765,6 +770,7 @@ export default function TeacherManager() {
                 teachersToImport.push({
                     id,
                     teacher_id,
+                    email,
                     sname,
                     fname,
                     mi,
