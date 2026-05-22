@@ -40,6 +40,7 @@ import {
     sanitizeVeryShortName
 } from "@/lib/validation.ts";
 import {IoMdArrowDropdown} from "react-icons/io";
+import ExcelJS from "exceljs";
 
 /** --- Helper Components --- **/
 const AvailabilityManager = ({
@@ -333,7 +334,7 @@ export default function TeacherManager() {
             type !== typeOld ||
             availability !== availabilityOld;
 
-        setContainsEmail(email.includes("@alabang.sti.edu"));
+        setContainsEmail(email.includes("@alabang.sti.edu.ph"));
         setActiveChanges(hasChanges);
     }, [
         pscsId,
@@ -638,6 +639,29 @@ export default function TeacherManager() {
         }
     }
 
+    function getCellText(cell: ExcelJS.Cell): string {
+        const value = cell.value;
+
+        if (value == null) return "";
+
+        // plain string / number
+        if (typeof value === "string" || typeof value === "number") {
+            return value.toString().trim();
+        }
+
+        // hyperlink object (common for emails/URLs)
+        if (typeof value === "object" && "text" in value) {
+            return String(value.text).trim();
+        }
+
+        // fallback for rich text
+        if (typeof value === "object" && "richText" in value) {
+            return value.richText.map((t: any) => t.text).join("").trim();
+        }
+
+        return "";
+    }
+
     async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -706,7 +730,7 @@ export default function TeacherManager() {
 
                 const id = row.getCell(1).value?.toString().trim() || "";
                 const teacher_id = row.getCell(2).value?.toString().trim() || "";
-                const email = row.getCell(3).value?.toString().trim() || "";
+                const email = getCellText(row.getCell(3));
                 const sname = row.getCell(4).value?.toString().trim() || "";
                 const fname = row.getCell(5).value?.toString().trim() || "";
                 const mi = row.getCell(6).value?.toString().trim() || "";
@@ -1063,13 +1087,13 @@ export default function TeacherManager() {
                                 <Label>Email *</Label>
                                 <Popover
                                     open={email && !containsEmail}
-                                    content={'Must Contain "@alabang.sti.edu"'}
+                                    content={'Must Contain "@alabang.sti.edu.ph"'}
                                     placement="top"
                                 >
                                     <TextInput icon={HiMail}
                                                value={email}
                                                color={email && !containsEmail? "failure":"gray"}
-                                               onChange={e => { setEmail(sanitizeEmail(e.target.value)) }} placeholder="example@alabang.sti.edu"/>
+                                               onChange={e => { setEmail(sanitizeEmail(e.target.value)) }} placeholder="example@alabang.sti.edu.ph"/>
                                 </Popover>
                                 </div>
                         </div>
@@ -1138,13 +1162,16 @@ export default function TeacherManager() {
                             <Label>Email *</Label>
                             <Popover
                                 open={!containsEmail}
-                                content={'Must Contain "@alabang.sti.edu"'}
+                                content={(
+                                    <div className={"p-2"}>
+                                        Must Contain @alabang.sti.edu.ph
+                                    </div>)}
                                 placement="top"
                             >
                                 <TextInput required
                                            value={email}
                                            color={!containsEmail? "failure":"gray"}
-                                           onChange={e => { setEmail(sanitizeEmail(e.target.value)) }} placeholder="example@alabang.sti.edu"/>
+                                           onChange={e => { setEmail(sanitizeEmail(e.target.value)) }} placeholder="example@alabang.sti.edu.ph"/>
                             </Popover>
                         </div>
                         <div className={"grid grid-cols-4 gap-4"}>

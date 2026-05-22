@@ -15,18 +15,35 @@ import {
     HiOutlineMenu, HiUserGroup, HiChevronDown, HiQuestionMarkCircle
 } from "react-icons/hi";
 import Link from "next/link";
-import {useState} from "react";
+import {useEffect, useState} from "react";
 import { usePathname } from "next/navigation";
 import { useMsal } from "@azure/msal-react";
 import {IoMdSettings} from "react-icons/io";
+import {getTeacherID} from "@/services/userService.ts";
 
-export function SidebarComponent({ username, role }: { username: string, role: string }) {
+export function SidebarComponent({ username, role, email }: { username: string, role: string, email: string }) {
     const [isOpen, setIsOpen] = useState(false);
     const pathname = usePathname();
     const { instance, accounts } = useMsal();
+    const [facultyID, setFacultyID] = useState("");
 
+    useEffect(() => {
+        if (!email) return;
+        if (role == "Faculty"){
+            (async () => {
+                const id = await getTeacherID(email);
+                setFacultyID(id ?? "");
+            })();
+
+        }
+    }, [email]);
 
     /** --- Role Detection --- **/
+        if (role !== "Viewer"){
+            if( pathname.includes("/academic_qualifications")) {
+                window.location.href = "/unauthorized";
+            }
+        }
 
         if (role !== "Administrator") {
             if( pathname.includes("/schedules") ||
@@ -127,8 +144,16 @@ export function SidebarComponent({ username, role }: { username: string, role: s
                             Dashboard
                         </SidebarItem>
                         <SidebarItem hidden={role !== "Academic Assistant"}
-                                     as={Link} href="/booking" className={"hover:bg-gray-500/14"} icon={HiTable} onClick={() => setIsOpen(false)}>
+                                     as={Link} href="/maintenance" className={"hover:bg-gray-500/14"} icon={HiTable} onClick={() => setIsOpen(false)}>
                             Booking
+                        </SidebarItem>
+                        <SidebarItem hidden={role !== "Faculty"}
+                                     as={Link} href={`/overview/${facultyID}`} className={"hover:bg-gray-500/14"} icon={HiTable} onClick={() => setIsOpen(false)}>
+                            Personal Schedule
+                        </SidebarItem>
+                        <SidebarItem hidden={role !== "Faculty"}
+                                     as={Link} href="/maintenance" className={"hover:bg-gray-500/14"} icon={HiAcademicCap} onClick={() => setIsOpen(false)}>
+                            Acad. Qualifications
                         </SidebarItem>
                         <SidebarItem hidden={role !== "Administrator"}
                                      as={Link} href="/schedules" className={"hover:bg-gray-500/14"} icon={HiTable} onClick={() => setIsOpen(false)}>

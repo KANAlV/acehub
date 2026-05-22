@@ -32,13 +32,14 @@ export default async function RootLayout({
 
     // Fetch the logged-in user on the server
     const user = await getCurrentUser();
+    const email = user?.email || "";
     const username = user?.username || "Guest";
     const role = user?.role || "Viewer";
     const isStudent = await studentCheck(username);
 
     return (
         <div className="flex flex-col md:flex-row h-screen w-screen overflow-hidden">
-            <SidebarComponent username={username} role={role} />
+            <SidebarComponent username={username} role={role} email={email} />
             <main className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-900">
                 {children}
             </main>

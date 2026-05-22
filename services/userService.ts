@@ -38,6 +38,34 @@ export async function getOrCreateUser(email: string, name: string) {
     }
 }
 
+export async function checkIfTeacher(userEmail: string) {
+    try {
+        if (!userEmail) return;
+
+        await sql`
+            SELECT sync_faculty_role(${userEmail})
+        `;
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to sync faculty role:", error);
+    }
+}
+
+export async function getTeacherID(userEmail: string): Promise<string | null> {
+    try {
+        if (!userEmail) return null;
+
+        const result = await sql`
+            SELECT get_pscs_id_by_email(${userEmail}) AS pscs_id
+        `;
+
+        return result[0]?.pscs_id ?? null;
+
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch PSCS ID:", error);
+        return null;
+    }
+}
+
 export async function getCurrentUser(): Promise<User | null> {
     try {
         const cookieStore = await cookies();

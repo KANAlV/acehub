@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getOrCreateUser } from '@/services/userService';
+import {checkIfTeacher, getOrCreateUser} from '@/services/userService';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 
@@ -27,6 +27,11 @@ export async function POST(request: Request) {
 
         // Create or get user from your database
         const user = await getOrCreateUser(userEmail, name);
+
+        if (user.role == "Viewer") {
+            const checkRole = await checkIfTeacher(userEmail);
+            checkRole;
+        }
 
         // Set an HTTP-only cookie for server-side session management
         const cookieStore = await cookies();
