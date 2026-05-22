@@ -495,6 +495,26 @@ export async function fetchProgramCount(p_program_name: string) {
     }
 }
 
+export async function fetchProgramCountShs(p_program_name: string) {
+    try {
+        const result = await sql`SELECT get_program_count_shs(${p_program_name})`;
+        return result.length > 0 ? result[0].get_program_count : 0;
+    } catch (error) {
+        console.error(`[DB_ERROR]: Failed to fetch program count for "${p_program_name}":`, error);
+        return 0;
+    }
+}
+
+export async function fetchProgramCountCollege(p_program_name: string) {
+    try {
+        const result = await sql`SELECT get_program_count_college(${p_program_name})`;
+        return result.length > 0 ? result[0].get_program_count : 0;
+    } catch (error) {
+        console.error(`[DB_ERROR]: Failed to fetch program count for "${p_program_name}":`, error);
+        return 0;
+    }
+}
+
 export async function insertProgram(p_program_code: string, p_program_name: string, p_level: string, p_students: Record<string, number>) {
     const checkIfExists = await sql`SELECT 1 FROM programs WHERE program_code = ${p_program_code} LIMIT 1`;
     if (checkIfExists.length > 0) return "409";
@@ -515,6 +535,30 @@ export async function fetchPrograms(search = "", page: number) {
         const val = search.trim() === "" ? null : search;
         const offset = (page - 1) * ITEMS_PER_PAGE;
         return await sql`SELECT * FROM get_programs(${val}, ${offset})`;
+    } catch (error) {
+        console.error(`[DB_ERROR]: Failed to fetch programs (Page: ${page}, Search: "${search}"):`, error);
+        return [];
+    }
+}
+
+export async function fetchProgramsShs(search = "", page: number) {
+    const ITEMS_PER_PAGE = 10;
+    try {
+        const val = search.trim() === "" ? null : search;
+        const offset = (page - 1) * ITEMS_PER_PAGE;
+        return await sql`SELECT * FROM get_programs_shs(${val}, ${offset})`;
+    } catch (error) {
+        console.error(`[DB_ERROR]: Failed to fetch programs (Page: ${page}, Search: "${search}"):`, error);
+        return [];
+    }
+}
+
+export async function fetchProgramsCollege(search = "", page: number) {
+    const ITEMS_PER_PAGE = 10;
+    try {
+        const val = search.trim() === "" ? null : search;
+        const offset = (page - 1) * ITEMS_PER_PAGE;
+        return await sql`SELECT * FROM get_programs_college(${val}, ${offset})`;
     } catch (error) {
         console.error(`[DB_ERROR]: Failed to fetch programs (Page: ${page}, Search: "${search}"):`, error);
         return [];

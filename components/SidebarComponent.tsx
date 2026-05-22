@@ -1,11 +1,13 @@
 "use client";
 
 import {
+    AccordionContent,
+    AccordionPanel, AccordionTitle,
     Button,
     Drawer,
     DrawerHeader,
     DrawerItems, Popover,
-    Sidebar,
+    Sidebar, SidebarCollapse,
     SidebarItem,
     SidebarItemGroup,
     SidebarItems
@@ -159,10 +161,16 @@ export function SidebarComponent({ username, role, email }: { username: string, 
                                      as={Link} href="/schedules" className={"hover:bg-gray-500/14"} icon={HiTable} onClick={() => setIsOpen(false)}>
                             Schedules
                         </SidebarItem>
-                        <SidebarItem hidden={!["Registrar", "Administrator"].includes(role)}
-                                     as={Link} href="/courses" className={"hover:bg-gray-500/14"} icon={HiUserGroup} onClick={() => setIsOpen(false)}>
-                            Courses
-                        </SidebarItem>
+                        <SidebarCollapse icon={HiUserGroup} label="Courses" className={"hover:bg-gray-500/14"}>
+                            <SidebarItem hidden={role !== "Administrator"}
+                                         as={Link} href="/courses/shs" className={"hover:bg-gray-500/14"} onClick={() => setIsOpen(false)}>
+                                SHS
+                            </SidebarItem>
+                            <SidebarItem hidden={role !== "Administrator"}
+                                         as={Link} href="/courses/tertiary" className={"hover:bg-gray-500/14"} onClick={() => setIsOpen(false)}>
+                                Tertiary
+                            </SidebarItem>
+                        </SidebarCollapse>
                         <SidebarItem hidden={role !== "Administrator"}
                                      as={Link} href="/rooms" className={"hover:bg-gray-500/14"} icon={HiLibrary} onClick={() => setIsOpen(false)}>
                             Rooms
