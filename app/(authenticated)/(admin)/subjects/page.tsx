@@ -44,19 +44,31 @@ export default function SubjectsManager() {
     const [openWarningModal, setOpenWarningModal] = useState(false);
     const [warningType, setWarningType] = useState("");
 
-    // Form useStates for Subjects
-    const [idVal, setIdVal] = useState<string | undefined>(undefined);
-    const [curriculumnVersionVal, setCurriculumnVersionVal] = useState("");
-    const [courseCodeVal, setCourseCodeVal] = useState("");
-    const [courseNameVal, setCourseNameVal] = useState("");
-    const [specializationVal, setSpecializationVal] = useState("");
-    const [lectureVal, setLectureVal] = useState("0");
-    const [labVal, setLabVal] = useState("0");
-    const [labTypeVal, setLabTypeVal] = useState(""); 
-    const [yearVal, setYearVal] = useState("1");
-    const [termVal, setTermVal] = useState("1");
+     // Form useStates for Subjects
+     const [idVal, setIdVal] = useState<string | undefined>(undefined);
+     const [curriculumnVersionVal, setCurriculumnVersionVal] = useState("");
+     const [courseCodeVal, setCourseCodeVal] = useState("");
+     const [courseNameVal, setCourseNameVal] = useState("");
+     const [specializationVal, setSpecializationVal] = useState("");
+     const [lectureVal, setLectureVal] = useState("0");
+     const [labVal, setLabVal] = useState("0");
+     const [labTypeVal, setLabTypeVal] = useState(""); 
+     const [yearVal, setYearVal] = useState("1");
+     const [termVal, setTermVal] = useState("1");
 
-    const [activeChanges, setActiveChanges] = useState(false);
+     // Track original values for comparison
+     const [idValOld, setIdValOld] = useState<string | undefined>(undefined);
+     const [curriculumnVersionValOld, setCurriculumnVersionValOld] = useState("");
+     const [courseCodeValOld, setCourseCodeValOld] = useState("");
+     const [courseNameValOld, setCourseNameValOld] = useState("");
+     const [specializationValOld, setSpecializationValOld] = useState("");
+     const [lectureValOld, setLectureValOld] = useState("0");
+     const [labValOld, setLabValOld] = useState("0");
+     const [labTypeValOld, setLabTypeValOld] = useState("");
+     const [yearValOld, setYearValOld] = useState("1");
+     const [termValOld, setTermValOld] = useState("1");
+
+     const [activeChanges, setActiveChanges] = useState(false);
     const AddModalCourseNameInput = useRef<HTMLInputElement>(null);
     const EditModalCourseNameInput = useRef<HTMLInputElement>(null);
 
@@ -95,50 +107,75 @@ export default function SubjectsManager() {
         loadDropdownValues();
     }, []);
 
-    /** UI Functions **/
-    function editModalValue(id: string) {
-        const subject = subjects.find(s => s.id === id);
-        if (!subject) return;
+     /** UI Functions **/
+     function editModalValue(id: string) {
+         const subject = subjects.find(s => s.id === id);
+         if (!subject) return;
 
-        setIdVal(subject.id);
-        setCurriculumnVersionVal(subject.curriculumn_version || "");
-        setCourseCodeVal(subject.course_code);
-        setCourseNameVal(subject.course_name);
-        setSpecializationVal(subject.field_of_specialization || "");
-        setLectureVal(subject.lecture_units?.toString() || "0");
-        setLabVal(subject.lab_units?.toString() || "0");
-        setLabTypeVal(subject.lab_type || "");
+         setIdVal(subject.id);
+         setCurriculumnVersionVal(subject.curriculumn_version || "");
+         setCourseCodeVal(subject.course_code);
+         setCourseNameVal(subject.course_name);
+         setSpecializationVal(subject.field_of_specialization || "");
+         setLectureVal(subject.lecture_units?.toString() || "0");
+         setLabVal(subject.lab_units?.toString() || "0");
+         setLabTypeVal(subject.lab_type || "");
 
-        if (subject.year_term) {
-            const [y, t] = subject.year_term.split("-");
-            setYearVal(y || "1");
-            setTermVal(t || "1");
-        }
+         if (subject.year_term) {
+             const [y, t] = subject.year_term.split("-");
+             setYearVal(y || "1");
+             setTermVal(t || "1");
+         }
 
-        setEditModal(true);
-    }
+         // Store original values for comparison
+         setIdValOld(subject.id);
+         setCurriculumnVersionValOld(subject.curriculumn_version || "");
+         setCourseCodeValOld(subject.course_code);
+         setCourseNameValOld(subject.course_name);
+         setSpecializationValOld(subject.field_of_specialization || "");
+         setLectureValOld(subject.lecture_units?.toString() || "0");
+         setLabValOld(subject.lab_units?.toString() || "0");
+         setLabTypeValOld(subject.lab_type || "");
+         if (subject.year_term) {
+             const [y, t] = subject.year_term.split("-");
+             setYearValOld(y || "1");
+             setTermValOld(t || "1");
+         }
+
+         setEditModal(true);
+     }
 
     function showWarning(type: string) {
         setWarningType(type);
         setOpenWarningModal(true);
     }
 
-    function discardEntry() {
-        setIdVal(undefined);
-        setCurriculumnVersionVal("");
-        setCourseCodeVal("");
-        setCourseNameVal("");
-        setSpecializationVal("");
-        setLectureVal("0");
-        setLabVal("0");
-        setLabTypeVal("");
-        setYearVal("1");
-        setTermVal("1");
-        setOpenWarningModal(false);
-        setEditModal(false);
-        setActiveChanges(false);
-        setAddModal(false);
-    }
+     function discardEntry() {
+         setIdVal(undefined);
+         setCurriculumnVersionVal("");
+         setCourseCodeVal("");
+         setCourseNameVal("");
+         setSpecializationVal("");
+         setLectureVal("0");
+         setLabVal("0");
+         setLabTypeVal("");
+         setYearVal("1");
+         setTermVal("1");
+         setIdValOld(undefined);
+         setCurriculumnVersionValOld("");
+         setCourseCodeValOld("");
+         setCourseNameValOld("");
+         setSpecializationValOld("");
+         setLectureValOld("0");
+         setLabValOld("0");
+         setLabTypeValOld("");
+         setYearValOld("1");
+         setTermValOld("1");
+         setOpenWarningModal(false);
+         setEditModal(false);
+         setActiveChanges(false);
+         setAddModal(false);
+     }
 
     /** Filtering **/
     function limitCourseNameVal(e: string){
@@ -160,6 +197,20 @@ export default function SubjectsManager() {
         }
         setLectureVal(limitNumericValueShort(e));
     }
+
+    const isFormUnchanged = () => {
+        return (
+            curriculumnVersionVal === curriculumnVersionValOld &&
+            courseCodeVal === courseCodeValOld &&
+            courseNameVal === courseNameValOld &&
+            specializationVal === specializationValOld &&
+            lectureVal === lectureValOld &&
+            labVal === labValOld &&
+            labTypeVal === labTypeValOld &&
+            yearVal === yearValOld &&
+            termVal === termValOld
+        );
+    };
 
     async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0];
@@ -422,7 +473,7 @@ export default function SubjectsManager() {
 
     /** Queries **/
     async function submitSubject() {
-        if (!courseCodeVal || !courseNameVal) {
+        if (!curriculumnVersionVal || !courseCodeVal || !courseNameVal) {
             setStatusCode("400");
             setShowToast(true);
             return;
@@ -486,7 +537,7 @@ export default function SubjectsManager() {
     }
 
     async function updateEntry() {
-        if (!idVal || !courseCodeVal || !courseNameVal) {
+        if (!curriculumnVersionVal || !idVal || !courseCodeVal || !courseNameVal) {
             setStatusCode("400");
             setShowToast(true);
             return;
@@ -799,38 +850,48 @@ export default function SubjectsManager() {
                     </div>
                     <div className="grid grid-cols-3 gap-4">
                         <div>
-                            <Label htmlFor="lec">Lecture Units</Label>
-                            <TextInput id="lec"
-                                       type="number"
-                                       max={99}
-                                       step={"0.1"}
-                                       value={lectureVal}
-                                       onFocus={(e) => e.target.value === "0" ? setLectureVal("") : e.target.value}
-                                       onBlur={(e) => e.target.value === "" ? setLectureVal("0") : e.target.value}
-                                       onChange={(e) => {
-                                           const val = e.target.value;
-                                           if (val.length <= 3) { // Limits length including decimals
-                                               setLectureVal(val);
-                                               setActiveChanges(true);
-                                           }
-                                       }} />
+                            <Label>Lecture Units</Label>
+                            <TextInput
+                                type="number"
+                                max={99}
+                                placeholder="0"
+                                value={lectureVal}
+                                step={"0.1"}
+                                // Prevents typing letters like 'e', '+', '-'
+                                onKeyDown={(e) => ["e", "E", "+", "-"].includes(e.key) && e.preventDefault()}
+                                onFocus={(e) => e.target.value === "0" ? setLectureVal("") : e.target.value}
+                                onBlur={(e) => e.target.value === "" ? setLectureVal("0") : e.target.value}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    // Constraint: Only allow up to 3 characters total (e.g., "3.5", "100")
+                                    if (val.length <= 3) {
+                                        limitLectureUnits(val);
+                                        setActiveChanges(true);
+                                    }
+                                }}
+                            />
                         </div>
                         <div>
-                            <Label htmlFor="lab">Lab Units</Label>
-                            <TextInput id="lab"
-                                       type="number"
-                                       max={99}
-                                       step={"0.1"}
-                                       value={labVal}
-                                       onFocus={(e) => e.target.value === "0" ? setLabVal("") : e.target.value}
-                                       onBlur={(e) => e.target.value === "" ? setLabVal("0") : e.target.value}
-                                       onChange={(e) => {
-                                           const val = e.target.value;
-                                           if (val.length <= 3) { // Limits length including decimals
-                                               setLabVal(val);
-                                               setActiveChanges(true);
-                                           }
-                                       }}  />
+                            <Label>Lab Units</Label>
+                            <TextInput
+                                type="number"
+                                max={99}
+                                placeholder="0"
+                                value={labVal}
+                                step={"0.1"}
+                                // Prevents typing letters like 'e', '+', '-'
+                                onKeyDown={(e) => ["e", "E", "+", "-"].includes(e.key) && e.preventDefault()}
+                                onFocus={(e) => e.target.value === "0" ? setLabVal("") : e.target.value}
+                                onBlur={(e) => e.target.value === "" ? setLabVal("0") : e.target.value}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    // Constraint: Only allow up to 3 characters total
+                                    if (val.length <= 3) {
+                                        limitLabUnits(val);
+                                        setActiveChanges(true);
+                                    }
+                                }}
+                            />
                         </div>
                         <div>
                             <Label htmlFor="labType">Lab Type {parseFloat(labVal) > 0 && <span className="text-red-500">*</span>}</Label>
@@ -1009,7 +1070,10 @@ export default function SubjectsManager() {
                         <Button color="alternative" onClick={() => activeChanges ? showWarning("yellow") : discardEntry()}>
                             Cancel
                         </Button>
-                        <Button onClick={() => showWarning("default")}>
+                        <Button
+                            onClick={() => showWarning("default")}
+                            disabled={isFormUnchanged()}
+                        >
                             Update
                         </Button>
                     </div>
