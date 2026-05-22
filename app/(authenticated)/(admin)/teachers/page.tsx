@@ -8,7 +8,7 @@ import {
     ModalBody,
     ModalFooter,
     ModalHeader,
-    Pagination,
+    Pagination, Popover,
     Progress,
     Select, Spinner,
     Table,
@@ -19,7 +19,7 @@ import {
     TableRow,
     TextInput,
     Toast,
-    ToastToggle
+    ToastToggle, Tooltip
 } from "flowbite-react";
 import React, {useEffect, useRef, useState} from "react";
 import {HiCheck, HiExclamation, HiMail, HiOutlineTrash, HiPlus, HiTrash} from "react-icons/hi";
@@ -274,6 +274,7 @@ export default function TeacherManager() {
     const [specOld, setSpecOld] = useState("");
     const [typeOld, setTypeOld] = useState("FT");
     const [availabilityOld, setAvailabilityOld] = useState<any[]>([]);
+    const [containsEmail, setContainsEmail] = useState(true);
 
     // Search and Filter
     const [search, setSearch] = useState("");
@@ -332,6 +333,7 @@ export default function TeacherManager() {
             type !== typeOld ||
             availability !== availabilityOld;
 
+        setContainsEmail(email.includes("@alabang.sti.edu"));
         setActiveChanges(hasChanges);
     }, [
         pscsId,
@@ -401,6 +403,7 @@ export default function TeacherManager() {
         setEmailOld("")
         setSpecOld("");
         setTypeOld("FT");
+        setContainsEmail(true);
         setAvailabilityOld([]);
         setOpenWarningModal(false);
         setEditModal(false);
@@ -424,7 +427,7 @@ export default function TeacherManager() {
     const onPageChange = (page: number) => setCurrentPage(page);
 
     async function submitTeacher() {
-        if (!pscsId || !teacherId || !email || !fname || !sname || !code) return;
+        if (!containsEmail || !pscsId || !teacherId || !email || !fname || !sname || !code) return;
         setLoading(true);
         // Clear availability if Full-Time before saving
         const finalAvailability = (type === "FT" || type === "PTFL") ? [] : availability;
@@ -440,7 +443,7 @@ export default function TeacherManager() {
     }
 
     async function updateEntry() {
-        if (!pscsId || !teacherId || !email || !fname || !sname || !code) return;
+        if (!containsEmail || !pscsId || !teacherId || !email || !fname || !sname || !code) return;
         setLoading(true);
         // Clear availability if Full-Time before saving
         const finalAvailability = (type === "FT" || type === "FTPT") ? [] : availability;
@@ -1052,8 +1055,17 @@ export default function TeacherManager() {
                             </div>
                             <div className={"col-span-3"}>
                                 <Label>Email *</Label>
-                                <TextInput icon={HiMail} value={email} onChange={e => { setEmail(sanitizeEmail(e.target.value)) }} placeholder="example@alabang.sti.edu"/>
-                            </div>
+                                <Popover
+                                    open={email && !containsEmail}
+                                    content={'Must Contain "@alabang.sti.edu"'}
+                                    placement="top"
+                                >
+                                    <TextInput icon={HiMail}
+                                               value={email}
+                                               color={email && !containsEmail? "failure":"gray"}
+                                               onChange={e => { setEmail(sanitizeEmail(e.target.value)) }} placeholder="example@alabang.sti.edu"/>
+                                </Popover>
+                                </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
@@ -1118,7 +1130,16 @@ export default function TeacherManager() {
                         </div>
                         <div>
                             <Label>Email *</Label>
-                            <TextInput required value={email} onChange={e => { setEmail(sanitizeEmail(e.target.value)) }} placeholder="example@alabang.sti.edu"/>
+                            <Popover
+                                open={!containsEmail}
+                                content={'Must Contain "@alabang.sti.edu"'}
+                                placement="top"
+                            >
+                                <TextInput required
+                                           value={email}
+                                           color={!containsEmail? "failure":"gray"}
+                                           onChange={e => { setEmail(sanitizeEmail(e.target.value)) }} placeholder="example@alabang.sti.edu"/>
+                            </Popover>
                         </div>
                         <div className={"grid grid-cols-4 gap-4"}>
                             <div className={"col-span-3"}>
