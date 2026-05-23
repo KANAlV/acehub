@@ -161,13 +161,11 @@ export function SidebarComponent({ username, role, email }: { username: string, 
                                      as={Link} href="/schedules" className={"hover:bg-gray-500/14"} icon={HiTable} onClick={() => setIsOpen(false)}>
                             Schedules
                         </SidebarItem>
-                        <SidebarCollapse icon={HiUserGroup} label="Courses" className={"hover:bg-gray-500/14"}>
-                            <SidebarItem hidden={role !== "Administrator"}
-                                         as={Link} href="/courses/shs" className={"hover:bg-gray-500/14"} onClick={() => setIsOpen(false)}>
+                        <SidebarCollapse hidden={role !== "Administrator" && role !== "Registrar"} icon={HiUserGroup} label="Courses" className={"hover:bg-gray-500/14"}>
+                            <SidebarItem as={Link} href="/courses/shs" className={"hover:bg-gray-500/14"} onClick={() => setIsOpen(false)}>
                                 SHS
                             </SidebarItem>
-                            <SidebarItem hidden={role !== "Administrator"}
-                                         as={Link} href="/courses/tertiary" className={"hover:bg-gray-500/14"} onClick={() => setIsOpen(false)}>
+                            <SidebarItem as={Link} href="/courses/tertiary" className={"hover:bg-gray-500/14"} onClick={() => setIsOpen(false)}>
                                 Tertiary
                             </SidebarItem>
                         </SidebarCollapse>
