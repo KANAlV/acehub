@@ -334,7 +334,7 @@ export default function TeacherManager() {
             type !== typeOld ||
             availability !== availabilityOld;
 
-        setContainsEmail(email.includes("@alabang.sti.edu.ph"));
+        setContainsEmail(email.endsWith("@alabang.sti.edu.ph"));
         setActiveChanges(hasChanges);
     }, [
         pscsId,
@@ -1087,7 +1087,7 @@ export default function TeacherManager() {
                                 <Label>Email *</Label>
                                 <Popover
                                     open={email && !containsEmail}
-                                    content={'Must Contain "@alabang.sti.edu.ph"'}
+                                    content={'Must End With "@alabang.sti.edu.ph"'}
                                     placement="top"
                                 >
                                     <TextInput icon={HiMail}
@@ -1164,7 +1164,7 @@ export default function TeacherManager() {
                                 open={!containsEmail}
                                 content={(
                                     <div className={"p-2"}>
-                                        Must Contain @alabang.sti.edu.ph
+                                        Must End With @alabang.sti.edu.ph
                                     </div>)}
                                 placement="top"
                             >
