@@ -428,7 +428,7 @@ export default function TeacherManager() {
     const onPageChange = (page: number) => setCurrentPage(page);
 
     async function submitTeacher() {
-        if (!containsEmail || !pscsId || !teacherId || !email || !fname || !sname || !code) return;
+        if (!containsEmail || !pscsId || !teacherId || !email.trim() || !fname.trim() || !sname.trim() || !code) return;
         setLoading(true);
         // Clear availability if Full-Time before saving
         const finalAvailability = (type === "FT" || type === "PTFL") ? [] : availability;
@@ -444,7 +444,7 @@ export default function TeacherManager() {
     }
 
     async function updateEntry() {
-        if (!containsEmail || !pscsId || !teacherId || !email || !fname || !sname || !code) return;
+        if (!containsEmail || !pscsId || !teacherId || !email || !fname.trim() || !sname.trim() || !code) return;
         setLoading(true);
         // Clear availability if Full-Time before saving
         const finalAvailability = (type === "FT" || type === "FTPT") ? [] : availability;
