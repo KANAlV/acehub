@@ -193,7 +193,7 @@ export function SidebarComponent({ username, role, email }: { username: string, 
                         </SidebarItem>
                     </SidebarItemGroup>
                     <SidebarItemGroup>
-                        <SidebarItem hidden={role == "Viewer"}
+                        <SidebarItem hidden={role !== "Administrator"}
                                      as={Link} href="#" className={"hover:bg-gray-500/14"} icon={HiQuestionMarkCircle}>
                             Help (*)
                         </SidebarItem>
