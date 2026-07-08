@@ -1,50 +1,97 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import {useEffect, useState} from "react";
 import {
     Button,
-    Tabs,
-    TabItem,
-    TextInput,
-    Label,
     Card,
-    Table,
+    Label,
+    List,
+    ListItem,
     Modal,
-    TableHead, TableHeadCell, ModalBody, TableBody, TableRow, TableCell, ModalHeader, ModalFooter,
-    Toast, ToastToggle, Progress, Spinner, Select
+    ModalBody,
+    ModalFooter,
+    ModalHeader,
+    Progress,
+    Select,
+    Spinner,
+    TabItem,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeadCell,
+    TableRow,
+    Tabs,
+    TextInput,
+    Toast,
+    ToastToggle
 } from "flowbite-react";
 import {
-    HiPlus, HiTrash, HiSave, HiClock, HiUserGroup, HiAcademicCap, HiCog,
-    HiDownload, HiUpload, HiCheck, HiExclamation, HiOutlinePlus
+    HiAcademicCap,
+    HiCheck,
+    HiClock,
+    HiDownload,
+    HiExclamation,
+    HiOutlinePlus,
+    HiOutlineShieldCheck,
+    HiPencilAlt,
+    HiPlus,
+    HiSave,
+    HiTrash,
+    HiUpload,
+    HiUserGroup
 } from "react-icons/hi";
 import {
-    deleteBreakPeriod, deletePreset, fetchAuthorizedAccounts, fetchBreakPeriods,
-    fetchPresets, fetchSystemSettings, insertBreakPeriod, savePreset,
-    updateAccountRole, updateBreakPeriod, updateSystemSetting,
-    insertUser, deleteUser, getCurrentUser, pgDump, truncateTables, fetchDropdownValues, fetchAllDropdownValues,
-    saveDropdownValue, deleteDropdownValue
+    deleteBreakPeriod,
+    deleteDropdownValue,
+    deletePreset,
+    deleteUser,
+    fetchAllDropdownValues,
+    fetchAllRoles,
+    fetchBreakPeriods,
+    fetchPresets,
+    fetchSystemSettings,
+    fetchUserProfilesPaginated,
+    getCurrentUser,
+    insertBreakPeriod,
+    insertUser,
+    saveDropdownValue,
+    savePreset,
+    syncRolesWithDatabase,
+    truncateTables,
+    updateAccountRole,
+    updateBreakPeriod,
+    updateSystemSetting
 } from "@/services/userService.ts";
 import {BsDatabaseDash, BsDatabaseDown} from "react-icons/bs";
 import {FaDatabase} from "react-icons/fa";
-import {
-    numericValueOnly,
-    isStrictPositiveNumber, sanitizeDropdownValue
-} from "@/lib/validation";
-import { clampNumericValue, MAX_FACULTY_LOAD, MAX_PREP_LIMIT, MAX_OVERLOADING, MAX_STUDENTS } from "@/lib/validation";
+import {clampNumericValue, sanitizeDropdownValue} from "@/lib/validation";
 import {IoMdArrowDropdownCircle} from "react-icons/io";
+import {HiExclamationTriangle, HiPlusCircle} from "react-icons/hi2";
 
 type DropdownValue = {
     value: string;
     value_for: string;
 };
 
+type Pagination = {
+    totalCount: number;
+    totalPages: number;
+    currentPage: number;
+    limit: number;
+    sortBy: "username" | "email";
+    sortDir: "ASC" | "DESC";
+}
+
 export default function Settings() {
     const [loading, setLoading] = useState(true);
+    const [editorId, setEditorId] = useState("")
 
     // UI State
     const [showToast, setShowToast] = useState(false);
     const [statusCode, setStatusCode] = useState("200");
     const [progress, setProgress] = useState(100);
+    const [usersRolePagination, setUsersRolePagination] = useState<Pagination|null>(null);
 
     // Settings State
     const [facultyLoad, setFacultyLoad] = useState({ FT: 24, PTFL: 18, PT: 12 });
@@ -67,7 +114,7 @@ export default function Settings() {
     const [newBreak, setNewBreak] = useState({ dayOfWeek: "", startTime: "", endTime: "", description: "" });
 
     const [showAddAccountModal, setShowAddAccountModal] = useState(false);
-    const [newAccount, setNewAccount] = useState({ username: "", email: "", role: "Faculty" });
+    const [newAccount, setNewAccount] = useState({ username: "", email: "", role: "" });
     const [showDeleteDropdownModal, setShowDeleteDropdownModal] = useState(false);
 
     // Truncate Table Modal
@@ -86,6 +133,15 @@ export default function Settings() {
     const [newPresetName, setNewPresetName] = useState("");
     const [isSuperUser, setIsSuperUser] = useState(false);
     const [userRole, setUserRole] = useState("");
+
+    const [openRoleSaveConfirmationModal, setOpenRoleSaveConfirmationModal] = useState(false);
+    const [showRoleWarning, setShowRoleWarning] = useState(false);
+    const [roleListLoaded, setRoleListLoaded] = useState(false);
+    const [showRoleList, setShowRoleList] = useState(false);
+    const [oldRoles, setOldRoles] = useState<any[]>([]);
+    const [newRoles, setNewRoles] = useState<any[]>([]);
+    const [editingRoleId, setEditingRoleId] = useState<number | string | null>(null);
+    const [isNewRoleAdding, setIsNewRoleAdding] = useState(false); // Helps prevent multiple empty row initializations
 
     const STATUS_MESSAGES = {
         "200": "Operation completed successfully",
@@ -110,7 +166,7 @@ export default function Settings() {
             const [settings, breaks, accounts, availablePresets, ddValues] = await Promise.all([
                 fetchSystemSettings(),
                 fetchBreakPeriods(),
-                fetchAuthorizedAccounts(),
+                handleLoadUsers(),
                 fetchPresets(),
                 fetchAllDropdownValues()
             ]);
@@ -132,14 +188,29 @@ export default function Settings() {
         }
     };
 
-    useEffect(() => { 
+    useEffect(() => {
         loadAllData();
+        handleFetchRolesData();
         checkUserRole();
     }, []);
 
+    const handleLoadUsers = async () => {
+        const res = await fetchUserProfilesPaginated({ page: 1, limit: 10 });
+
+        // Check status code directly
+        if (res.status === "200") {
+            setUsersRolePagination(res.pagination);
+            return res.users;
+        } else {
+            triggerNotification(res.status); // Triggers toast with "500"
+        }
+    };
+
     const checkUserRole = async () => {
         const fetchedUser = await getCurrentUser();
-        const role = await fetchedUser.role;
+        const edId = fetchedUser.id;
+        setEditorId(edId);
+        const role = fetchedUser.role;
         setUserRole(role);
     };
 
@@ -194,7 +265,7 @@ export default function Settings() {
         if (res === "201") {
             setNewBreak({ dayOfWeek: "", startTime: "", endTime: "", description: "" });
             setShowAddBreakModal(false);
-            loadAllData();
+            await loadAllData();
         }
         triggerNotification(res);
     };
@@ -204,20 +275,20 @@ export default function Settings() {
         if (res === "200") {
             setEditingBreak(null);
             setShowAddBreakModal(false);
-            loadAllData();
+            await loadAllData();
         }
         triggerNotification(res);
     };
 
     const handleDeleteBreak = async (id: number) => {
         const res = await deleteBreakPeriod(id);
-        if (res === "204") loadAllData();
+        if (res === "204") await loadAllData();
         triggerNotification(res);
     };
 
     const handleUpdateRole = async (id: string, role: string) => {
-        const res = await updateAccountRole(id, role);
-        if (res === "200") loadAllData();
+        const res = await updateAccountRole(id, role, editorId);
+        if (res === "200") await loadAllData();
         triggerNotification(res);
     };
 
@@ -226,19 +297,28 @@ export default function Settings() {
             triggerNotification("400");
             return;
         }
-        const res = await insertUser(newAccount.username, newAccount.email, newAccount.role);
+        const res = await insertUser(newAccount.username, newAccount.email, newAccount.role, editorId);
         if (res === "201") {
             setShowAddAccountModal(false);
-            setNewAccount({ username: "", email: "", role: "Faculty" });
-            loadAllData();
+            setNewAccount({ username: "", email: "", role: "" });
+            await loadAllData();
         }
         triggerNotification(res);
     };
 
     const handleDeleteUserAction = async (id: string) => {
-        if (!confirm("Are you sure you want to delete this user?")) return;
+        // 1. Guard check prompt confirmation loop
+        if (!confirm("Are you sure you want to remove roles from this user?")) return;
+
+        // 2. Dispatch action to the backend service layer
         const res = await deleteUser(id);
-        if (res === "204") loadAllData();
+
+        // 3. React to status code pipeline response
+        if (res === "204") {
+            await loadAllData(); // Refresh list to reflect updates or show the empty state row
+        }
+
+        // 4. Fire standard toast notification event
         triggerNotification(res);
     };
 
@@ -248,7 +328,7 @@ export default function Settings() {
         if (res === "201") {
             setShowSavePresetModal(false);
             setNewPresetName("");
-            loadAllData();
+            await loadAllData();
         }
         triggerNotification(res);
     };
@@ -270,6 +350,145 @@ export default function Settings() {
         setNewDropdownValue("");
         setNewDropdownValueFor("");
     }
+
+    const resetRolesState = () => {
+        setNewRoles([]);
+        setRoleListLoaded(false); // Crucial: This ensures a fresh fetch next time they open it
+        handleFetchRolesData();
+    };
+
+    const handleFetchRolesData = async () => {
+        if (!roleListLoaded) {
+            try {
+                const roles = await fetchAllRoles();
+                setOldRoles(roles);
+                setNewRoles(roles);
+                setRoleListLoaded(true);
+            } catch (error) {
+                console.error("Error loading roles on demand:", error);
+            }
+        }
+    };
+
+    const handlePermissionToggle = (roleId: number, permissionKey: string) => {
+        setNewRoles((prevRoles) =>
+            prevRoles.map((role) =>
+                role.role_id === roleId
+                    ? { ...role, [permissionKey]: !role[permissionKey] }
+                    : role
+            )
+        );
+    };
+
+    const handleAddNewRoleRow = () => {
+        // Generate a temporary unique ID for the client state
+        const tempId = `temp-${Date.now()}`;
+
+        const newRoleTemplate = {
+            role_id: tempId,
+            role_name: "", // Leaves empty so placeholder "New Role" shows up
+            booking: false,
+            personal_schedule: false,
+            academic_qualifications: false,
+            schedules: false,
+            courses: false,
+            rooms: false,
+            subjects: false,
+            teachers: false,
+            maq: false,
+            fcce: false,
+            help: false,
+        };
+
+        setNewRoles((prev) => [...prev, newRoleTemplate]);
+        setEditingRoleId(tempId); // Instantly put the new row into edit mode
+    };
+
+    const handleRoleNameChange = (roleId: number | string, newName: string) => {
+        setNewRoles((prevRoles) =>
+            prevRoles.map((role) =>
+                role.role_id === roleId ? { ...role, role_name: newName } : role
+            )
+        );
+    };
+
+    const rolesHasChanges = () => {
+        // CRITICAL GUARD: If any role name is empty or just spaces, block saving entirely
+        const hasInvalidNames = newRoles.some(r => !r.role_name || r.role_name.trim() === "");
+        if (hasInvalidNames) return false; // Forces save button to stay disabled
+
+        // 1. If the quantity of roles doesn't match, changes have occurred (Add/Delete)
+        if (oldRoles.length !== newRoles.length) return true;
+
+        // 2. Deep compare every key-value pair for matching IDs
+        for (const oldRole of oldRoles) {
+            const correspondingNewRole = newRoles.find(r => r.role_id === oldRole.role_id);
+
+            // If a matching role cannot be found in the new list, it was removed
+            if (!correspondingNewRole) return true;
+
+            // Compare all schema keys
+            const keysToCompare = [
+                'role_name', 'booking', 'personal_schedule', 'academic_qualifications',
+                'schedules', 'courses', 'rooms', 'subjects', 'teachers', 'maq', 'fcce', 'help'
+            ];
+
+            for (const key of keysToCompare) {
+                if (oldRole[key] !== correspondingNewRole[key]) {
+                    return true; // A difference was spotted!
+                }
+            }
+        }
+
+        // Check if any newly added 'temp' rows exist
+        return newRoles.some(r => String(r.role_id).startsWith('temp-'));
+
+         // Pristine state matches perfectly
+    };
+
+    const saveRolesToDatabase = async (currentNewRoles: any[]) => {
+        // Identify DELETED roles
+        const rolesToDelete = oldRoles
+            .filter(oldR => !currentNewRoles.some(newR => newR.role_id === oldR.role_id))
+            .map(role => role.role_id);
+
+        // Identify INSERTED roles
+        const rolesToInsert = currentNewRoles
+            .filter(newR => String(newR.role_id).startsWith('temp-'))
+            .map(({ role_id, ...rest }) => rest);
+
+        // Identify UPDATED roles
+        const rolesToUpdate = currentNewRoles.filter(newR => {
+            const correspondingOld = oldRoles.find(oldR => oldR.role_id === newR.role_id);
+            if (!correspondingOld) return false;
+
+            const keysToCompare = [
+                'role_name', 'booking', 'personal_schedule', 'academic_qualifications',
+                'schedules', 'courses', 'rooms', 'subjects', 'teachers', 'maq', 'fcce', 'help'
+            ];
+            return keysToCompare.some(key => correspondingOld[key] !== newR[key]);
+        });
+
+        // Directly execute and return the "200" or "500" code from your database action
+        return await syncRolesWithDatabase({
+            inserts: rolesToInsert,
+            updates: rolesToUpdate,
+            deletes: rolesToDelete
+        });
+    };
+
+    const handleSaveRolesConfiguration = async () => {
+        // Fire your database sync mapping function
+        const res = await saveRolesToDatabase(newRoles);
+
+        // Display the notification code instantly ("200" / "500")
+        triggerNotification(res);
+
+        // Close and flush state only if everything succeeded smoothly
+        if (res === "200") {
+            location.reload();
+        }
+    };
 
     const handleSaveDropdownValue = async (forValue: string) => {
         if (newDropdownValue.trim().length === 0) {
@@ -305,7 +524,7 @@ export default function Settings() {
 
     const handleDeleteDDValue = async (value: string, value_for: string) => {
         const res = await deleteDropdownValue(value, value_for);
-        if (res === "204") loadAllData();
+        if (res === "204") await loadAllData();
         setShowDeleteDropdownModal(false);
         triggerNotification(res);
         clearDropdownValues();
@@ -313,7 +532,7 @@ export default function Settings() {
 
     const handleDeletePresetAction = async (name: string) => {
         const res = await deletePreset(name);
-        if (res === "204") loadAllData();
+        if (res === "204") await loadAllData();
         triggerNotification(res);
     };
 
@@ -452,10 +671,22 @@ export default function Settings() {
                     <TabItem title="Users & Roles" icon={HiUserGroup}>
                         <Card className="mt-6 border-none shadow-sm">
                             <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-lg font-bold">Access Control</h3>
-                                <Button size="sm" onClick={() => setShowAddAccountModal(true)}>
-                                    <HiPlus className="mr-2" /> Add User
-                                </Button>
+                                <div>
+                                    <h3 className="text-lg font-bold">User Access Control</h3>
+                                    <p className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-0.5">
+                                        ⚠️ Warning: Role modifications take effect instantly.
+                                    </p>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <Button size="sm" color="purple" onClick={() => setShowRoleWarning(true)}>
+                                        <HiOutlineShieldCheck className="mr-2" /> Edit Role Permissions
+                                    </Button>
+
+                                    <Button size="sm" onClick={() => setShowAddAccountModal(true)}>
+                                        <HiPlus className="mr-2" /> Add User
+                                    </Button>
+                                </div>
                             </div>
                             <Table hoverable>
                                 <TableHead>
@@ -467,28 +698,45 @@ export default function Settings() {
                                     </TableRow>
                                 </TableHead>
                                 <TableBody className="divide-y">
-                                    {authorizedAccounts.map(account => (
-                                        <TableRow key={account.id}>
-                                            <TableCell className="font-medium">{account.username}</TableCell>
-                                            <TableCell>{account.email}</TableCell>
-                                            <TableCell>
-                                                <Select value={account.role} onChange={(e) => handleUpdateRole(account.id, e.target.value)}>
-                                                    <option value="Viewer">Viewer</option>
-                                                    <option value="Registrar">Registrar</option>
-                                                    <option value="Academic Assistant">Academic Assistant</option>
-                                                    <option value="Administrator">Administrator</option>
-                                                    <option value="SuperAdmin">SuperAdmin</option>
-                                                </Select>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex justify-end">
-                                                    <Button color="red" size="xs" onClick={() => handleDeleteUserAction(account.id)}>
-                                                        <HiTrash />
-                                                    </Button>
-                                                </div>
+                                    {authorizedAccounts.length > 0 ? (
+                                        authorizedAccounts.map(account => (
+                                            <TableRow key={account.email}>
+                                                <TableCell className="font-medium">{account.username}</TableCell>
+                                                <TableCell>{account.email}</TableCell>
+                                                <TableCell>
+                                                    <Select
+                                                        value={account.role_id}
+                                                        onChange={(e) => handleUpdateRole(account.id, e.target.value)}
+                                                    >
+                                                        {oldRoles.length > 0 ? (
+                                                            oldRoles.map((role) => (
+                                                                <option key={role.role_id} value={role.role_id}>
+                                                                    {role.role_name}
+                                                                </option>
+                                                            ))
+                                                        ) : null}
+                                                    </Select>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex justify-end">
+                                                        <Button
+                                                            color="red"
+                                                            size="xs"
+                                                            onClick={() => handleDeleteUserAction(account.role_assignment_id)}
+                                                        >
+                                                            <HiTrash />
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center py-8 text-gray-500 dark:text-gray-400">
+                                                No authorized accounts found.
                                             </TableCell>
                                         </TableRow>
-                                    ))}
+                                    )}
                                 </TableBody>
                             </Table>
                         </Card>
@@ -744,10 +992,10 @@ export default function Settings() {
                                                         <TableCell className={"flex justify-end"}>
                                                             <Button color={"red"}
                                                                     className={"cursor-pointer"}
-                                                                    onClick={() => (
-                                                                        setShowDeleteDropdownModal(true),
-                                                                        setNewDropdownValue(ddValues.value),
-                                                                        setNewDropdownValueFor(ddValues.value_for))}>
+                                                                    onClick={() => {
+                                                                        setShowDeleteDropdownModal(true);
+                                                                        setNewDropdownValue(ddValues.value);
+                                                                        setNewDropdownValueFor(ddValues.value_for)}}>
                                                                 <HiTrash/>
                                                             </Button>
                                                         </TableCell>
@@ -794,10 +1042,10 @@ export default function Settings() {
                                                         <TableCell className={"flex justify-end"}>
                                                             <Button color={"red"}
                                                                     className={"cursor-pointer"}
-                                                                    onClick={() => (
-                                                                        setShowDeleteDropdownModal(true),
-                                                                        setNewDropdownValue(ddValues.value),
-                                                                        setNewDropdownValueFor(ddValues.value_for))}>
+                                                                    onClick={() => {
+                                                                        setShowDeleteDropdownModal(true);
+                                                                        setNewDropdownValue(ddValues.value);
+                                                                        setNewDropdownValueFor(ddValues.value_for)}}>
                                                                 <HiTrash/>
                                                             </Button>
                                                         </TableCell>
@@ -931,6 +1179,232 @@ export default function Settings() {
                 </ModalFooter>
             </Modal>
 
+            {/* Role Warning Modal */}
+            <Modal show={showRoleWarning} onClose={() => setShowRoleWarning(false)}>
+                <ModalHeader>
+                    <div className={"flex items-center"}><HiExclamationTriangle color={"yellow"} className={"mr-2"} /> Warning Disclaimer</div>
+                </ModalHeader>
+                <ModalBody className="space-y-4">
+                    <List>
+                        <h3 className="text-lg font-semibold">You are modifying a core system role definition.</h3>
+                        <ListItem>Cascading Effect: Any changes made to these permission toggles (e.g., Booking, Schedules, Courses) will immediately alter the access rights of every user currently assigned to this role group.</ListItem>
+                        <ListItem>Potential Session Disruptions: Users currently logged in under this role may experience immediate changes in interface accessibility or encounter authorization errors mid-session.</ListItem>
+                        <ListItem>System Stability: Restricting permissions for high-level roles (like Admin) can lock administrators out of essential management features. Please cross-verify dependencies before saving.</ListItem>
+                    </List>
+                </ModalBody>
+                <ModalFooter className="justify-end">
+                    <Button color="gray" onClick={() => setShowRoleWarning(false)}>Cancel</Button>
+                    <Button onClick={() => {handleFetchRolesData(); setShowRoleWarning(false); setShowRoleList(true)}}>
+                        Proceed
+                    </Button>
+                </ModalFooter>
+            </Modal>
+
+            {/* Roles Modal */}
+            <Modal size={"7xl"} show={showRoleList} onClose={() => setShowRoleList(false)}>
+                <ModalHeader>
+                    <div className={"flex items-center"}>Roles & Permissions Management</div>
+                </ModalHeader>
+                <ModalBody className="space-y-4">
+                    {roleListLoaded ? (
+                        /* Added overflow protection wrapper and forced table to occupy full width */
+                        <div className="w-full overflow-x-auto border border-gray-200 dark:border-gray-800 rounded-lg p-1">
+                            <Table className="w-full table-fixed min-w-225">
+                                <TableHead>
+                                    <TableRow>
+                                        {/* Actions + Name combined on the left side to save horizontal footprint */}
+                                        <TableHeadCell className="w-15 text-center"><span className="sr-only">Delete</span></TableHeadCell>
+                                        <TableHeadCell className="w-50">Role Name</TableHeadCell>
+
+                                        {/* Condensed column headers */}
+                                        <TableHeadCell className="w-20 text-center px-1 text-xs">Booking</TableHeadCell>
+                                        <TableHeadCell className="w-22.5 text-center px-1 text-xs">Pers. Schedule</TableHeadCell>
+                                        <TableHeadCell className="w-25 text-center px-1 text-xs">Acad. Qual.</TableHeadCell>
+                                        <TableHeadCell className="w-21.25 text-center px-1 text-xs">Schedules</TableHeadCell>
+                                        <TableHeadCell className="w-20 text-center px-1 text-xs">Courses</TableHeadCell>
+                                        <TableHeadCell className="w-20 text-center px-1 text-xs">Rooms</TableHeadCell>
+                                        <TableHeadCell className="w-20 text-center px-1 text-xs">Subjects</TableHeadCell>
+                                        <TableHeadCell className="w-20 text-center px-1 text-xs">Teachers</TableHeadCell>
+                                        <TableHeadCell className="w-17.5 text-center px-1 text-xs">MAQ</TableHeadCell>
+                                        <TableHeadCell className="w-17.5 text-center px-1 text-xs">FCCE</TableHeadCell>
+                                        <TableHeadCell className="w-17.5 text-center px-1 text-xs">Help</TableHeadCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {newRoles.length > 0 ? (
+                                        newRoles.map((role) => (
+                                            <TableRow key={role.role_id} className="hover:bg-gray-500/10">
+                                                {/* Action Column moved to the front (Left side anchor) */}
+                                                <TableCell className="text-center p-2">
+                                                    <button
+                                                        type="button"
+                                                        className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-md transition-colors cursor-pointer"
+                                                        onClick={() => {
+                                                            setNewRoles(prev => prev.filter(r => r.role_id !== role.role_id));
+                                                        }}
+                                                    >
+                                                        <HiTrash className="text-base" />
+                                                    </button>
+                                                </TableCell>
+
+                                                {/* Name Column */}
+                                                <TableCell className="font-medium text-gray-900 dark:text-white p-2">
+                                                    {editingRoleId === role.role_id ? (
+                                                        <input
+                                                            type="text"
+                                                            value={role.role_name}
+                                                            placeholder="New Role"
+                                                            onChange={(e) => handleRoleNameChange(role.role_id, e.target.value)}
+                                                            onBlur={() => setEditingRoleId(null)}
+                                                            onKeyDown={(e) => e.key === 'Enter' && setEditingRoleId(null)}
+                                                            className="w-full bg-transparent border-b border-indigo-500 text-sm py-0.5 focus:outline-none dark:text-white"
+                                                            autoFocus
+                                                        />
+                                                    ) : (
+                                                        <div className="flex items-center gap-2 group justify-between">
+                                                <span className="truncate max-w-37.5">
+                                                    {role.role_name || <span className="text-gray-400 italic">New Role</span>}
+                                                </span>
+                                                            <button
+                                                                onClick={() => setEditingRoleId(role.role_id)}
+                                                                className="text-gray-400 hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                                                                title="Edit Role Name"
+                                                            >
+                                                                <HiPencilAlt className="text-sm" />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </TableCell>
+
+                                                {/* Checkboxes Loop */}
+                                                {[
+                                                    'booking',
+                                                    'personal_schedule',
+                                                    'academic_qualifications',
+                                                    'schedules',
+                                                    'courses',
+                                                    'rooms',
+                                                    'subjects',
+                                                    'teachers',
+                                                    'maq',
+                                                    'fcce',
+                                                    'help',
+                                                ].map((field) => (
+                                                    <TableCell key={field} className="text-center p-2">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!role[field]}
+                                                            onChange={() => handlePermissionToggle(role.role_id, field)}
+                                                            className="w-4 h-4 rounded text-indigo-600 border-gray-300 focus:ring-indigo-500 cursor-pointer mx-auto block"
+                                                        />
+                                                    </TableCell>
+                                                ))}
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={13} className="text-center text-gray-500 py-8">
+                                                No global system roles found.
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+
+                                    {/* Append Action Row */}
+                                    <TableRow className="border-t border-dashed border-gray-300 dark:border-gray-800 hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
+                                        <TableCell colSpan={13} className="p-0">
+                                            <button
+                                                type="button"
+                                                onClick={handleAddNewRoleRow}
+                                                className="flex items-center justify-center gap-2 w-full py-3.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors cursor-pointer"
+                                            >
+                                                <HiPlusCircle className="text-lg" />
+                                                Create & Add New System Role
+                                            </button>
+                                        </TableCell>
+                                    </TableRow>
+                                </TableBody>
+                            </Table>
+                        </div>
+                    ) : (
+                        <div className="flex items-center justify-center py-12">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-3 border-blue-600"></div>
+                        </div>
+                    )}
+                </ModalBody>
+                <ModalFooter className="justify-end">
+                    {/* EXIT WITHOUT CHANGES */}
+                    <Button
+                        color={"gray"}
+                        onClick={() => {
+                            setShowRoleList(false);
+                            resetRolesState(); // Wipes out all pending unsaved edits safely
+                        }}
+                    >
+                        Exit Without Changes
+                    </Button>
+
+                    {/* SAVE CHANGES */}
+                    <Button
+                        disabled={!rolesHasChanges()}
+                        onClick={() => setOpenRoleSaveConfirmationModal(true)}
+                    >
+                        Save Changes
+                    </Button>
+                </ModalFooter>
+            </Modal>
+
+            {/* Roles Save Confirmation Modal */}
+            <Modal
+                size="md"
+                show={openRoleSaveConfirmationModal}
+                onClose={() => setOpenRoleSaveConfirmationModal(false)}
+                popup
+            >
+                <ModalHeader>
+                    <span className="p-4 text-xl font-medium text-gray-900 dark:text-white block">
+                        Confirm Changes
+                    </span>
+                </ModalHeader>
+
+                <ModalBody>
+                    <div className="space-y-3 p-2">
+                        <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                            Are you sure you want to save these modifications? This will permanently update the global system roles matrix in the database.
+                        </p>
+                        <div className="bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-900/50 p-3 rounded-lg text-xs text-yellow-800 dark:text-yellow-300">
+                            <strong>Warning:</strong> Any deleted roles will immediately revoke access permissions for users currently assigned to them.
+                        </div>
+                    </div>
+                </ModalBody>
+
+                <ModalFooter className="justify-end gap-2">
+                    <Button
+                        color="gray"
+                        onClick={() => setOpenRoleSaveConfirmationModal(false)}
+                        className="cursor-pointer"
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        color="indigo"
+                        className="cursor-pointer"
+                        onClick={async () => {
+                            try {
+                                // Close this confirmation alert backdrop first
+                                setOpenRoleSaveConfirmationModal(false);
+
+                                // Dispatch the network requests and handle notification triggers
+                                await handleSaveRolesConfiguration();
+                            } catch (error) {
+                                console.error("Failed to save changes:", error);
+                            }
+                        }}
+                    >
+                        Confirm & Save
+                    </Button>
+                </ModalFooter>
+            </Modal>
+
             {/* Add User Modal */}
             <Modal show={showAddAccountModal} onClose={() => setShowAddAccountModal(false)}>
                 <ModalHeader>Add Authorized User</ModalHeader>
@@ -945,18 +1419,26 @@ export default function Settings() {
                     </div>
                     <div>
                         <Label>Initial Role</Label>
-                        <Select value={newAccount.role} onChange={e => setNewAccount({...newAccount, role: e.target.value})}>
-                            <option value="Viewer">Viewer</option>
-                            <option value="Academic Assistant">Academic Assistant</option>
-                            <option value="Registrar">Registrar</option>
-                            <option value="Administrator">Administrator</option>
-                            <option value="SuperAdmin">SuperAdmin</option>
+                        <Select value={newAccount.role || ""} onChange={e => setNewAccount({...newAccount, role: e.target.value})}>
+                            <option value="" disabled hidden>--- Select Option ---</option>
+                            {oldRoles.length > 0 ? (
+                                oldRoles.map((role) => (
+                                    <option key={role.role_id} value={role.role_id}>
+                                        {role.role_name}
+                                    </option>
+                                ))
+                            ) : null}
                         </Select>
                     </div>
                 </ModalBody>
                 <ModalFooter className="justify-end">
                     <Button color="gray" onClick={() => setShowAddAccountModal(false)}>Cancel</Button>
-                    <Button onClick={handleAddUser}>Add User</Button>
+                    <Button
+                        onClick={handleAddUser}
+                        disabled={!newAccount.username?.trim() || !newAccount.email?.trim() || !newAccount.role}
+                    >
+                        Add User
+                    </Button>
                 </ModalFooter>
             </Modal>
 
@@ -1069,7 +1551,7 @@ export default function Settings() {
                     <TextInput value={newDropdownValue} onChange={e => setNewDropdownValue(sanitizeDropdownValue(e.target.value))} placeholder="Computer Laboratory" />
                 </ModalBody>
                 <ModalFooter className="justify-end">
-                    <Button color="gray" onClick={() => (setShowAddLaboratoryTypeModal(false), clearDropdownValues())}>Cancel</Button>
+                    <Button color="gray" onClick={() => {setShowAddLaboratoryTypeModal(false); clearDropdownValues()}}>Cancel</Button>
                     <Button onClick={() => handleSaveDropdownValue("laboratory")}>Save</Button>
                 </ModalFooter>
             </Modal>
@@ -1082,7 +1564,7 @@ export default function Settings() {
                     <TextInput value={newDropdownValue} onChange={e => setNewDropdownValue(sanitizeDropdownValue(e.target.value))} placeholder="Information Technology" />
                 </ModalBody>
                 <ModalFooter className="justify-end">
-                    <Button color="gray" onClick={() => (setShowAddSpecializationTypeModal(false), clearDropdownValues())}>Cancel</Button>
+                    <Button color="gray" onClick={() => {setShowAddSpecializationTypeModal(false); clearDropdownValues()}}>Cancel</Button>
                     <Button onClick={() => handleSaveDropdownValue("specialization")}>Save</Button>
                 </ModalFooter>
             </Modal>

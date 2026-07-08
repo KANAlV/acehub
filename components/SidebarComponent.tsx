@@ -21,13 +21,14 @@ import {useEffect, useState} from "react";
 import { usePathname } from "next/navigation";
 import { useMsal } from "@azure/msal-react";
 import {IoMdSettings} from "react-icons/io";
-import {getTeacherID} from "@/services/userService.ts";
+import {fetchUserPermissions, getTeacherID} from "@/services/userService.ts";
 
 export function SidebarComponent({ username, role, email }: { username: string, role: string, email: string }) {
     const [isOpen, setIsOpen] = useState(false);
     const pathname = usePathname();
     const { instance, accounts } = useMsal();
     const [facultyID, setFacultyID] = useState("");
+    const [userRole, setUserRole] = useState<any>(null);
 
     useEffect(() => {
         if (!email) return;
@@ -41,38 +42,39 @@ export function SidebarComponent({ username, role, email }: { username: string, 
     }, [email]);
 
     /** --- Role Detection --- **/
-        if (role !== "Viewer"){
-            if( pathname.includes("/academic_qualifications")) {
-                window.location.href = "/unauthorized";
-            }
-        }
 
-        if (role !== "Administrator") {
-            if( pathname.includes("/schedules") ||
-                pathname.includes("/rooms") ||
-                pathname.includes("/teachers") ||
-                pathname.includes("/subjects")) {
-                window.location.href = "/unauthorized";
-            }
-        }
+        useEffect(() => {
+            async function loadRoles() {
+                const uRole = await fetchUserPermissions();
 
-        if (role !== "Administrator" && role !== "SuperAdmin") {
+                if (uRole) {
+                    setUserRole(uRole);
+                    if (pathname.includes("/booking") && !uRole?.booking){window.location.href = "/unauthorized";}
+                    if (pathname.includes("/rooms") && !uRole?.rooms){window.location.href = "/unauthorized";}
+                    if (pathname.includes("/academic_qualifications") && !uRole?.academic_qualifications){window.location.href = "/unauthorized";}
+                    if (pathname.includes("/schedules") && !uRole?.schedules){window.location.href = "/unauthorized";}
+                    if (pathname.includes("/courses") && !uRole?.courses){window.location.href = "/unauthorized";}
+                    if (pathname.includes("/rooms") && !uRole?.rooms){window.location.href = "/unauthorized";}
+                    if (pathname.includes("/subjects") && !uRole?.subjects){window.location.href = "/unauthorized";}
+                    if (pathname.includes("/teachers") && !uRole?.subjects){window.location.href = "/unauthorized";}
+                    if (pathname.includes("/maq") && !uRole?.maq){window.location.href = "/unauthorized";}
+                    if (pathname.includes("/fcce") && !uRole?.maq){window.location.href = "/unauthorized";}
+                    if (pathname.includes("/help") && !uRole?.help){window.location.href = "/unauthorized";}
+
+                } else {
+                    // Fallback default structure or redirect if they have zero access
+                    setUserRole({ role_name: 'Guest', permissions: [] });
+                }
+            }
+
+            loadRoles();
+        }, []);
+
+        if (role !== "Administrator" && role !== "SuperAdmin" && role !== "AcademicHead") {
             if( pathname.includes("/configuration")) {
                 window.location.href = "/unauthorized";
             }
         }
-
-        if (role !== "Administrator" && role !== "Registrar") {
-            if( pathname.includes("/courses")) {
-                window.location.href = "/unauthorized";
-            }
-        }
-
-    if (role !== "Academic Assistant") {
-        if( pathname.includes("/booking")) {
-            window.location.href = "/unauthorized";
-        }
-    }
 
     /** --- /Role Detection --- **/
 
@@ -145,55 +147,55 @@ export function SidebarComponent({ username, role, email }: { username: string, 
                         <SidebarItem as={Link} href="/dashboard" className={"hover:bg-gray-500/14"} icon={HiChartPie} onClick={() => setIsOpen(false)}>
                             Dashboard
                         </SidebarItem>
-                        <SidebarItem hidden={role !== "Academic Assistant"}
+                        <SidebarItem hidden={!userRole?.booking}
                                      as={Link} href="/maintenance" className={"hover:bg-gray-500/14"} icon={HiTable} onClick={() => setIsOpen(false)}>
                             Booking
                         </SidebarItem>
-                        <SidebarItem hidden={role !== "Faculty"}
+                        <SidebarItem hidden={!userRole?.personal_schedule}
                                      as={Link} href={`/overview/${facultyID}`} className={"hover:bg-gray-500/14"} icon={HiTable} onClick={() => setIsOpen(false)}>
                             Personal Schedule
                         </SidebarItem>
-                        <SidebarItem hidden={role !== "Faculty"}
+                        <SidebarItem hidden={!userRole?.academic_qualifications}
                                      as={Link} href="/maintenance" className={"hover:bg-gray-500/14"} icon={HiAcademicCap} onClick={() => setIsOpen(false)}>
                             Acad. Qualifications
                         </SidebarItem>
-                        <SidebarItem hidden={role !== "Administrator"}
+                        <SidebarItem hidden={!userRole?.schedules}
                                      as={Link} href="/schedules" className={"hover:bg-gray-500/14"} icon={HiTable} onClick={() => setIsOpen(false)}>
                             Schedules
                         </SidebarItem>
-                        <SidebarCollapse icon={HiUserGroup} label="Courses" className={"hover:bg-gray-500/14"}>
-                            <SidebarItem hidden={role !== "Administrator"}
+                        <SidebarCollapse hidden={!userRole?.courses} icon={HiUserGroup} label="Courses" className={"hover:bg-gray-500/14"}>
+                            <SidebarItem hidden={!userRole?.courses}
                                          as={Link} href="/courses/shs" className={"hover:bg-gray-500/14"} onClick={() => setIsOpen(false)}>
                                 SHS
                             </SidebarItem>
-                            <SidebarItem hidden={role !== "Administrator"}
+                            <SidebarItem hidden={!userRole?.courses}
                                          as={Link} href="/courses/tertiary" className={"hover:bg-gray-500/14"} onClick={() => setIsOpen(false)}>
                                 Tertiary
                             </SidebarItem>
                         </SidebarCollapse>
-                        <SidebarItem hidden={role !== "Administrator"}
+                        <SidebarItem hidden={!userRole?.rooms}
                                      as={Link} href="/rooms" className={"hover:bg-gray-500/14"} icon={HiLibrary} onClick={() => setIsOpen(false)}>
                             Rooms
                         </SidebarItem>
-                        <SidebarItem hidden={role !== "Administrator"}
+                        <SidebarItem hidden={!userRole?.subjects}
                                      as={Link} href="/subjects" className={"hover:bg-gray-500/14"} icon={HiBookOpen} onClick={() => setIsOpen(false)}>
                             Subjects
                         </SidebarItem>
-                        <SidebarItem hidden={role !== "Administrator"}
+                        <SidebarItem hidden={!userRole?.teachers}
                                      as={Link} href="/teachers" className={"hover:bg-gray-500/14"} icon={HiAcademicCap} onClick={() => setIsOpen(false)}>
                             Teachers
                         </SidebarItem>
-                        <SidebarItem hidden={role !== "Administrator"}
+                        <SidebarItem hidden={!userRole?.maq}
                                      as={Link} href="/maintenance" className={"hover:bg-gray-500/14"} icon={HiClipboardCheck} onClick={() => setIsOpen(false)}>
                             MAQ (*)
                         </SidebarItem>
-                        <SidebarItem hidden={role !== "Administrator"}
+                        <SidebarItem hidden={!userRole?.fcce}
                                      as={Link} href="/maintenance" className={"hover:bg-gray-500/14"} icon={HiClipboardCheck} onClick={() => setIsOpen(false)}>
                             FCCE (*)
                         </SidebarItem>
                     </SidebarItemGroup>
                     <SidebarItemGroup>
-                        <SidebarItem hidden={role == "Viewer"}
+                        <SidebarItem hidden={!userRole?.help}
                                      as={Link} href="#" className={"hover:bg-gray-500/14"} icon={HiQuestionMarkCircle}>
                             Help (*)
                         </SidebarItem>

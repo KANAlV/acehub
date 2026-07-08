@@ -85,6 +85,7 @@ export async function getCurrentUser(): Promise<User | null> {
 }
 
 /** --- Dashboard Related Functions --- **/
+
 export async function setDisplay(id: string) {
     try {
         await sql`SELECT set_dashboard_display(${id})`;
@@ -106,6 +107,163 @@ export async function getDisplay() {
         return null;
     }
 }
+
+
+
+/** ---  Role Related queruies --- **/
+
+export async function fetchUserPermissions() {
+    try {
+        const user = await getCurrentUser();
+
+        // Safety Guard: Check if user exists (since it's an object/null, not an array)
+        if (!user || !user.id) {
+            console.warn("[AUTH_WARN]: No active user session or user ID found.");
+            return null;
+        }
+
+        // Fix: Use user.id directly instead of user[0].id
+        const result = await sql`SELECT * FROM get_user_permissions(${user.id})`;
+
+        return result.length > 0 ? result[0] : null;
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch user permissions:", error);
+        return null;
+    }
+}
+
+export async function fetchUserProfilesPaginated({
+     search = "",
+     page = 1,
+     limit = 10,
+     sortBy = "username", // accepts: 'username' | 'email'
+     sortDir = "ASC"      // accepts: 'ASC' | 'DESC'
+ }: {
+    search?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: "username" | "email";
+    sortDir?: "ASC" | "DESC";
+} = {}) {
+    try {
+        // 1. Calculate how many items to skip
+        const offset = (page - 1) * limit;
+
+        // 2. Call the updated stored procedure pulling from role_assignment
+        const result = await sql`
+            SELECT * FROM get_user_profiles_paginated(
+                    ${search},
+                    ${limit},
+                    ${offset},
+                    ${sortBy},
+                    ${sortDir}
+                          )
+        `;
+
+        // 3. Extract the total count metadata from the first row
+        const totalCount = result.length > 0 ? Number(result[0].total_count) : 0;
+        const totalPages = Math.ceil(totalCount / limit);
+
+        // 4. Return status "200" along with formatted role-assignment items
+        return {
+            status: "200",
+            users: result.map(({ total_count, user_id, ...rest }) => ({
+                id: user_id, // Maps user_id to 'id' so your account.id code works natively
+                ...rest
+            })),
+            pagination: {
+                totalCount,
+                totalPages,
+                currentPage: page,
+                limit,
+                sortBy,
+                sortDir
+            }
+        };
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch paginated role assignment profiles:", error);
+
+        // 5. Return status "500" on exception
+        return {
+            status: "500",
+            users: [],
+            pagination: {
+                totalCount: 0,
+                totalPages: 0,
+                currentPage: page,
+                limit,
+                sortBy,
+                sortDir
+            }
+        };
+    }
+}
+
+export async function fetchAllRoles() {
+    try {
+        // Simple, clean, and handles new columns automatically
+        const result = await sql`
+            SELECT * FROM roles 
+            ORDER BY role_name ASC
+        `;
+        return result;
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch system roles directory:", error);
+        return [];
+    }
+}
+
+export async function syncRolesWithDatabase(payload: { inserts: any[], updates: any[], deletes: any[] }) {
+    try {
+        const { inserts, updates, deletes } = payload;
+
+        await sql`
+            SELECT sync_system_roles(
+                ${inserts}::jsonb, 
+                ${updates}::jsonb, 
+                ${deletes}::jsonb
+            );
+        `;
+
+        return "200";
+    } catch (error) {
+        console.error("[DB_ERROR]: Database role synchronization transaction failed:", error);
+        return "500";
+    }
+}
+
+export async function insertUser(
+    username: string,
+    email: string,
+    role: string,
+    updated_by: string
+) {
+    try {
+        const result = await sql`
+            SELECT status_code FROM upsert_user_and_assign_role(
+                ${username},
+                ${email},
+                ${role},
+                ${updated_by}
+            )
+        `;
+
+        const dbStatus = result[0]?.status_code || "500";
+
+        if (dbStatus === "201") {
+            revalidatePath('/configuration');
+            return "201";
+        }
+
+        return "500";
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to create or update user context:", error);
+        return "500";
+    }
+}
+
+
+
 
 /** ---  Settings & Presets --- **/
 
@@ -224,6 +382,8 @@ export async function deletePreset(name: string) {
     }
 }
 
+
+
 /** --- Break Periods --- **/
 
 export async function fetchBreakPeriods() {
@@ -268,6 +428,8 @@ export async function deleteBreakPeriod(id: number) {
     }
 }
 
+
+
 /** --- Database Truncation --- **/
 
 export async function truncateTables(selectedTables: {
@@ -296,6 +458,8 @@ export async function truncateTables(selectedTables: {
         throw new Error("Failed to truncate tables");
     }
 }
+
+
 
 /** --- Database Export --- **/
 
@@ -350,6 +514,8 @@ export async function pgDump() {
     }
 }
 
+
+
 /** --- Account Management --- **/
 
 export async function fetchAuthorizedAccounts() {
@@ -361,22 +527,35 @@ export async function fetchAuthorizedAccounts() {
     }
 }
 
-export async function insertUser(username: string, email: string, role: string) {
+export async function updateAccountRole(id: string, role: string, updated_by: string) {
     try {
-        await sql`SELECT create_user(${username}, ${email}, ${role})`;
-        revalidatePath('/configuration');
-        return "201";
-    } catch (error) {
-        console.error("[DB_ERROR]: Failed to create user:", error);
-        return "500";
-    }
-}
+        // Parse your input strings into the exact data types expected by the database
+        const targetUserId = id;
+        const targetRoleId = parseInt(role, 10);
+        const executorId = updated_by;
 
-export async function updateAccountRole(id: string, role: string) {
-    try {
-        await sql`SELECT update_user_role(${id}::uuid, ${role})`;
-        revalidatePath('/configuration');
-        return "200";
+        if (isNaN(targetRoleId)) {
+            console.error("[UPDATE_ERROR]: Provided role ID is not a valid integer number.");
+            return "400";
+        }
+
+        // Execute the updated stored procedure passing all required parameters
+        const result = await sql`
+            SELECT status_code FROM update_user_role_v2(
+                ${targetUserId}::uuid, 
+                ${targetRoleId}, 
+                ${executorId}::uuid
+            )
+        `;
+
+        const dbStatus = result[0]?.status_code || "500";
+
+        if (dbStatus === "200") {
+            revalidatePath('/configuration');
+            return "200";
+        }
+
+        return dbStatus; // Returns "404" if user was missing, or "500" for errors
     } catch (error) {
         console.error("[DB_ERROR]: Failed to update role:", error);
         return "500";
@@ -385,16 +564,41 @@ export async function updateAccountRole(id: string, role: string) {
 
 export async function deleteUser(id: string) {
     try {
-        await sql`SELECT delete_user(${id}::uuid)`;
-        revalidatePath('/configuration');
-        return "204";
+        // 1. Convert the string ID from the frontend into the integer required by the DB
+        const roleAssignmentId = parseInt(id, 10);
+
+        if (isNaN(roleAssignmentId)) {
+            console.error("[DELETE_ERROR]: Provided ID is not a valid integer number.");
+            return "400"; // Bad Request
+        }
+
+        // 2. Execute the stored function and unpack its returned status table row
+        const result = await sql`
+            SELECT * FROM delete_user_role(${roleAssignmentId})
+        `;
+
+        const dbStatus = result[0]?.status_code;
+
+        // 3. Handle results natively according to what happened in the database
+        if (dbStatus === "200") {
+            revalidatePath('/configuration');
+            return "204"; // HTTP 204 No Content (Standard successful delete code)
+        } else if (dbStatus === "404") {
+            return "404"; // Not Found in database
+        } else {
+            return "500"; // Fallback server error code
+        }
+
     } catch (error) {
         console.error("[DB_ERROR]: Failed to delete user:", error);
         return "500";
     }
 }
 
+
+
 /** ---  Rooms --- **/
+
 export async function fetchRoomsCount(p_room_name: string) {
     const searchLabel = p_room_name.trim() === "" ? "all rooms" : `filter: "${p_room_name}"`;
 
@@ -484,7 +688,10 @@ export async function getAllRoomsData() {
     }
 }
 
+
+
 /** --- Sections --- **/
+
 export async function fetchProgramCount(p_program_name: string) {
     try {
         const result = await sql`SELECT get_program_count(${p_program_name})`;
@@ -603,7 +810,10 @@ export async function deleteProgram(id: string) {
     }
 }
 
+
+
 /** --- Subjects --- **/
+
 export async function insertSubject(curriculumn_version: string | null, course_code: string, course_name: string, field_of_specialization: string, lecture: number, lab: number, lab_type: string, year_term: string) {
     try {
         /** -----------------------------------
@@ -729,7 +939,10 @@ export async function fetchCurriculumVersions() {
     }
 }
 
+
+
 /** --- Teachers --- **/
+
 export async function fetchTeachers(search = "", page: number, type = "All") {
     const ITEMS_PER_PAGE = 10;
     try {
@@ -939,7 +1152,10 @@ export async function fetchAllTeachers() {
     }
 }
 
+
+
 /** --- Schedules --- **/
+
 export async function saveGeneratedSchedule(name: string, config: any) {
     try {
         // 1. Create the Schedule Snapshot record
