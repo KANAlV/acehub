@@ -22,7 +22,13 @@ import {
 } from "@/services/userService.ts";
 import {HiCheck, HiExclamation, HiOutlineExclamationCircle, HiOutlineTrash} from "react-icons/hi";
 import { VscSave } from "react-icons/vsc";
-import {numericValueOnly, sanitizeLongName, sanitizeVeryShortName, clampNumericValue} from "@/lib/validation.ts";
+import {
+    numericValueOnly,
+    sanitizeLongName,
+    sanitizeVeryShortName,
+    clampNumericValue,
+    sanitizeProgramCode
+} from "@/lib/validation.ts";
 
 /** --- Helper Components --- **/
 const ProgramTableRow = ({ program, editModalValue }: { program: any, editModalValue: (id: string) => void }) => {
@@ -198,7 +204,7 @@ export default function CoursesManager() {
 
     /** Filtering **/
     function filterProgramCode(e:string) {
-        setSelectedProgram(sanitizeVeryShortName(e))
+        setSelectedProgram(sanitizeProgramCode(e))
     }
 
     function filterProgramName(e:string) {
@@ -387,7 +393,7 @@ export default function CoursesManager() {
 
     /** Queries **/
     async function submitProgram() {
-        if (!selectedProgram || !programNameVal || !academicLevelVal) {
+        if (!selectedProgram.trim() || !programNameVal.trim() || !academicLevelVal) {
             console.warn("[UI_VALIDATION]: Missing fields.");
             return;
         }
@@ -401,7 +407,7 @@ export default function CoursesManager() {
         });
 
         try {
-            const stat = await insertProgram(selectedProgram, programNameVal, academicLevelVal, studentsToSave);
+            const stat = await insertProgram(selectedProgram, programNameVal.trim(), academicLevelVal, studentsToSave);
             setStatusCode(stat);
             if (stat === "201") {
                 discardEntry();
@@ -417,6 +423,7 @@ export default function CoursesManager() {
     }
 
     async function updateEntry() {
+        if (!programNameVal.trim()) {return};
         const studentsToSave: Record<string, number> = {};
         Object.entries(studentsVal).forEach(([k, v]) => {
             studentsToSave[k] = parseInt(v || "0");
@@ -424,7 +431,7 @@ export default function CoursesManager() {
 
         setLoading(true);
         try {
-            const stat = await updateProgram(selectedProgram, programNameVal, academicLevelVal, studentsToSave);
+            const stat = await updateProgram(selectedProgram, programNameVal.trim(), academicLevelVal, studentsToSave);
             setStatusCode(stat);
             if (stat === "200") {
                 discardEntry();
@@ -527,7 +534,7 @@ export default function CoursesManager() {
             </div>
 
             <div className={"flex items-center justify-between"}>
-                <h1 className={"mb-4 font-bold text-2xl"}>Manage Courses</h1>
+                <h1 className={"mb-4 font-bold text-2xl"}>Manage Strands</h1>
                 <div className={"flex space-x-3"}>
                     <Dropdown color={"alternative"} label={"Actions"} dismissOnClick={false}>
                         <DropdownItem onClick={() => downloadProgramTemplate()}>Get Import Template</DropdownItem>

@@ -39,6 +39,12 @@ export function sanitizeVeryShortName(input: string): string {
         .slice(0, MAX_LENGTH_VERY_SHORT); // 2. Enforce length
 }
 
+export function sanitizeProgramCode(input: string): string {
+    return input
+        .replace(ALPHA_REGEX, '') // 1. Remove bad characters
+        .slice(0, MAX_LENGTH_VERY_SHORT); // 2. Enforce length
+}
+
 export function sanitizeTeacherCode(input: string): string {
     return input
         .replace(ALPHA_REGEX, '') // 1. Remove bad characters

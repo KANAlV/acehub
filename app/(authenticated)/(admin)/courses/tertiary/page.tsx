@@ -22,7 +22,13 @@ import {
 } from "@/services/userService.ts";
 import {HiCheck, HiExclamation, HiOutlineExclamationCircle, HiOutlineTrash} from "react-icons/hi";
 import { VscSave } from "react-icons/vsc";
-import {numericValueOnly, sanitizeLongName, sanitizeVeryShortName, clampNumericValue} from "@/lib/validation.ts";
+import {
+    numericValueOnly,
+    sanitizeLongName,
+    sanitizeVeryShortName,
+    clampNumericValue,
+    sanitizeProgramCode
+} from "@/lib/validation.ts";
 
 /** --- Helper Components --- **/
 const ProgramTableRow = ({ program, editModalValue }: { program: any, editModalValue: (id: string) => void }) => {
@@ -200,7 +206,7 @@ export default function CoursesManager() {
 
     /** Filtering **/
     function filterProgramCode(e:string) {
-        setSelectedProgram(sanitizeVeryShortName(e))
+        setSelectedProgram(sanitizeProgramCode(e))
     }
 
     function filterProgramName(e:string) {
@@ -383,7 +389,7 @@ export default function CoursesManager() {
 
     /** Queries **/
     async function submitProgram() {
-        if (!selectedProgram || !programNameVal || !academicLevelVal) {
+        if (!selectedProgram || !programNameVal.trim() || !academicLevelVal) {
             console.warn("[UI_VALIDATION]: Missing fields.");
             return;
         }
@@ -397,7 +403,7 @@ export default function CoursesManager() {
         });
 
         try {
-            const stat = await insertProgram(selectedProgram, programNameVal, academicLevelVal, studentsToSave);
+            const stat = await insertProgram(selectedProgram, programNameVal.trim(), academicLevelVal, studentsToSave);
             setStatusCode(stat);
             if (stat === "201") {
                 discardEntry();
@@ -413,6 +419,10 @@ export default function CoursesManager() {
     }
 
     async function updateEntry() {
+        if (!programNameVal.trim()) {
+            console.warn("[UI_VALIDATION]: Missing fields.");
+            return;
+        }
         const studentsToSave: Record<string, number> = {};
         Object.entries(studentsVal).forEach(([k, v]) => {
             studentsToSave[k] = parseInt(v || "0");
@@ -420,7 +430,7 @@ export default function CoursesManager() {
 
         setLoading(true);
         try {
-            const stat = await updateProgram(selectedProgram, programNameVal, academicLevelVal, studentsToSave);
+            const stat = await updateProgram(selectedProgram, programNameVal.trim(), academicLevelVal, studentsToSave);
             setStatusCode(stat);
             if (stat === "200") {
                 discardEntry();
