@@ -46,13 +46,16 @@ export default function DashboardSummary() {
     const [systemSettings, setSystemSettings] = useState<any>(null);
     const [userPerms, setUserPerms] = useState<any>(null);
 
-    async function fetchRole() {
-        const uRole = await fetchUserPermissions();
-        return uRole;
-    } 
-
     useEffect(() => {
-        setUserPerms(fetchRole());
+        async function initPermissions() {
+            try {
+                const uRole = await fetchUserPermissions();
+                setUserPerms(uRole); // Now safely storing the actual object data!
+            } catch (error) {
+                console.error("Failed to load user permissions:", error);
+            }
+        }
+        initPermissions();
     }, []);
 
     // Logic for max units as defined in your reference
@@ -154,15 +157,15 @@ export default function DashboardSummary() {
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{scheduleName}</h1>
                     <p className="text-sm text-gray-500 italic">Active Display ID: {activeScheduleId}</p>
                 </div>
-                <Button color="blue" onClick={() => userPerms.schedule?
+                <Button color="blue" onClick={() => userPerms?.schedules?
                         router.push(`/schedules/${activeScheduleId}/timetable`) :
                         router.push(`./timetable`)
                 }>
-                    {userPerms.schedule?
+                    {userPerms?.schedules == true ?
                         <HiPencilAlt className="mr-2 h-5 w-5" /> :
                         <HiCalendar className="mr-2 h-5 w-5" />
                     }
-                    {userPerms.schedule? "View Timetable":"Edit Timetable"}
+                    {userPerms?.schedules == true ? "Edit Timetable":"View Timetable"}
                 </Button>
             </div>
 
@@ -246,7 +249,7 @@ export default function DashboardSummary() {
 
                         return (
                             <div key={teacher.pscs_id} className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md transition-all"
-                                 onClick={() => userPerms.schedule? router.push(`/schedules/${activeScheduleId}/teachers/${teacher.pscs_id}`) : router.push(`./overview/${teacher.pscs_id}`) }>
+                                 onClick={() => userPerms?.schedules? router.push(`/schedules/${activeScheduleId}/teachers/${teacher.pscs_id}`) : router.push(`./overview/${teacher.pscs_id}`) }>
                                 <div className="flex justify-between items-start mb-3">
                                     <div>
                                         <h4 className="font-semibold text-sm">{teacher.fname} {teacher.mi ? teacher.mi + "." : ""} {teacher.sname} {teacher.suffix ? `, ${teacher.suffix}` : ""}</h4>
@@ -294,7 +297,7 @@ export default function DashboardSummary() {
                     })}
 
                     {/* View All Card */}
-                    <div onClick={() => (userPerms.schedule? router.push(`/schedules/${activeScheduleId}/teachers`) : router.push(`/overview`))}
+                    <div onClick={() => (userPerms?.schedules? router.push(`/schedules/${activeScheduleId}/teachers`) : router.push(`/overview`))}
                          className="flex items-center justify-center p-4 text-center text-gray-500 bg-transparent hover:bg-blue-500/20 border border-dashed border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:shadow-md transition-all">
                         View All Teachers
                     </div>
