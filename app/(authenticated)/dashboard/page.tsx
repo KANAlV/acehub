@@ -15,12 +15,27 @@ import {
     fetchScheduleDetails,
     fetchTeachers,
     fetchSchedulesList,
-    fetchSystemSettings, getCurrentUser
+    fetchSystemSettings, getCurrentUser,
+    getTeacherScheduleMetrics,
+    fetchUserPermissions
 } from "@/services/userService";
 import { getOverloadMaxSync, getPrepLimitSync } from "@/lib/teachingLoadUtils";
 
+type Metrics =
+{
+    totalTeachers: number;
+    activeTeachers: number;
+    totalUnitsAssigned: number;
+    averageUtilization: number;
+    teacherLoads: Record<string, any>[];
+    activeRooms: number;
+    activeSections: number;
+    totalEntries: number;
+}
+
 export default function DashboardSummary() {
     const router = useRouter();
+    const [metrics, setMetrics] = useState<Metrics>();
 
     const [loading, setLoading] = useState(true);
     const [activeScheduleId, setActiveScheduleId] = useState<string | null>(null);
@@ -29,16 +44,15 @@ export default function DashboardSummary() {
     const [teachers, setTeachers] = useState<any[]>([]);
     const [schedules, setSchedules] = useState<any[]>([]);
     const [systemSettings, setSystemSettings] = useState<any>(null);
-    const [role, setRole] = useState("");
+    const [userPerms, setUserPerms] = useState<any>(null);
 
-    const checkUserStatus = async () => {
-        const fetchedUser = await getCurrentUser();
-        const role = fetchedUser.role;
-        setRole(role);
-    };
+    async function fetchRole() {
+        const uRole = await fetchUserPermissions();
+        return uRole;
+    } 
 
     useEffect(() => {
-        checkUserStatus();
+        setUserPerms(fetchRole());
     }, []);
 
     // Logic for max units as defined in your reference
@@ -50,6 +64,25 @@ export default function DashboardSummary() {
         if (type === "proby") return 20;
         return 24;
     };
+
+    async function fetchFacultyAnalytics(scheduleId: string) {
+            try {
+                if (!scheduleId) return null;
+    
+                // Calls your existing DB metric extractor directly
+                const data = await getTeacherScheduleMetrics(scheduleId);
+                return data;
+                
+            } catch (error) {
+                console.error("[USER_SERVICE_ERROR]: Failed to retrieve schedule metrics:", error);
+                return null;
+            }
+        }
+
+    async function getMetrics(dID){
+        const res = await fetchFacultyAnalytics(dID);
+        setMetrics(res);
+    }
 
     const loadDashboardData = async () => {
         setLoading(true);
@@ -63,6 +96,7 @@ export default function DashboardSummary() {
             }
 
             setActiveScheduleId(displayId);
+            getMetrics(displayId);
 
             const [details, teacherResponse, list, settings] = await Promise.all([
                 fetchScheduleDetails(displayId),
@@ -120,19 +154,24 @@ export default function DashboardSummary() {
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{scheduleName}</h1>
                     <p className="text-sm text-gray-500 italic">Active Display ID: {activeScheduleId}</p>
                 </div>
-                <Button color="blue" onClick={() => role != "Administrator"? router.push(`./timetable`) : router.push(`/schedules/${activeScheduleId}/timetable`)}>
-                    {role == "Administrator" && <HiPencilAlt className="mr-2 h-5 w-5" />}
-                    {role != "Administrator" && <HiCalendar className="mr-2 h-5 w-5" />}
-                    {role != "Administrator"? "View Timetable":"Edit Timetable"}
+                <Button color="blue" onClick={() => userPerms.schedule?
+                        router.push(`/schedules/${activeScheduleId}/timetable`) :
+                        router.push(`./timetable`)
+                }>
+                    {userPerms.schedule?
+                        <HiPencilAlt className="mr-2 h-5 w-5" /> :
+                        <HiCalendar className="mr-2 h-5 w-5" />
+                    }
+                    {userPerms.schedule? "View Timetable":"Edit Timetable"}
                 </Button>
             </div>
 
             {/* Quick Stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatBox label="Total Entries" value={stats.totalEntries} icon={HiCalendar} color="text-blue-500" />
-                <StatBox label="Active Teachers" value={stats.uniqueTeachers} icon={HiUserGroup} color="text-green-500" />
+                <StatBox label="Active Teachers" value={metrics?.activeTeachers ?? 0} icon={HiUserGroup} color="text-green-500" />
                 <StatBox label="Subjects" value={stats.uniqueSubjects} icon={HiBookOpen} color="text-purple-500" />
-                <StatBox label="Total Units" value={stats.totalUnits.toFixed(1)} icon={HiClock} color="text-orange-500" />
+                <StatBox label="Total Units" value={metrics?.totalUnitsAssigned ?? 0} icon={HiClock} color="text-orange-500" />
             </div>
 
             {/* REPLICATED TEACHER ANALYSIS SECTION */}
@@ -152,41 +191,31 @@ export default function DashboardSummary() {
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-xs">
                         <div>
                             <p className="text-gray-600 dark:text-gray-400">Total Teachers</p>
-                            <p className="font-bold text-lg">{teachers.length}</p>
+                            <p className="font-bold text-lg">{metrics?.totalTeachers ?? 0}</p>
                         </div>
                         <div>
                             <p className="text-gray-600 dark:text-gray-400">Active in Schedule</p>
                             <p className="font-bold text-lg text-green-600">
-                                {teachers.filter(t => schedules.some(s => String(s.teacher_id) === String(t.pscs_id))).length}
+                                {metrics?.activeTeachers ?? 0}
                             </p>
                         </div>
                         <div>
                             <p className="text-gray-600 dark:text-gray-400">Overloaded</p>
                             <p className="font-bold text-lg text-red-600">
-                                {teachers.filter(t => {
-                                    const teacherUnits = schedules.reduce((total, s) => {
-                                        if (String(s.teacher_id) === String(t.pscs_id)) {
-                                            return total + (Number(s.end_time) - Number(s.start_time)) / 60;
-                                        }
-                                        return total;
-                                    }, 0);
-                                    const maxUnits = getMaxUnits(t.employment_type);
-                                    return teacherUnits > maxUnits;
-                                }).length}
+                                {metrics?.teacherLoads ? metrics.teacherLoads.filter((t: any) => {
+                                    const maxUnits = getMaxUnits(t.type);
+                                    return t.load > maxUnits;
+                                }).length : 0}
                             </p>
                         </div>
                         <div>
                             <p className="text-gray-600 dark:text-gray-400">Total Units Assigned</p>
-                            <p className="font-bold text-lg text-blue-600">{stats.totalUnits.toFixed(1)}</p>
+                            <p className="font-bold text-lg text-blue-600">{metrics?.totalUnitsAssigned ?? 0}</p>
                         </div>
                         <div>
                             <p className="text-gray-600 dark:text-gray-400">Avg Utilization</p>
                             <p className="font-bold text-lg text-purple-600">
-                                {teachers.length > 0 ? (teachers.reduce((avg, t) => {
-                                    const tUnits = schedules.reduce((acc, s) => String(s.teacher_id) === String(t.pscs_id) ? acc + (Number(s.end_time) - Number(s.start_time))/60 : acc, 0);
-                                    const max = getMaxUnits(t.employment_type);
-                                    return avg + (max > 0 ? (tUnits / max) * 100 : 0);
-                                }, 0) / teachers.length).toFixed(1) : 0}%
+                                {metrics?.averageUtilization ? metrics.averageUtilization.toFixed(1) : "0.0"}%
                             </p>
                         </div>
                     </div>
@@ -217,7 +246,7 @@ export default function DashboardSummary() {
 
                         return (
                             <div key={teacher.pscs_id} className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md transition-all"
-                                 onClick={() => role != "Administrator"? router.push(`./overview/${teacher.pscs_id}`) : router.push(`/schedules/${activeScheduleId}/teachers/${teacher.pscs_id}`) }>
+                                 onClick={() => userPerms.schedule? router.push(`/schedules/${activeScheduleId}/teachers/${teacher.pscs_id}`) : router.push(`./overview/${teacher.pscs_id}`) }>
                                 <div className="flex justify-between items-start mb-3">
                                     <div>
                                         <h4 className="font-semibold text-sm">{teacher.fname} {teacher.mi ? teacher.mi + "." : ""} {teacher.sname} {teacher.suffix ? `, ${teacher.suffix}` : ""}</h4>
@@ -265,7 +294,7 @@ export default function DashboardSummary() {
                     })}
 
                     {/* View All Card */}
-                    <div onClick={() => (role != "Administrator"? router.push(`/overview`) : router.push(`/schedules/${activeScheduleId}/teachers`))}
+                    <div onClick={() => (userPerms.schedule? router.push(`/schedules/${activeScheduleId}/teachers`) : router.push(`/overview`))}
                          className="flex items-center justify-center p-4 text-center text-gray-500 bg-transparent hover:bg-blue-500/20 border border-dashed border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:shadow-md transition-all">
                         View All Teachers
                     </div>

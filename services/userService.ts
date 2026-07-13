@@ -1156,6 +1156,33 @@ export async function fetchAllTeachers() {
 
 /** --- Schedules --- **/
 
+export async function getTeacherScheduleMetrics(scheduleId: string) {
+    try {
+        if (!scheduleId) return null;
+
+        const [metrics] = await sql`
+            SELECT * FROM get_teacher_schedule_metrics(${scheduleId})
+        `;
+
+        // Destructure and format numbers safely since PostgreSQL numeric returns come back as strings
+        return {
+            totalTeachers: Number(metrics.total_teachers ?? 0),
+            activeTeachers: Number(metrics.active_teachers ?? 0),
+            totalUnitsAssigned: Number(metrics.total_units_assigned ?? 0),
+            averageUtilization: Number(metrics.average_utilization ?? 0),
+            teacherLoads: metrics.teacher_loads ?? [],
+            // New fields:
+            activeRooms: Number(metrics.active_rooms ?? 0),
+            activeSections: Number(metrics.active_sections ?? 0),
+            totalEntries: Number(metrics.total_entries ?? 0)
+        };
+
+    } catch (error) {
+        console.error("[DB_ERROR]: Failed to fetch teacher schedule metrics:", error);
+        throw error;
+    }
+}
+
 export async function saveGeneratedSchedule(name: string, config: any) {
     try {
         // 1. Create the Schedule Snapshot record

@@ -1,8 +1,6 @@
 "use client";
 
 import {
-    AccordionContent,
-    AccordionPanel, AccordionTitle,
     Button,
     Drawer,
     DrawerHeader,

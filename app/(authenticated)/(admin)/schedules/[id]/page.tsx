@@ -12,14 +12,27 @@ import {
 import {
     fetchScheduleDetails, getAllRoomsData, getAllProgramsData, fetchTeachers,
     fetchAllSubjects, fetchSchedulesList, deleteGeneratedSchedule, setDisplay, getDisplay,
-    fetchSystemSettings
+    fetchSystemSettings, getTeacherScheduleMetrics
 } from "@/services/userService.ts";
 import { getMaxUnitsSync, getOverloadMaxSync, getPrepLimitSync } from "@/lib/teachingLoadUtils.ts";
 import { exportScheduleToExcel } from "@/lib/scheduleExport.ts";
 import {redirect} from "next/navigation";
 
+type Metrics =
+{
+    totalTeachers: number;
+    activeTeachers: number;
+    totalUnitsAssigned: number;
+    averageUtilization: number;
+    teacherLoads: Record<string, any>[];
+    activeRooms: number;
+    activeSections: number;
+    totalEntries: number;
+}
+
 export default function ScheduleSummary({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
+    const [metrics, setMetrics] = useState<Metrics>();
 
     const [loading, setLoading] = useState(true);
     const [scheduleExists, setScheduleExists] = useState<boolean | null>(null);
@@ -51,8 +64,14 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
         setCurrentDisplayId(activeId);
     };
 
+    async function getMetrics(){
+        const res = await fetchFacultyAnalytics(id);
+        setMetrics(res);
+    }
+
     useEffect(() => {
         checkCurrentDisplay();
+        getMetrics();
     }, [id]);
 
     // 2. Handle the update
@@ -151,6 +170,20 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
     useEffect(() => {
         loadData();
     }, [id]);
+
+    async function fetchFacultyAnalytics(scheduleId: string) {
+        try {
+            if (!scheduleId) return null;
+
+            // Calls your existing DB metric extractor directly
+            const data = await getTeacherScheduleMetrics(scheduleId);
+            return data;
+            
+        } catch (error) {
+            console.error("[USER_SERVICE_ERROR]: Failed to retrieve schedule metrics:", error);
+            return null;
+        }
+    }
 
     const handleDelete = async () => {
         if (!confirm("Are you sure you want to delete this schedule? This action cannot be undone.")) {
@@ -296,7 +329,7 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm text-gray-500 dark:text-gray-400">Active Teachers</p>
-                            <p className="text-2xl font-bold">{stats.uniqueTeachers}</p>
+                            <p className="text-2xl font-bold">{metrics?.activeTeachers ?? 0}</p>
                         </div>
                         <HiUserGroup className="h-8 w-8 text-green-500" />
                     </div>
@@ -316,7 +349,7 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm text-gray-500 dark:text-gray-400">Total Units</p>
-                            <p className="text-2xl font-bold">{stats.totalUnits.toFixed(1)}</p>
+                            <p className="text-2xl font-bold">{metrics?.totalUnitsAssigned ?? 0}</p>
                         </div>
                         <HiClock className="h-8 w-8 text-orange-500" />
                     </div>
@@ -337,13 +370,13 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                                 <span className="text-sm">Teachers</span>
                                 <div className="flex items-center gap-2">
                                     <Progress 
-                                        progress={teachers.length > 0 ? (stats.uniqueTeachers / teachers.length) * 100 : 0} 
+                                        progress={(metrics?.totalTeachers ?? 0) > 0 ? ((metrics?.activeTeachers ?? 0) / metrics!.totalTeachers) * 100 : 0} 
                                         size="sm" 
                                         color="blue"
                                         className="w-20"
                                     />
                                     <span className="text-sm font-medium">
-                                        {stats.uniqueTeachers}/{teachers.length}
+                                        {metrics?.activeTeachers ?? 0}/{metrics?.totalTeachers ?? 0}
                                     </span>
                                 </div>
                             </div>
@@ -351,13 +384,13 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                                 <span className="text-sm">Rooms</span>
                                 <div className="flex items-center gap-2">
                                     <Progress 
-                                        progress={rooms.length > 0 ? (stats.uniqueRooms / rooms.length) * 100 : 0} 
+                                        progress={rooms.length > 0 ? ((metrics?.activeRooms ?? 0) / rooms.length) * 100 : 0} 
                                         size="sm" 
                                         color="green"
                                         className="w-20"
                                     />
                                     <span className="text-sm font-medium">
-                                        {stats.uniqueRooms}/{rooms.length}
+                                        {metrics?.activeRooms ?? 0}/{rooms.length}
                                     </span>
                                 </div>
                             </div>
@@ -365,7 +398,7 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                                 <span className="text-sm">Sections</span>
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm font-medium">
-                                        {stats.uniqueSections}
+                                        {metrics?.activeSections ?? 0}
                                     </span>
                                 </div>
                             </div>
@@ -380,16 +413,18 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-600">Total Units:</span>
-                                <span className="font-medium">{stats.totalUnits.toFixed(1)}</span>
+                                <span className="font-medium">{(metrics?.totalUnitsAssigned ?? 0).toFixed(1)}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-600">Daily Average:</span>
-                                <span className="font-medium">{(stats.totalUnits / 5).toFixed(1)} units/day</span>
+                                <span className="font-medium">{((metrics?.totalUnitsAssigned ?? 0) / 5).toFixed(1)} units/day</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-600">Avg Class Duration:</span>
                                 <span className="font-medium">
-                                    {stats.totalEntries > 0 ? (stats.totalUnits / stats.totalEntries).toFixed(1) : 0} hours
+                                    {(metrics?.totalEntries ?? 0) > 0 
+                                        ? (metrics!.totalUnitsAssigned / metrics!.totalEntries).toFixed(1) 
+                                        : "0.0"} hours
                                 </span>
                             </div>
                         </div>
@@ -410,59 +445,40 @@ export default function ScheduleSummary({ params }: { params: Promise<{ id: stri
                 </div>
 
                 {/* Summary Statistics for This Schedule */}
-                <div className=" mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                     <h4 className="font-semibold text-sm mb-3 text-blue-800 dark:text-blue-200">Teacher Workload Summary</h4>
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-xs">
                         <div>
                             <p className="text-gray-600 dark:text-gray-400">Total Teachers</p>
-                            <p className="font-bold text-lg">{teachers.length}</p>
+                            <p className="font-bold text-lg">
+                                {metrics?.totalTeachers ?? 0}
+                            </p>
                         </div>
                         <div>
                             <p className="text-gray-600 dark:text-gray-400">Active in Schedule</p>
                             <p className="font-bold text-lg text-green-600">
-                                {teachers.filter(t =>
-                                    schedules.some(s => s.teacher_id === t.pscs_id)
-                                ).length}
+                                {metrics?.activeTeachers ?? 0}
                             </p>
                         </div>
                         <div>
                             <p className="text-gray-600 dark:text-gray-400">Overloaded</p>
                             <p className="font-bold text-lg text-red-600">
-                                {teachers.filter(t => {
-                                    const teacherUnits = schedules.reduce((total, schedule) => {
-                                        if (schedule.teacher_id === t.pscs_id) {
-                                            const durationHours = (schedule.end_time - schedule.start_time) / 60;
-                                            return total + durationHours;
-                                        }
-                                        return total;
-                                    }, 0);
-                                    const maxUnits = getMaxUnits(t.employment_type);
-                                    const overloadMax = getOverloadMaxSync(systemSettings);
-                                    const absoluteMax = maxUnits + overloadMax;
-                                    return teacherUnits > maxUnits;
-                                }).length}
+                                {metrics?.teacherLoads ? metrics.teacherLoads.filter((t: any) => {
+                                    const maxUnits = getMaxUnits(t.type);
+                                    return t.load > maxUnits;
+                                }).length : 0}
                             </p>
                         </div>
                         <div>
                             <p className="text-gray-600 dark:text-gray-400">Total Units Assigned</p>
                             <p className="font-bold text-lg text-blue-600">
-                                {stats.totalUnits.toFixed(1)}
+                                {metrics?.totalUnitsAssigned ? metrics.totalUnitsAssigned.toFixed(1) : "0.0"}
                             </p>
                         </div>
                         <div>
                             <p className="text-gray-600 dark:text-gray-400">Avg Utilization</p>
                             <p className="font-bold text-lg text-purple-600">
-                                {teachers.length > 0 ?
-                                    (teachers.reduce((avg, teacher) => {
-                                        const teacherUnits = schedules.reduce((total, schedule) => {
-                                            if (schedule.teacher_id === teacher.pscs_id) {
-                                                return total + (schedule.end_time - schedule.start_time) / 60;
-                                            }
-                                            return total;
-                                        }, 0);
-                                        const maxUnits = getMaxUnits(teacher.employment_type);
-                                        return avg + (maxUnits > 0 ? (teacherUnits / maxUnits) * 100 : 0);
-                                    }, 0) / teachers.length).toFixed(1) : 0}%
+                                {metrics?.averageUtilization ? metrics.averageUtilization.toFixed(1) : "0.0"}%
                             </p>
                         </div>
                     </div>
